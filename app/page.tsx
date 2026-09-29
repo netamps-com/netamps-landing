@@ -48,11 +48,11 @@ const heroImages = [
 ];
 
 const heroBadges = [
-  { status: "SYSTEM SECURE", text: "24/7 SOC Monitoring", bgClass: "bg-emerald-100", textClass: "text-emerald-600", borderClass: "border-emerald-200", icon: Shield },
-  { status: "THREAT DETECTED", text: "Incident Response Active", bgClass: "bg-rose-100", textClass: "text-rose-600", borderClass: "border-rose-200", icon: AlertTriangle },
-  { status: "DATA ENCRYPTED", text: "Zero Trust Architecture", bgClass: "bg-indigo-100", textClass: "text-indigo-600", borderClass: "border-indigo-200", icon: Key },
-  { status: "NETWORK SCANNED", text: "Vulnerability Management", bgClass: "bg-purple-100", textClass: "text-purple-600", borderClass: "border-purple-200", icon: Activity },
-  { status: "ACCESS VERIFIED", text: "Identity & Access Control", bgClass: "bg-cyan-100", textClass: "text-cyan-600", borderClass: "border-cyan-200", icon: Eye },
+  { status: "VULNERABILITY ASSESSMENT", text: "Penetration Testing (VAPT)", bgClass: "bg-emerald-100", textClass: "text-emerald-600", borderClass: "border-emerald-200", icon: Shield },
+  { status: "COMPLIANCE VERIFIED", text: "Risk & Compliance", bgClass: "bg-rose-100", textClass: "text-rose-600", borderClass: "border-rose-200", icon: AlertTriangle },
+  { status: "NETWORK SECURED", text: "Network Infrastructure", bgClass: "bg-indigo-100", textClass: "text-indigo-600", borderClass: "border-indigo-200", icon: Key },
+  { status: "AI ANALYTICS ACTIVE", text: "Smart Surveillance", bgClass: "bg-purple-100", textClass: "text-purple-600", borderClass: "border-purple-200", icon: Activity },
+  { status: "EDGE SECURED", text: "Internet of Things (IoT)", bgClass: "bg-cyan-100", textClass: "text-cyan-600", borderClass: "border-cyan-200", icon: Eye },
   { status: "FORENSICS LOGGED", text: "Digital Forensics (DFIR)", bgClass: "bg-amber-100", textClass: "text-amber-600", borderClass: "border-amber-200", icon: Fingerprint }
 ];
 
@@ -317,7 +317,7 @@ export default function Home() {
                 ))}
                 
                 <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent z-10 pointer-events-none"></div>
-                <div className="absolute bottom-6 left-6 right-6 z-20 h-[80px] relative">
+                <div className="absolute bottom-6 left-6 right-6 z-20 h-[80px]">
                   {heroBadges.map((badge, index) => {
                     const isActive = badgeIndex === index;
                     return (
