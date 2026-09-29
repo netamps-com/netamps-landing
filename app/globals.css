@@ -97,3 +97,6 @@ h1, h2, h3, h4, h5, h6 {
   background-image: radial-gradient(rgba(15, 23, 42, 0.1) 1px, transparent 1px);
   background-size: 32px 32px;
 }
+
+html { scroll-behavior: smooth; }
+
