@@ -41,11 +41,11 @@ const heroBadges = [
 const expertiseAreas = [
   { title: "Digital Forensics (DFIR)", desc: "Deep-dive forensic analysis, chain-of-custody preservation, and rapid incident post-mortems for critical infrastructure breaches.", color: "border-indigo-400/50 bg-indigo-500/20 text-indigo-100" },
   { title: "Risk & Compliance", desc: "Enterprise architecture alignment with stringent global frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-400/50 bg-emerald-500/20 text-emerald-100" },
-  { title: "Network Security", desc: "Implementation of Zero Trust Network Access (ZTNA), Next-Gen IPS/IDS, and dynamic micro-segmentation protocols.", color: "border-blue-400/50 bg-blue-500/20 text-blue-100" },
-  { title: "Dark Web Monitoring", desc: "Continuous OSINT and darknet surveillance to intercept leaked credentials, proprietary source code, and imminent threat indicators.", color: "border-purple-400/50 bg-purple-500/20 text-purple-100" },
-  { title: "Breach Response", desc: "Immediate containment orchestration, payload eradication, and system restoration to minimize operational downtime.", color: "border-rose-400/50 bg-rose-500/20 text-rose-100" },
-  { title: "Security Procurement", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced cryptography tools.", color: "border-teal-400/50 bg-teal-500/20 text-teal-100" },
-  { title: "Malware Analysis", desc: "Advanced reverse-engineering of polymorphic malware and zero-day payloads to extract actionable IOCs and TTPs.", color: "border-amber-400/50 bg-amber-500/20 text-amber-100" },
+  { title: "Network Infrastructure", desc: "Implementation of enterprise-grade networking foundations, Zero Trust Network Access, and Next-Gen IPS/IDS.", color: "border-blue-400/50 bg-blue-500/20 text-blue-100" },
+  { title: "Smart Surveillance & AI Analytics", desc: "Deploying intelligent AI-driven surveillance networks for proactive physical security and behavioral anomaly detection.", color: "border-purple-400/50 bg-purple-500/20 text-purple-100" },
+  { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-400/50 bg-rose-500/20 text-rose-100" },
+  { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-400/50 bg-teal-500/20 text-teal-100" },
+  { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-400/50 bg-amber-500/20 text-amber-100" },
   { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-400/50 bg-cyan-500/20 text-cyan-100" }
 ];
 
@@ -159,9 +159,6 @@ export default function Home() {
                 </a>
               ))}
             </nav>
-            <a href="mailto:contact@netamps.com" className="rainbow-btn hidden md:inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-slate-900 text-white font-bold text-sm transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-primary/50 whitespace-nowrap">
-              Get Started
-            </a>
             <button className="lg:hidden p-2 text-slate-600 bg-white/20 rounded-full border border-slate-200 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-primary">
               <Menu className="w-6 h-6" />
             </button>
