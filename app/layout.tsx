@@ -56,6 +56,8 @@ export const metadata: Metadata = {
   },
 };
 
+import SecurityWrapper from "./SecurityWrapper";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -66,8 +68,12 @@ export default function RootLayout({
       <head>
         <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;" />
       </head>
-      <body className={`${inter.variable} ${outfit.variable} font-sans`}>
-        {children}
+      <body 
+        className={`${inter.variable} ${outfit.variable} font-sans select-none`}
+      >
+        <SecurityWrapper>
+          {children}
+        </SecurityWrapper>
       </body>
     </html>
   );
