@@ -52,6 +52,7 @@ const expertiseAreas = [
 
 export default function Home() {
   const [news, setNews] = useState<{title: string, link: string, source: string}[]>([]);
+  const [hackersNews, setHackersNews] = useState<{title: string, link: string, source: string}[]>([]);
   const [heroImageIndex, setHeroImageIndex] = useState(0);
   const [badgeIndex, setBadgeIndex] = useState(0);
   const [hoveredExpertise, setHoveredExpertise] = useState<number | null>(null);
@@ -62,20 +63,29 @@ export default function Home() {
   
   // Ticker animation state
   const baseX = useMotionValue(0);
+  const baseX2 = useMotionValue(-3500);
   const [isFeedHovered, setIsFeedHovered] = useState(false);
   const velocity = useMotionValue(-1.5);
+  const velocity2 = useMotionValue(1.5);
 
   useAnimationFrame((t, delta) => {
     // Smoothly interpolate velocity: -0.2 (slow) when hovered, -1.5 (normal) when not
     const target = isFeedHovered ? -0.2 : -1.5;
+    const target2 = isFeedHovered ? 0.2 : 1.5;
+    
     velocity.set(velocity.get() + (target - velocity.get()) * 0.1); 
+    velocity2.set(velocity2.get() + (target2 - velocity2.get()) * 0.1);
     
     // Apply movement
     baseX.set(baseX.get() + velocity.get() * (delta / 16));
+    baseX2.set(baseX2.get() + velocity2.get() * (delta / 16));
     
     // Wrap around seamlessly (assuming content is long enough)
     if (baseX.get() <= -3500) {
       baseX.set(0);
+    }
+    if (baseX2.get() >= 0) {
+      baseX2.set(-3500);
     }
   });
 
@@ -110,15 +120,18 @@ export default function Home() {
     fetch('/api/feed')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setNews([...data, ...data]); // Duplicate for seamless infinite scroll
+        if (data.main && data.main.length > 0) {
+          setNews([...data.main, ...data.main]); // Duplicate for seamless infinite scroll
+        }
+        if (data.hackersNews && data.hackersNews.length > 0) {
+          setHackersNews([...data.hackersNews, ...data.hackersNews, ...data.hackersNews, ...data.hackersNews]);
         }
       })
       .catch(console.error);
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col overflow-x-hidden pt-[112px] relative">
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col overflow-x-hidden pt-[150px] relative">
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-indigo-200/50 blur-[100px] mix-blend-multiply animate-blob"></div>
@@ -168,47 +181,68 @@ export default function Home() {
       </motion.header>
 
       {/* NON-STOP NEWS TICKER */}
-      {news.length > 0 && (
-        <div className="fixed top-20 left-0 right-0 z-40 bg-slate-900 border-b border-slate-800 py-2.5 overflow-hidden flex text-slate-300 shadow-md">
+      {(news.length > 0 || hackersNews.length > 0) && (
+        <div className="fixed top-20 left-0 right-0 z-40 bg-slate-900 border-b border-slate-800 overflow-hidden flex flex-col text-slate-300 shadow-md">
           <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-slate-900 to-transparent z-10 pointer-events-none"></div>
           <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-slate-900 to-transparent z-10 pointer-events-none"></div>
           <div className="flex items-center justify-center gap-2 px-6 bg-primary text-white font-bold text-[10px] uppercase tracking-widest absolute left-0 z-20 h-full top-0 shadow-[4px_0_15px_rgba(0,0,0,0.5)]">
             <Activity className="w-3.5 h-3.5 animate-pulse" /> CYBER FEED
           </div>
-          <motion.div 
-            style={{ x: baseX }}
-            onMouseEnter={() => setIsFeedHovered(true)}
-            onMouseLeave={() => setIsFeedHovered(false)}
-            className="flex items-center whitespace-nowrap pl-[180px] cursor-pointer"
-          >
-            {[...news, ...news, ...news, ...news].map((item, i) => {
-              let badgeColor = "bg-primary text-white";
-              let icon = <Activity className="w-3 h-3" />;
-              
-              if (item.source === 'AWS Security') {
-                badgeColor = "bg-orange-500 text-white";
-                icon = <Cloud className="w-3 h-3" />;
-              } else if (item.source === 'CrowdStrike') {
-                badgeColor = "bg-red-600 text-white";
-                icon = <Shield className="w-3 h-3" />;
-              } else if (item.source === 'BleepingComputer') {
-                badgeColor = "bg-blue-600 text-white";
-                icon = <Network className="w-3 h-3" />;
-              } else if (item.source === 'Cisco Security') {
-                badgeColor = "bg-teal-600 text-white";
-                icon = <Server className="w-3 h-3" />;
-              }
-              
-              return (
-                <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group">
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm ${badgeColor}`}>
-                    {icon} {item.source}
+          
+          {news.length > 0 && (
+            <motion.div 
+              style={{ x: baseX }}
+              onMouseEnter={() => setIsFeedHovered(true)}
+              onMouseLeave={() => setIsFeedHovered(false)}
+              className="flex items-center whitespace-nowrap pl-[180px] cursor-pointer py-2 border-b border-white/5"
+            >
+              {[...news, ...news, ...news, ...news].map((item, i) => {
+                let badgeColor = "bg-primary text-white";
+                let icon = <Activity className="w-3 h-3" />;
+                
+                if (item.source === 'AWS Security') {
+                  badgeColor = "bg-orange-500 text-white";
+                  icon = <Cloud className="w-3 h-3" />;
+                } else if (item.source === 'CrowdStrike') {
+                  badgeColor = "bg-red-600 text-white";
+                  icon = <Shield className="w-3 h-3" />;
+                } else if (item.source === 'BleepingComputer') {
+                  badgeColor = "bg-blue-600 text-white";
+                  icon = <Network className="w-3 h-3" />;
+                } else if (item.source === 'Cisco Security') {
+                  badgeColor = "bg-teal-600 text-white";
+                  icon = <Server className="w-3 h-3" />;
+                }
+                
+                return (
+                  <a key={`main-${i}`} href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group">
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm ${badgeColor}`}>
+                      {icon} {item.source}
+                    </div>
+                    <span className="rainbow-text-hover">{item.title}</span>
+                  </a>
+                );
+              })}
+            </motion.div>
+          )}
+
+          {hackersNews.length > 0 && (
+            <motion.div 
+              style={{ x: baseX2 }}
+              onMouseEnter={() => setIsFeedHovered(true)}
+              onMouseLeave={() => setIsFeedHovered(false)}
+              className="flex items-center whitespace-nowrap pl-[180px] cursor-pointer py-2"
+            >
+              {[...hackersNews, ...hackersNews, ...hackersNews, ...hackersNews].map((item, i) => (
+                <a key={`hacker-${i}`} href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm bg-green-600 text-white">
+                    <Lock className="w-3 h-3" /> {item.source}
                   </div>
                   <span className="rainbow-text-hover">{item.title}</span>
                 </a>
-              );
-            })}
-          </motion.div>
+              ))}
+            </motion.div>
+          )}
         </div>
       )}
 

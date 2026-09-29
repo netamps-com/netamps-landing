@@ -38,25 +38,23 @@ async function fetchFeed(url: string, source: string) {
 
 export async function GET() {
   try {
-    const [bleeping, crowdstrike, aws, cisco] = await Promise.all([
+    const [bleeping, crowdstrike, aws, cisco, hackersNews] = await Promise.all([
       fetchFeed('https://www.bleepingcomputer.com/feed/', 'BleepingComputer'),
       fetchFeed('https://ir.crowdstrike.com/rss/events.xml', 'CrowdStrike'),
       fetchFeed('https://aws.amazon.com/security/security-bulletins/rss/feed/', 'AWS Security'),
-      fetchFeed('https://sec.cloudapps.cisco.com/security/center/eventResponses_20.xml', 'Cisco Security')
+      fetchFeed('https://sec.cloudapps.cisco.com/security/center/eventResponses_20.xml', 'Cisco Security'),
+      fetchFeed('https://feeds.feedburner.com/TheHackersNews', 'TheHackersNews')
     ]);
     
     // Combine and shuffle the feeds so they interleave beautifully
     let combined = [...bleeping, ...crowdstrike, ...aws, ...cisco];
     combined = combined.sort(() => Math.random() - 0.5);
     
-    if (combined.length === 0) {
-       return NextResponse.json([{ title: "Cybersecurity News Feed Temporarily Unavailable", link: "#", source: "System" }]);
-    }
-    
-    return NextResponse.json(combined);
+    return NextResponse.json({ main: combined, hackersNews });
   } catch (error) {
-    return NextResponse.json([
-      { title: "Cybersecurity News Feed Temporarily Unavailable", link: "#", source: "System" }
-    ], { status: 500 });
+    return NextResponse.json({
+      main: [{ title: "Cybersecurity News Feed Temporarily Unavailable", link: "#", source: "System" }],
+      hackersNews: []
+    }, { status: 500 });
   }
 }
