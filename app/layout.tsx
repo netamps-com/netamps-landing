@@ -57,6 +57,7 @@ export const metadata: Metadata = {
 };
 
 import SecurityWrapper from "./SecurityWrapper";
+import TrustSeal from "./TrustSeal";
 
 export default function RootLayout({
   children,
@@ -66,13 +67,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;" />
+        <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https:;" />
       </head>
       <body 
         className={`${inter.variable} ${outfit.variable} font-sans select-none`}
       >
         <SecurityWrapper>
           {children}
+          <TrustSeal />
         </SecurityWrapper>
       </body>
     </html>
