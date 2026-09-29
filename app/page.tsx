@@ -629,9 +629,16 @@ export default function Home() {
               <h4 className="font-bold text-slate-900 mb-6">Connect</h4>
               <ul className="space-y-4 text-slate-600 text-sm font-bold">
                 <li>
-                  <a href="mailto:contact@netamps.com" className="hover:text-primary transition-colors flex items-center gap-2">
-                    <Mail className="w-4 h-4" /> contact@netamps.com
-                  </a>
+                  <button 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.location.href = 'mailto:' + ['contact', 'netamps.com'].join('@');
+                    }}
+                    className="hover:text-primary transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1 cursor-pointer"
+                  >
+                    <Mail className="w-4 h-4" /> 
+                    <span>contact<span className="hidden">.spam.trap</span>@<span className="hidden">do.not.scrape.</span>netamps.com</span>
+                  </button>
                 </li>
               </ul>
             </div>
