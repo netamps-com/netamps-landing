@@ -272,12 +272,12 @@ export default function Home() {
             <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="max-w-3xl">
               <motion.div variants={fadeInUp} className="inline-block mb-6">
                 <span className="text-xs font-extrabold tracking-[0.2em] text-primary uppercase bg-primary/10 border border-primary/20 px-4 py-1.5 rounded-full shadow-sm">
-                  Welcome to the Future of Security
+                  Next-Generation Enterprise Defense
                 </span>
               </motion.div>
               <motion.h1 variants={fadeInUp} className="text-5xl lg:text-[4.5rem] font-black tracking-tighter mb-6 leading-[1.05] text-slate-900 flex flex-col gap-1">
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-400 to-indigo-600 pb-2 drop-shadow-sm animate-text-glitter" style={{ filter: 'drop-shadow(0 10px 20px rgba(79,70,229,0.25))' }}>
-                  NETAMPS TECHNOLOGIES
+                  Securing the Digital Frontier
                 </span>
               </motion.h1>
               <motion.p variants={fadeInUp} className="text-lg lg:text-xl text-slate-600 mb-10 leading-relaxed font-medium">
@@ -295,40 +295,53 @@ export default function Home() {
             
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1, ease: "easeOut" }} className="relative hidden lg:block">
               <div className="aspect-[4/3] rounded-3xl bg-slate-100 border border-slate-200 shadow-2xl overflow-hidden relative group">
-                <AnimatePresence mode="wait">
+                {heroImages.map((src, index) => (
                   <motion.img 
-                    key={heroImageIndex}
-                    src={heroImages[heroImageIndex]} 
+                    key={src}
+                    src={src} 
                     alt="Cyber Security Operations" 
-                    initial={{ opacity: 0, scale: 1.1 }}
-                    animate={{ opacity: 1, scale: 1.05 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 1.5 }}
-                    className="absolute inset-0 w-full h-full object-cover" 
+                    initial={false}
+                    animate={{ 
+                      opacity: heroImageIndex === index ? 1 : 0,
+                      scale: heroImageIndex === index ? 1.05 : 1.1 
+                    }}
+                    transition={{ duration: 1.5, ease: "easeInOut" }}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none" 
                   />
-                </AnimatePresence>
+                ))}
+                
                 <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent z-10 pointer-events-none"></div>
-                <div className="absolute bottom-6 left-6 right-6 z-20">
-                  <AnimatePresence mode="wait">
-                    <motion.div 
-                      key={badgeIndex}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.3 }}
-                      className="flex justify-between items-end bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-white shadow-sm"
-                    >
-                      <div>
-                        <div className={`text-xs font-bold px-2 py-1 rounded inline-block mb-1 border ${heroBadges[badgeIndex].bgClass} ${heroBadges[badgeIndex].textClass} ${heroBadges[badgeIndex].borderClass}`}>
-                          {heroBadges[badgeIndex].status}
+                <div className="absolute bottom-6 left-6 right-6 z-20 h-[80px] relative">
+                  {heroBadges.map((badge, index) => {
+                    const isActive = badgeIndex === index;
+                    return (
+                      <motion.div 
+                        key={badge.text}
+                        initial={false}
+                        animate={{ 
+                          opacity: isActive ? 1 : 0, 
+                          y: isActive ? 0 : 10,
+                          pointerEvents: isActive ? 'auto' : 'none'
+                        }}
+                        transition={{ duration: 0.4, ease: "easeInOut" }}
+                        className="absolute inset-0 flex justify-between items-end bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-white shadow-sm"
+                      >
+                        <div>
+                          <div className={`text-xs font-bold px-2 py-1 rounded inline-block mb-1 border ${badge.bgClass} ${badge.textClass} ${badge.borderClass}`}>
+                            {badge.status}
+                          </div>
+                          <div className="font-bold text-lg text-slate-900">{badge.text}</div>
                         </div>
-                        <div className="font-bold text-lg text-slate-900">{heroBadges[badgeIndex].text}</div>
-                      </div>
-                      <motion.div animate={{ rotate: 360 }} transition={{ duration: 12, repeat: Infinity, ease: "linear" }} className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                        {React.createElement(heroBadges[badgeIndex].icon, { className: "w-5 h-5 text-primary" })}
+                        <motion.div 
+                          animate={{ rotate: 360 }} 
+                          transition={{ duration: 12, repeat: Infinity, ease: "linear" }} 
+                          className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0"
+                        >
+                          {React.createElement(badge.icon, { className: "w-5 h-5 text-primary" })}
+                        </motion.div>
                       </motion.div>
-                    </motion.div>
-                  </AnimatePresence>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
