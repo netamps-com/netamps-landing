@@ -21,6 +21,10 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
+  icons: {
+    icon: '/logo.jpg',
+    apple: '/logo.jpg',
+  },
   openGraph: {
     title: "Netamps Technologies | Advanced Enterprise Security",
     description: "Architecting resilient cyber environments with human intelligence and emerging technologies. Secure your enterprise against advanced threats.",
