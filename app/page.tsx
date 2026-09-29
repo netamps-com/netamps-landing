@@ -393,6 +393,37 @@ export default function Home() {
           </div>
         </section>
 
+        {/* SECTION: ADVANCED SOLUTIONS */}
+        <section id="solutions" className="py-24 bg-transparent border-y border-white/20">
+          <div className="container mx-auto px-6">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="mb-16 text-center">
+              <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 font-bold text-xs mb-4 uppercase tracking-widest">
+                Next-Gen Solutions
+              </motion.div>
+              <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-extrabold text-slate-900 mb-6">Advanced Threat Defense</motion.h2>
+            </motion.div>
+
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="grid md:grid-cols-2 gap-6">
+              {[
+                { icon: Key, title: "Zero Trust Architecture", desc: "Never trust, always verify. We implement micro-segmentation and continuous authentication.", bg: "bg-amber-100", color: "text-amber-600" },
+                { icon: Cloud, title: "Cloud Security Posture", desc: "Automated identification and remediation of risks across AWS, Azure, and GCP environments.", bg: "bg-cyan-100", color: "text-cyan-600" },
+                { icon: AlertTriangle, title: "Advanced Threat Hunting", desc: "Proactive searching through networks to detect and isolate advanced persistent threats.", bg: "bg-rose-100", color: "text-rose-600" },
+                { icon: Eye, title: "Identity & Access Management", desc: "Streamline user identities and access privileges with MFA and SSO integration.", bg: "bg-pink-100", color: "text-pink-600" }
+              ].map((sol, i) => (
+                <motion.div key={i} variants={fadeInUp} className="group flex gap-6 p-6 rounded-2xl hover:-translate-y-2 transition-all duration-500">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${sol.bg} ${sol.color} group-hover:scale-110 transition-transform`}>
+                    <sol.icon className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">{sol.title}</h3>
+                    <p className="text-slate-600 leading-relaxed font-medium">{sol.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+
         {/* SECTION: SERVICES / AREA OF EXPERTISE */}
         <section id="services" className="py-24 bg-transparent relative border-y border-white/20 overflow-hidden">
           {/* Ambient Background Glows */}
@@ -448,37 +479,6 @@ export default function Home() {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-        </section>
-
-        {/* SECTION: ADVANCED SOLUTIONS */}
-        <section id="solutions" className="py-24 bg-transparent border-y border-white/20">
-          <div className="container mx-auto px-6">
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="mb-16 text-center">
-              <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 font-bold text-xs mb-4 uppercase tracking-widest">
-                Next-Gen Solutions
-              </motion.div>
-              <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-extrabold text-slate-900 mb-6">Advanced Threat Defense</motion.h2>
-            </motion.div>
-
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="grid md:grid-cols-2 gap-6">
-              {[
-                { icon: Key, title: "Zero Trust Architecture", desc: "Never trust, always verify. We implement micro-segmentation and continuous authentication.", bg: "bg-amber-100", color: "text-amber-600" },
-                { icon: Cloud, title: "Cloud Security Posture", desc: "Automated identification and remediation of risks across AWS, Azure, and GCP environments.", bg: "bg-cyan-100", color: "text-cyan-600" },
-                { icon: AlertTriangle, title: "Advanced Threat Hunting", desc: "Proactive searching through networks to detect and isolate advanced persistent threats.", bg: "bg-rose-100", color: "text-rose-600" },
-                { icon: Eye, title: "Identity & Access Management", desc: "Streamline user identities and access privileges with MFA and SSO integration.", bg: "bg-pink-100", color: "text-pink-600" }
-              ].map((sol, i) => (
-                <motion.div key={i} variants={fadeInUp} className="group flex gap-6 p-6 rounded-2xl hover:-translate-y-2 transition-all duration-500">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${sol.bg} ${sol.color} group-hover:scale-110 transition-transform`}>
-                    <sol.icon className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">{sol.title}</h3>
-                    <p className="text-slate-600 leading-relaxed font-medium">{sol.desc}</p>
                   </div>
                 </motion.div>
               ))}
