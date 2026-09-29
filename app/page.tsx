@@ -5,13 +5,31 @@ import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'fram
 import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
 
 const fadeInUp = {
-  hidden: { opacity: 0, y: 40 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] } }
+  hidden: { opacity: 0, y: 60, scale: 0.95, filter: "blur(10px)" },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1, 
+    filter: "blur(0px)",
+    transition: { 
+      type: "spring",
+      stiffness: 60,
+      damping: 14,
+      mass: 1,
+      bounce: 0.2
+    } 
+  }
 };
 
 const staggerContainer = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
+  visible: { 
+    opacity: 1, 
+    transition: { 
+      staggerChildren: 0.1,
+      delayChildren: 0.05
+    } 
+  }
 };
 
 const heroImages = [
@@ -345,7 +363,7 @@ export default function Home() {
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
+                  viewport={{ once: true, margin: "-50px" }}
                   transition={{ delay: i * 0.05, duration: 0.5 }}
                   key={i} 
                   className="flex items-center gap-4 px-4 py-3 hover:scale-110 transition-transform duration-500 min-w-[180px]"
@@ -372,7 +390,7 @@ export default function Home() {
         {/* SECTION: ABOUT US & VALUES */}
         <section id="about" className="py-24 bg-transparent relative border-b border-white/20">
           <div className="container mx-auto px-6">
-            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="mb-20 rounded-[2.5rem] overflow-hidden h-[350px] md:h-[500px] relative shadow-2xl group">
+            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.8 }} className="mb-20 rounded-[2.5rem] overflow-hidden h-[350px] md:h-[500px] relative shadow-2xl group">
                <div className="absolute inset-0 bg-slate-900/20 z-10"></div>
                <img src="https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&q=80&w=2000" alt="Cyber Security Team" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[4s] ease-out" />
                <div className="absolute inset-0 z-20 flex items-center p-6 md:p-16">
@@ -386,7 +404,7 @@ export default function Home() {
             </motion.div>
             
             <div className="grid lg:grid-cols-2 gap-16 items-start">
-              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer}>
+              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer}>
                 <motion.h2 variants={fadeInUp} className="text-4xl font-extrabold mb-8 flex items-center gap-4 text-slate-900">
                   <span className="w-10 h-1.5 bg-primary rounded-full shrink-0"></span>
                   Firm Overview
@@ -404,7 +422,7 @@ export default function Home() {
                 </div>
               </motion.div>
 
-              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="space-y-6">
+              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="space-y-6">
                 <motion.h2 variants={fadeInUp} className="text-3xl font-extrabold mb-8 text-slate-900 pl-6 border-l-4 border-primary">Core Principles</motion.h2>
                 
                 {[
@@ -430,14 +448,14 @@ export default function Home() {
         {/* SECTION: ADVANCED SOLUTIONS */}
         <section id="solutions" className="py-24 bg-transparent border-y border-white/20">
           <div className="container mx-auto px-6">
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="mb-16 text-center">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="mb-16 text-center">
               <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 font-bold text-xs mb-4 uppercase tracking-widest">
                 Next-Gen Solutions
               </motion.div>
               <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-extrabold text-slate-900 mb-6">Advanced Threat Defense</motion.h2>
             </motion.div>
 
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="grid md:grid-cols-2 gap-6">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-2 gap-6">
               {[
                 { icon: Key, title: "Zero Trust Architecture", desc: "Never trust, always verify. We implement micro-segmentation and continuous authentication.", bg: "bg-amber-100", color: "text-amber-600" },
                 { icon: Cloud, title: "Cloud Security Posture", desc: "Automated identification and remediation of risks across AWS, Azure, and GCP environments.", bg: "bg-cyan-100", color: "text-cyan-600" },
@@ -465,7 +483,7 @@ export default function Home() {
           <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-purple-400/10 rounded-full blur-[100px] -z-10 mix-blend-multiply"></div>
           
           <div className="container mx-auto px-6 relative z-10">
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="text-center max-w-3xl mx-auto mb-20">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="text-center max-w-3xl mx-auto mb-20">
               <motion.div variants={fadeInUp} className="inline-block mb-4">
                 <span className="text-xs font-black tracking-[0.2em] text-indigo-600 uppercase bg-indigo-50 border border-indigo-100 px-4 py-1.5 rounded-full shadow-sm">
                   Area of Expertise
@@ -479,7 +497,7 @@ export default function Home() {
               </motion.p>
             </motion.div>
             
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="grid md:grid-cols-3 gap-8">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-3 gap-8">
               {[
                 { icon: Server, title: "Security Operations Center", gradient: "from-blue-500 to-indigo-500", desc: "Continuous 24/7/365 infrastructure monitoring. We detect, triage, and respond to threats while deploying proactive tactics to minimize attack surfaces.", items: ['24/7/365 SOC Monitoring', 'SOAR Orchestration', 'Incident Response', 'Next-Gen Firewall Management'] },
                 { icon: Activity, title: "Vulnerability & Risk Management", gradient: "from-purple-500 to-pink-500", desc: "Proactively shield your enterprise against lateral movement and vulnerabilities introduced by configuration drift, third-party integrations, or shadow IT.", items: ['Vulnerability Assessments', 'User Behavior Analytics (UBA)', 'Zero Trust Network Access', 'Continuous Risk Monitoring'] },
@@ -523,7 +541,7 @@ export default function Home() {
         {/* SECTION: WE SUPPORT */}
         <section className="py-24 bg-transparent overflow-hidden border-b border-white/20">
           <div className="container mx-auto px-6">
-            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="bg-primary/80 backdrop-blur-2xl border border-white/20 p-10 md:p-16 rounded-[3rem] relative overflow-hidden shadow-2xl">
+            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.8 }} className="bg-primary/80 backdrop-blur-2xl border border-white/20 p-10 md:p-16 rounded-[3rem] relative overflow-hidden shadow-2xl">
               <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl mix-blend-overlay"></div>
               
               <div className="text-center max-w-2xl mx-auto mb-12 relative z-10">
@@ -567,7 +585,7 @@ export default function Home() {
         {/* SECTION: CSR */}
         <section id="csr" className="py-24 bg-transparent relative border-y border-white/20">
           <div className="container mx-auto px-6">
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="text-center max-w-3xl mx-auto mb-16">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="text-center max-w-3xl mx-auto mb-16">
               <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 font-bold text-xs mb-4 uppercase tracking-widest">
                 Corporate Social Responsibility
               </motion.div>
@@ -576,7 +594,7 @@ export default function Home() {
               </motion.h2>
             </motion.div>
 
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="grid md:grid-cols-2 gap-8">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-2 gap-8">
               {[
                 { 
                   icon: "🌐", title: "Digital Inclusion", 
@@ -641,7 +659,7 @@ export default function Home() {
                         key={i} 
                         initial={{ height: 0 }}
                         whileInView={{ height: `${h}%` }}
-                        viewport={{ once: true }}
+                        viewport={{ once: true, margin: "-50px" }}
                         transition={{ delay: i * 0.05, duration: 0.8, type: "spring" }}
                         className="flex-1 bg-gradient-to-t from-primary to-indigo-400 rounded-t-sm opacity-80 hover:opacity-100 cursor-pointer"
                       />
