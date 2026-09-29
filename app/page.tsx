@@ -659,10 +659,8 @@ export default function Home() {
             </div>
             <div className="flex items-center justify-center lg:justify-end gap-2 bg-slate-100/50 backdrop-blur-sm px-5 py-2.5 rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-indigo-300/50 group cursor-pointer">
               <span className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-0.5 group-hover:text-slate-600 transition-colors">Powered by</span>
-              <div className="flex items-center gap-1.5">
-                <div className="bg-gradient-to-tr from-primary to-indigo-500 p-1 rounded-md shadow-sm">
-                  <Shield className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
-                </div>
+              <div className="flex items-center gap-2">
+                <img src="/logo.png" alt="Netamps Logo" className="w-5 h-5 object-contain" />
                 <span className="font-black text-[15px] tracking-tight bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-800 bg-clip-text text-transparent group-hover:from-primary group-hover:to-indigo-600 transition-all duration-500">
                   NETAMPS
                 </span>
