@@ -75,9 +75,24 @@ export default function Home() {
   const [badgeIndex, setBadgeIndex] = useState(0);
   const [hoveredExpertise, setHoveredExpertise] = useState<number | null>(null);
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-  
-  // Contact Form State
-  // Contact state removed
+  const [currentTimeIST, setCurrentTimeIST] = useState<string>('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+      setCurrentTimeIST(formatter.format(now) + ' IST');
+    };
+    
+    updateTime();
+    const interval = setInterval(updateTime, 10000);
+    return () => clearInterval(interval);
+  }, []);
   
   // Ticker animation state
   const baseX = useMotionValue(0);
@@ -174,6 +189,12 @@ export default function Home() {
             <span className="font-black text-xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-400 to-indigo-600 animate-text-glitter drop-shadow-sm hidden sm:block">NETAMPS TECHNOLOGIES</span>
           </a>
           <div className="flex items-center gap-6">
+            {currentTimeIST && (
+              <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200 shadow-sm cursor-default hover:text-slate-900 transition-colors">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                {currentTimeIST}
+              </div>
+            )}
             <nav className="hidden lg:flex items-center gap-4">
               {[
                 { name: 'Home', href: '#' },
