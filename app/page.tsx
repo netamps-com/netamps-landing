@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
-import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu } from 'lucide-react';
+import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 40 },
@@ -39,15 +39,15 @@ const heroBadges = [
 ];
 
 const expertiseAreas = [
-  { title: "Digital Forensics (DFIR)", desc: "Deep-dive forensic analysis, chain-of-custody preservation, and rapid incident post-mortems for critical infrastructure breaches.", color: "border-indigo-400/50 bg-indigo-500/20 text-indigo-100" },
-  { title: "Risk & Compliance", desc: "Enterprise architecture alignment with stringent global frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-400/50 bg-emerald-500/20 text-emerald-100" },
-  { title: "Network Infrastructure", desc: "Implementation of enterprise-grade networking foundations, Zero Trust Network Access, and Next-Gen IPS/IDS.", color: "border-blue-400/50 bg-blue-500/20 text-blue-100" },
-  { title: "Smart Surveillance & AI Analytics", desc: "Deploying intelligent AI-driven surveillance networks for proactive physical security and behavioral anomaly detection.", color: "border-purple-400/50 bg-purple-500/20 text-purple-100" },
-  { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-400/50 bg-rose-500/20 text-rose-100" },
-  { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-400/50 bg-teal-500/20 text-teal-100" },
-  { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-400/50 bg-amber-500/20 text-amber-100" },
-  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-400/50 bg-cyan-500/20 text-cyan-100" },
-  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-yellow-400/50 bg-yellow-500/20 text-yellow-100" }
+  { title: "Digital Forensics (DFIR)", desc: "Deep-dive forensic analysis, chain-of-custody preservation, and rapid incident post-mortems for critical infrastructure breaches.", color: "border-indigo-400/50 bg-indigo-500/20 text-indigo-100", icon: Fingerprint },
+  { title: "Risk & Compliance", desc: "Enterprise architecture alignment with stringent global frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-400/50 bg-emerald-500/20 text-emerald-100", icon: Shield },
+  { title: "Network Infrastructure", desc: "Implementation of enterprise-grade networking foundations, Zero Trust Network Access, and Next-Gen IPS/IDS.", color: "border-blue-400/50 bg-blue-500/20 text-blue-100", icon: Network },
+  { title: "Smart Surveillance & AI Analytics", desc: "Deploying intelligent AI-driven surveillance networks for proactive physical security and behavioral anomaly detection.", color: "border-purple-400/50 bg-purple-500/20 text-purple-100", icon: Cctv },
+  { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-400/50 bg-rose-500/20 text-rose-100", icon: Cpu },
+  { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-400/50 bg-teal-500/20 text-teal-100", icon: ShoppingCart },
+  { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-400/50 bg-amber-500/20 text-amber-100", icon: Repeat },
+  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-400/50 bg-cyan-500/20 text-cyan-100", icon: Target },
+  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-yellow-400/50 bg-yellow-500/20 text-yellow-100", icon: BookOpen }
 ];
 
 export default function Home() {
@@ -497,35 +497,21 @@ export default function Home() {
                 <p className="text-indigo-100 text-lg font-medium">Our deep specialization spans across critical domains of enterprise security and compliance.</p>
               </div>
 
-              <div className="flex flex-wrap justify-center gap-4 relative z-10 max-w-4xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10 mx-auto">
                 {expertiseAreas.map((item, i) => (
                   <motion.div 
                     key={i} 
-                    layout
-                    onMouseEnter={() => handleMouseEnter(i)}
-                    onMouseLeave={handleMouseLeave}
-                    className={`flex flex-col items-center justify-center gap-2 backdrop-blur-md px-6 py-4 rounded-[2rem] shadow-lg text-white overflow-hidden cursor-pointer transition-colors duration-500 ${hoveredExpertise === i ? item.color : 'bg-white/10 border border-white/20'}`}
-                    animate={{ 
-                      scale: hoveredExpertise === i ? 1.05 : 1
-                    }}
-                    transition={{ layout: { duration: 0.4, type: "spring", bounce: 0.15 } }}
+                    className={`flex flex-col gap-4 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 bg-white/5 hover:bg-white/10 group`}
                   >
-                    <motion.div layout="position" className="flex items-center gap-3">
-                      <CheckCircle className={`w-5 h-5 flex-shrink-0 ${hoveredExpertise === i ? 'text-white' : 'text-white/70'}`} />
-                      <span className="font-bold tracking-wide whitespace-nowrap">{item.title}</span>
-                    </motion.div>
-                    <AnimatePresence>
-                      {hoveredExpertise === i && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                          animate={{ opacity: 1, height: "auto", marginTop: 12 }}
-                          exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                          className="text-white/90 text-sm max-w-xs text-center leading-relaxed font-medium"
-                        >
-                          {item.desc}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${item.color}`}>
+                      {React.createElement(item.icon, { className: "w-6 h-6 text-white" })}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-xl text-white mb-2">{item.title}</h3>
+                      <p className="text-white/70 text-sm leading-relaxed font-medium">
+                        {item.desc}
+                      </p>
+                    </div>
                   </motion.div>
                 ))}
               </div>
