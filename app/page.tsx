@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
-import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
+import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 60, scale: 0.95, filter: "blur(10px)" },
@@ -76,6 +76,7 @@ export default function Home() {
   const [hoveredExpertise, setHoveredExpertise] = useState<number | null>(null);
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [currentTimeIST, setCurrentTimeIST] = useState<string>('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const updateTime = () => {
@@ -212,11 +213,42 @@ export default function Home() {
                 </a>
               ))}
             </nav>
-            <button className="lg:hidden p-2 text-slate-600 bg-white/20 rounded-full border border-slate-200 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-primary">
-              <Menu className="w-6 h-6" />
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="lg:hidden p-2 text-slate-600 bg-white/20 rounded-full border border-slate-200 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-primary z-[60] relative">
+              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="lg:hidden bg-white/95 backdrop-blur-3xl border-b border-slate-200 shadow-xl overflow-hidden"
+            >
+              <div className="container mx-auto px-6 py-6 flex flex-col gap-4">
+                {[
+                  { name: 'Home', href: '#' },
+                  { name: 'About Us', href: '#about' },
+                  { name: 'Services', href: '#services' },
+                  { name: 'Solutions', href: '#solutions' },
+                  { name: 'CSR', href: '#csr' }
+                ].map((item) => (
+                  <a 
+                    key={item.name}
+                    href={item.href} 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100"
+                  >
+                    {item.name}
+                  </a>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.header>
 
       {/* NON-STOP NEWS TICKER */}
@@ -388,6 +420,8 @@ export default function Home() {
             </p>
             <div className="flex flex-wrap items-center justify-center gap-6">
               {[
+                { name: 'AWS', domain: 'aws.amazon.com' },
+                { name: 'Google Cloud', domain: 'cloud.google.com' },
                 { name: 'Intel', domain: 'intel.com', extra: 'Gold Partner' },
                 { name: 'HPE Aruba', domain: 'arubanetworks.com' },
                 { name: 'Seagate', domain: 'seagate.com' },
