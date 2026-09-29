@@ -46,7 +46,8 @@ const expertiseAreas = [
   { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-400/50 bg-rose-500/20 text-rose-100" },
   { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-400/50 bg-teal-500/20 text-teal-100" },
   { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-400/50 bg-amber-500/20 text-amber-100" },
-  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-400/50 bg-cyan-500/20 text-cyan-100" }
+  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-400/50 bg-cyan-500/20 text-cyan-100" },
+  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-yellow-400/50 bg-yellow-500/20 text-yellow-100" }
 ];
 
 export default function Home() {
