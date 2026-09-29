@@ -659,13 +659,8 @@ export default function Home() {
             </div>
             <div className="flex items-center justify-center lg:justify-end gap-1.5 bg-slate-100/50 backdrop-blur-sm px-5 py-2 rounded-full border border-slate-200/50 shadow-sm">
               <span className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-0.5">Powered by</span>
-              <span className="font-bold text-[1.1rem] tracking-tight leading-none flex items-center" style={{ fontFamily: 'Product Sans, sans-serif' }}>
-                <span className="text-[#4285F4]">G</span>
-                <span className="text-[#EA4335]">o</span>
-                <span className="text-[#FBBC05]">o</span>
-                <span className="text-[#4285F4]">g</span>
-                <span className="text-[#34A853]">l</span>
-                <span className="text-[#EA4335]">e</span>
+              <span className="font-bold text-sm tracking-tight leading-none text-slate-800">
+                Netamps Team
               </span>
             </div>
           </div>
