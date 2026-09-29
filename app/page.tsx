@@ -181,13 +181,8 @@ export default function Home() {
         className="fixed top-0 left-0 right-0 w-full z-50 backdrop-blur-3xl bg-slate-50/70 border-b border-slate-200/50 shadow-sm transition-all"
       >
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-          <a href="#" className="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-primary rounded-lg shrink-0">
-            <div className="relative flex items-center justify-center w-10 h-10 transition-all duration-500 group-hover:scale-110">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/80 to-indigo-600 rounded-xl shadow-[0_0_15px_rgba(79,70,229,0.5)] transform rotate-45 group-hover:rotate-90 transition-all duration-500"></div>
-              <div className="absolute inset-[2px] bg-slate-900 rounded-[10px] transform rotate-45 group-hover:rotate-90 transition-all duration-500"></div>
-              <span className="relative z-10 font-bold text-lg text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-indigo-400 tracking-tighter lowercase">nt</span>
-            </div>
-            <span className="font-black text-xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-400 to-indigo-600 animate-text-glitter drop-shadow-sm hidden sm:block">NETAMPS TECHNOLOGIES</span>
+          <a href="#" className="flex items-center group focus:outline-none focus:ring-2 focus:ring-primary rounded-lg shrink-0">
+            <img src="/logo.jpg" alt="Netamps Technologies" className="h-14 w-auto object-contain rounded shadow-md group-hover:scale-105 transition-transform duration-500" />
           </a>
           <div className="flex items-center gap-6">
             {currentTimeIST && (
