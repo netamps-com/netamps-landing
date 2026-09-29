@@ -57,15 +57,15 @@ const heroBadges = [
 ];
 
 const expertiseAreas = [
-  { title: "Digital Forensics (DFIR)", desc: "Deep-dive forensic analysis, chain-of-custody preservation, and rapid incident post-mortems for critical infrastructure breaches.", color: "border-indigo-400/50 bg-indigo-500/20 text-indigo-100", icon: Fingerprint },
-  { title: "Risk & Compliance", desc: "Enterprise architecture alignment with stringent global frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-400/50 bg-emerald-500/20 text-emerald-100", icon: Shield },
-  { title: "Network Infrastructure", desc: "Implementation of enterprise-grade networking foundations, Zero Trust Network Access, and Next-Gen IPS/IDS.", color: "border-blue-400/50 bg-blue-500/20 text-blue-100", icon: Network },
-  { title: "Smart Surveillance & AI Analytics", desc: "Deploying intelligent AI-driven surveillance networks for proactive physical security and behavioral anomaly detection.", color: "border-purple-400/50 bg-purple-500/20 text-purple-100", icon: Cctv },
-  { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-400/50 bg-rose-500/20 text-rose-100", icon: Cpu },
-  { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-400/50 bg-teal-500/20 text-teal-100", icon: ShoppingCart },
-  { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-400/50 bg-amber-500/20 text-amber-100", icon: Repeat },
-  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-400/50 bg-cyan-500/20 text-cyan-100", icon: Target },
-  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-yellow-400/50 bg-yellow-500/20 text-yellow-100", icon: BookOpen }
+  { title: "Digital Forensics (DFIR)", desc: "Deep-dive forensic analysis, chain-of-custody preservation, and rapid incident post-mortems for critical infrastructure breaches.", color: "border-indigo-200 bg-indigo-100 text-indigo-600", icon: Fingerprint },
+  { title: "Risk & Compliance", desc: "Enterprise architecture alignment with stringent global frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-200 bg-emerald-100 text-emerald-600", icon: Shield },
+  { title: "Network Infrastructure", desc: "Implementation of enterprise-grade networking foundations, Zero Trust Network Access, and Next-Gen IPS/IDS.", color: "border-blue-200 bg-blue-100 text-blue-600", icon: Network },
+  { title: "Smart Surveillance & AI Analytics", desc: "Deploying intelligent AI-driven surveillance networks for proactive physical security and behavioral anomaly detection.", color: "border-purple-200 bg-purple-100 text-purple-600", icon: Cctv },
+  { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-200 bg-rose-100 text-rose-600", icon: Cpu },
+  { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-200 bg-teal-100 text-teal-600", icon: ShoppingCart },
+  { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-200 bg-amber-100 text-amber-600", icon: Repeat },
+  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600", icon: Target },
+  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-orange-200 bg-orange-100 text-orange-600", icon: BookOpen }
 ];
 
 export default function Home() {
@@ -578,40 +578,38 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SECTION: WE SUPPORT */}
-        <section className="py-24 bg-transparent overflow-hidden border-b border-white/20">
+        {/* SECTION: AREAS OF EXPERTISE */}
+        <section className="py-24 bg-transparent overflow-hidden border-b border-slate-200/50">
           <div className="container mx-auto px-6">
-            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.8 }} className="bg-primary/80 backdrop-blur-2xl border border-white/20 p-10 md:p-16 rounded-[3rem] relative overflow-hidden shadow-2xl">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl mix-blend-overlay"></div>
-              
-              <div className="text-center max-w-2xl mx-auto mb-12 relative z-10">
-                <h2 className="text-4xl font-extrabold mb-4 text-white">Areas of Expertise</h2>
-                <p className="text-indigo-100 text-lg font-medium">Our deep specialization spans across critical domains of enterprise security and compliance.</p>
+            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.8 }} className="relative overflow-hidden">
+              <div className="text-center max-w-3xl mx-auto mb-16 relative z-10">
+                <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 font-bold text-xs mb-4 uppercase tracking-widest">
+                  Deep Specialization
+                </motion.div>
+                <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 text-slate-900">Areas of Expertise</h2>
+                <p className="text-slate-600 text-lg font-medium">Our deep specialization spans across critical domains of enterprise security and compliance.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10 mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10 mx-auto">
                 {expertiseAreas.map((item, i) => (
                   <motion.div 
                     key={i} 
-                    className="group relative flex flex-col p-8 rounded-3xl overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] cursor-pointer"
+                    className="group relative flex flex-col p-8 rounded-[2rem] bg-gradient-to-b from-white/60 to-white/10 hover:from-primary/10 hover:to-transparent transition-all duration-700 overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-2 cursor-pointer border border-white/60"
                   >
                     {/* Premium Glass Background */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-xl border border-white/10 rounded-3xl z-0 transition-all duration-500 group-hover:bg-white/10 group-hover:border-white/30"></div>
-                    
-                    {/* Glowing Accent Orb */}
-                    <div className={`absolute -top-20 -right-20 w-40 h-40 rounded-full blur-[60px] opacity-0 group-hover:opacity-50 transition-opacity duration-700 ${item.color.split(' ')[1].replace('/20', '')}`}></div>
+                    <div className="absolute inset-[1px] rounded-[2rem] bg-white/40 backdrop-blur-xl z-0 transition-colors duration-500 group-hover:bg-white/60"></div>
                     
                     {/* Content */}
                     <div className="relative z-10 flex flex-col h-full">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 mb-6 shadow-lg border backdrop-blur-md transition-all duration-500 group-hover:scale-110 group-hover:shadow-2xl ${item.color}`}>
-                        {React.createElement(item.icon, { className: "w-7 h-7 text-white drop-shadow-md" })}
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 mb-6 shadow-sm border border-white/80 transition-all duration-500 group-hover:scale-110 ${item.color}`}>
+                        {React.createElement(item.icon, { className: "w-7 h-7 drop-shadow-sm" })}
                       </div>
-                      <h3 className="font-bold text-xl text-white mb-3 tracking-tight group-hover:text-primary transition-colors duration-300">{item.title}</h3>
-                      <p className="text-indigo-100/70 text-sm leading-relaxed font-medium flex-grow group-hover:text-indigo-50 transition-colors duration-300">
+                      <h3 className="font-bold text-xl text-slate-900 mb-3 tracking-tight transition-colors duration-300">{item.title}</h3>
+                      <p className="text-slate-600 text-sm leading-relaxed font-medium flex-grow transition-colors duration-300">
                         {item.desc}
                       </p>
                       
-                      <div className="mt-6 flex items-center text-[11px] font-bold uppercase tracking-[0.2em] text-white opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 delay-75">
+                      <div className="mt-6 flex items-center text-[11px] font-bold uppercase tracking-[0.2em] text-slate-900 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 delay-75">
                         Explore <ArrowRight className="w-3 h-3 ml-1.5 text-primary" />
                       </div>
                     </div>
