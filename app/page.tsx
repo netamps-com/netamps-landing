@@ -167,9 +167,9 @@ export default function Home() {
                 <a 
                   key={item.name}
                   href={item.href} 
-                  className="text-sm font-bold text-slate-600 hover:text-primary transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-primary rounded px-2 py-1"
+                  className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm group overflow-hidden"
                 >
-                  {item.name}
+                  <span className="relative z-10 group-hover:text-white transition-colors">{item.name}</span>
                 </a>
               ))}
             </nav>
