@@ -300,6 +300,12 @@ export default function Home() {
                     key={src}
                     src={src} 
                     alt="Cyber Security Operations" 
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      if (!target.src.startsWith('data:')) {
+                        target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1000' height='800' viewBox='0 0 1000 800'%3E%3Crect width='1000' height='800' fill='%230f172a'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='40' fill='%23ffffff' font-weight='bold' text-anchor='middle' dy='.3em'%3ENETAMPS TECHNOLOGIES%3C/text%3E%3C/svg%3E";
+                      }
+                    }}
                     initial={false}
                     animate={{ 
                       opacity: heroImageIndex === index ? 1 : 0,
