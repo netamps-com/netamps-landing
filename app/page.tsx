@@ -529,15 +529,16 @@ export default function Home() {
               <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-extrabold text-slate-900 mb-6">Advanced Threat Defense</motion.h2>
             </motion.div>
 
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-2 gap-6">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
-                { icon: Key, title: "Zero Trust Architecture", desc: "Never trust, always verify. We implement micro-segmentation and continuous authentication.", bg: "bg-amber-100", color: "text-amber-600" },
-                { icon: Cloud, title: "Cloud Security Posture", desc: "Automated identification and remediation of risks across AWS, Azure, and GCP environments.", bg: "bg-cyan-100", color: "text-cyan-600" },
-                { icon: AlertTriangle, title: "Advanced Threat Hunting", desc: "Proactive searching through networks to detect and isolate advanced persistent threats.", bg: "bg-rose-100", color: "text-rose-600" },
-                { icon: Eye, title: "Identity & Access Management", desc: "Streamline user identities and access privileges with MFA and SSO integration.", bg: "bg-pink-100", color: "text-pink-600" }
+                { icon: Key, title: "Zero Trust Architecture", desc: "Never trust, always verify. We implement micro-segmentation and continuous authentication.", color: "border-amber-200 bg-amber-100 text-amber-600" },
+                { icon: Cloud, title: "Cloud Security Posture", desc: "Automated identification and remediation of risks across AWS, Azure, and GCP environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600" },
+                { icon: AlertTriangle, title: "Advanced Threat Hunting", desc: "Proactive searching through networks to detect and isolate advanced persistent threats.", color: "border-rose-200 bg-rose-100 text-rose-600" },
+                { icon: Eye, title: "Identity & Access Management", desc: "Streamline user identities and access privileges with MFA and SSO integration.", color: "border-pink-200 bg-pink-100 text-pink-600" },
+                ...expertiseAreas
               ].map((sol, i) => (
-                <motion.div key={i} variants={fadeInUp} className="group flex gap-6 p-6 rounded-2xl hover:-translate-y-2 transition-all duration-500">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${sol.bg} ${sol.color} group-hover:scale-110 transition-transform`}>
+                <motion.div key={i} variants={fadeInUp} className="group flex flex-col md:flex-row gap-6 p-6 rounded-2xl hover:-translate-y-2 transition-all duration-500 hover:shadow-xl bg-white/40 backdrop-blur-sm border border-slate-200/50">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${sol.color} group-hover:scale-110 transition-transform shadow-sm`}>
                     <sol.icon className="w-7 h-7" />
                   </div>
                   <div>
@@ -612,47 +613,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* SECTION: AREAS OF EXPERTISE */}
-        <section className="py-24 bg-transparent overflow-hidden border-b border-slate-200/50">
-          <div className="container mx-auto px-6">
-            <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.8 }} className="relative overflow-hidden">
-              <div className="text-center max-w-3xl mx-auto mb-16 relative z-10">
-                <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 font-bold text-xs mb-4 uppercase tracking-widest">
-                  Deep Specialization
-                </motion.div>
-                <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 text-slate-900">Areas of Expertise</h2>
-                <p className="text-slate-600 text-lg font-medium">Our deep specialization spans across critical domains of enterprise security and compliance.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10 mx-auto">
-                {expertiseAreas.map((item, i) => (
-                  <motion.div 
-                    key={i} 
-                    className="group relative flex flex-col p-8 rounded-[2rem] bg-gradient-to-b from-white/60 to-white/10 hover:from-primary/10 hover:to-transparent transition-all duration-700 overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-2 cursor-pointer border border-white/60"
-                  >
-                    {/* Premium Glass Background */}
-                    <div className="absolute inset-[1px] rounded-[2rem] bg-white/40 backdrop-blur-xl z-0 transition-colors duration-500 group-hover:bg-white/60"></div>
-                    
-                    {/* Content */}
-                    <div className="relative z-10 flex flex-col h-full">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 mb-6 shadow-sm border border-white/80 transition-all duration-500 group-hover:scale-110 ${item.color}`}>
-                        {React.createElement(item.icon, { className: "w-7 h-7 drop-shadow-sm" })}
-                      </div>
-                      <h3 className="font-bold text-xl text-slate-900 mb-3 tracking-tight transition-colors duration-300">{item.title}</h3>
-                      <p className="text-slate-600 text-sm leading-relaxed font-medium flex-grow transition-colors duration-300">
-                        {item.desc}
-                      </p>
-                      
-                      <div className="mt-6 flex items-center text-[11px] font-bold uppercase tracking-[0.2em] text-slate-900 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 delay-75">
-                        Explore <ArrowRight className="w-3 h-3 ml-1.5 text-primary" />
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        </section>
 
         {/* SECTION: CSR */}
         <section id="csr" className="py-24 bg-transparent relative border-y border-white/20">
