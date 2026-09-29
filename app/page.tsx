@@ -761,15 +761,15 @@ export default function Home() {
               <p className="text-slate-600 uppercase tracking-widest font-black">Netamps Technologies Private Limited <span className="text-slate-400 font-medium ml-2">CIN: U72900KA2022PTC167699</span></p>
               <p>&copy; {new Date().getFullYear()} Netamps Technologies. All rights reserved. All trademarks, logos and brand names are the property of their respective owners.</p>
             </div>
-            <div className="flex items-center justify-center lg:justify-end gap-2 bg-slate-100/50 backdrop-blur-sm px-5 py-2.5 rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-indigo-300/50 group cursor-pointer">
-              <span className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-0.5 group-hover:text-slate-600 transition-colors">Powered by</span>
-              <div className="flex items-center gap-2">
-                <div className="bg-gradient-to-tr from-indigo-600 to-blue-600 p-1 rounded shadow-sm flex items-center justify-center">
-                  <img src="/logo.png" alt="Netamps Logo" className="w-4 h-4 object-contain brightness-0 invert" />
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-end gap-4">
+              <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-5 py-2.5 rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-300/50 group cursor-pointer">
+                <span className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-0.5 group-hover:text-slate-600 transition-colors">Powered by</span>
+                <div className="flex items-center gap-1.5">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo" className="w-4 h-4 object-contain" />
+                  <span className="font-black text-[15px] tracking-tight text-slate-700 group-hover:text-slate-900 transition-all duration-500">
+                    Google
+                  </span>
                 </div>
-                <span className="font-black text-[15px] tracking-tight bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-800 bg-clip-text text-transparent group-hover:from-primary group-hover:to-indigo-600 transition-all duration-500">
-                  NETAMPS
-                </span>
               </div>
             </div>
           </div>
