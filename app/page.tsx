@@ -501,16 +501,27 @@ export default function Home() {
                 {expertiseAreas.map((item, i) => (
                   <motion.div 
                     key={i} 
-                    className={`flex flex-col gap-4 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 bg-white/5 hover:bg-white/10 group`}
+                    className="group relative flex flex-col p-8 rounded-3xl overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.5)] cursor-pointer"
                   >
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${item.color}`}>
-                      {React.createElement(item.icon, { className: "w-6 h-6 text-white" })}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-xl text-white mb-2">{item.title}</h3>
-                      <p className="text-white/70 text-sm leading-relaxed font-medium">
+                    {/* Premium Glass Background */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/0 backdrop-blur-xl border border-white/10 rounded-3xl z-0 transition-all duration-500 group-hover:bg-white/10 group-hover:border-white/30"></div>
+                    
+                    {/* Glowing Accent Orb */}
+                    <div className={`absolute -top-20 -right-20 w-40 h-40 rounded-full blur-[60px] opacity-0 group-hover:opacity-50 transition-opacity duration-700 ${item.color.split(' ')[1].replace('/20', '')}`}></div>
+                    
+                    {/* Content */}
+                    <div className="relative z-10 flex flex-col h-full">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 mb-6 shadow-lg border backdrop-blur-md transition-all duration-500 group-hover:scale-110 group-hover:shadow-2xl ${item.color}`}>
+                        {React.createElement(item.icon, { className: "w-7 h-7 text-white drop-shadow-md" })}
+                      </div>
+                      <h3 className="font-bold text-xl text-white mb-3 tracking-tight group-hover:text-primary transition-colors duration-300">{item.title}</h3>
+                      <p className="text-indigo-100/70 text-sm leading-relaxed font-medium flex-grow group-hover:text-indigo-50 transition-colors duration-300">
                         {item.desc}
                       </p>
+                      
+                      <div className="mt-6 flex items-center text-[11px] font-bold uppercase tracking-[0.2em] text-white opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 delay-75">
+                        Explore <ArrowRight className="w-3 h-3 ml-1.5 text-primary" />
+                      </div>
                     </div>
                   </motion.div>
                 ))}
