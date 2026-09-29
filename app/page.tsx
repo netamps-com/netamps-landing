@@ -542,9 +542,27 @@ export default function Home() {
             
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-3 gap-8">
               {[
-                { icon: Server, title: "Security Operations Center", gradient: "from-blue-500 to-indigo-500", desc: "Continuous 24/7/365 infrastructure monitoring. We detect, triage, and respond to threats while deploying proactive tactics to minimize attack surfaces.", items: ['24/7/365 SOC Monitoring', 'SOAR Orchestration', 'Incident Response', 'Next-Gen Firewall Management'] },
-                { icon: Activity, title: "Vulnerability & Risk Management", gradient: "from-purple-500 to-pink-500", desc: "Proactively shield your enterprise against lateral movement and vulnerabilities introduced by configuration drift, third-party integrations, or shadow IT.", items: ['Vulnerability Assessments', 'User Behavior Analytics (UBA)', 'Zero Trust Network Access', 'Continuous Risk Monitoring'] },
-                { icon: Lock, title: "Data Protection & Privacy", gradient: "from-emerald-400 to-teal-500", desc: "Mitigate risk before exploitation. We implement comprehensive data lifecycle protections, resolving endpoint vulnerabilities and enforcing encryption.", items: ['Endpoint Detection & Response', 'Enterprise Email Security', 'Data Loss Prevention (DLP)', 'Cryptographic Controls'] }
+                { 
+                  icon: Server, 
+                  title: "Security Operations Center", 
+                  gradient: "from-blue-500 to-indigo-500", 
+                  desc: "Next-generation 24/7/365 infrastructure monitoring aligned with the MITRE ATT&CK framework and NIST SP 800-61 Rev. 2. We utilize AI-driven SIEM and automated threat intelligence feeds to detect, triage, and execute rapid incident response protocols before lateral movement occurs.", 
+                  items: ['MITRE ATT&CK Aligned Threat Hunting', 'Automated SOAR Playbooks', 'NIST-Compliant Incident Response', 'Cloud-Native XDR Integration'] 
+                },
+                { 
+                  icon: Activity, 
+                  title: "Vulnerability & Risk Management", 
+                  gradient: "from-purple-500 to-pink-500", 
+                  desc: "Enterprise risk quantification and continuous attack surface management mapped to CIS Controls v8 and ISO/IEC 27001 standards. We actively prevent exploitation caused by configuration drift, supply chain vulnerabilities, and shadow IT environments.", 
+                  items: ['Continuous Automated Red Teaming (CART)', 'CIS v8 Benchmark Auditing', 'Zero Trust Architecture (ZTA) Mapping', 'Third-Party Risk Management (TPRM)'] 
+                },
+                { 
+                  icon: Lock, 
+                  title: "Data Protection & Privacy", 
+                  gradient: "from-emerald-400 to-teal-500", 
+                  desc: "Comprehensive data lifecycle governance ensuring strict compliance with global mandates like GDPR, CCPA, and HIPAA. We enforce cryptographic controls, granular role-based access (RBAC), and endpoint protections to maintain sovereign data integrity.", 
+                  items: ['FIPS 140-3 Validated Cryptography', 'Regulatory Compliance Mapping', 'Data Loss Prevention (DLP) Policies', 'Identity-First Security (IAM/MFA)'] 
+                }
               ].map((svc, i) => (
                 <motion.div key={i} variants={fadeInUp} className="group relative p-[1px] rounded-[2rem] bg-gradient-to-b from-white/60 to-white/10 hover:from-primary/30 hover:to-transparent transition-all duration-700 overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-2">
                   {/* Inner Card */}
