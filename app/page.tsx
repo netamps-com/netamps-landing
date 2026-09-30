@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import SecureLoginButton from './SecureLoginButton';
 import PartnerNewsBulletin from './PartnerNewsBulletin';
 import ServerStatusWidget from './ServerStatusWidget';
+import NetampsLogo from './NetampsLogo';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
 import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
 
@@ -216,7 +217,7 @@ export default function Home() {
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
           <a href="#" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
             <div className="relative p-[3px] bg-white rounded-xl shadow-sm border border-slate-200 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.2)] group-hover:border-indigo-300 transition-all duration-500">
-              <img fetchPriority="high" decoding="async" src="/logo.jpg" alt="Netamps Technologies" className="h-10 w-10 md:h-12 md:w-12 object-cover rounded-lg group-hover:scale-[1.03] transition-transform duration-500" />
+              <NetampsLogo className="h-10 w-10 md:h-12 md:w-12 group-hover:scale-[1.03] transition-transform duration-500" />
             </div>
             <div className="hidden sm:flex flex-col">
               <span className="font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-900 text-2xl leading-none">NETAMPS</span>
@@ -817,7 +818,7 @@ export default function Home() {
               <div className="mt-2 flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-2 text-slate-400">
                 <span>Website developed & maintained by</span>
                 <div className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md hover:border-indigo-300/50 cursor-default">
-                  <img fetchPriority="high" decoding="async" src="/logo.jpg" alt="Netamps Logo" className="w-4 h-4 object-cover rounded-[3px]" />
+                  <NetampsLogo className="w-4 h-4 rounded-[3px]" />
                   <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 tracking-tight" style={{ fontFamily: 'var(--font-outfit)' }}>NETAMPS TECHNOLOGIES</span>
                 </div>
               </div>
