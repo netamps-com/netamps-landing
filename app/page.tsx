@@ -244,6 +244,7 @@ export default function Home() {
                   <span className="relative z-10 group-hover:text-white transition-colors">{item.name}</span>
                 </a>
               ))}
+              <SecureLoginButton />
             </nav>
             <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="lg:hidden p-2 text-slate-600 bg-white/20 rounded-full border border-slate-200 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-primary z-[60] relative">
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -277,6 +278,9 @@ export default function Home() {
                     {item.name}
                   </a>
                 ))}
+                <div className="pt-2 border-t border-slate-100 flex justify-center mt-2 w-full">
+                  <SecureLoginButton />
+                </div>
               </div>
             </motion.div>
           )}
@@ -819,6 +823,8 @@ export default function Home() {
     </div>
   );
 }
+
+
 
 
 
