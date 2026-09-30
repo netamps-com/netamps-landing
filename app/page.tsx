@@ -182,7 +182,7 @@ export default function Home() {
       >
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
           <a href="#" className="flex items-center group focus:outline-none focus:ring-2 focus:ring-primary rounded-lg shrink-0">
-            <img src="/logo.jpg" alt="Netamps Technologies" className="h-14 w-auto object-contain rounded shadow-md group-hover:scale-105 transition-transform duration-500" />
+            <img src="/logo.jpg" alt="Netamps Technologies" className="h-14 w-14 object-cover rounded shadow-md group-hover:scale-105 transition-transform duration-500" />
           </a>
           <div className="flex items-center gap-6">
             {currentTimeIST && (
