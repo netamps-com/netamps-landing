@@ -388,7 +388,10 @@ export default function Home() {
               </motion.div>
             </motion.div>
             
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1, ease: "easeOut" }} className="relative hidden lg:block">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1, ease: "easeOut" }} className="relative hidden lg:block flex flex-col items-end">
+              <div className="w-full flex justify-end mb-6 z-20 relative">
+                <ServerStatusWidget />
+              </div>
               <div className="aspect-[4/3] rounded-3xl bg-slate-100 border border-slate-200 shadow-2xl overflow-hidden relative group">
                 {heroImages.map((src, index) => (
                   <motion.img 
