@@ -356,9 +356,6 @@ export default function Home() {
       )}
 
       <main className="flex-grow">
-        <div className="w-full flex justify-center pt-10 relative z-30">
-          <ServerStatusWidget />
-        </div>
         
         {/* SECTION 1: HERO */}
         <section className="relative pt-16 pb-20 lg:pt-24 lg:pb-32 overflow-hidden bg-transparent border-b border-white/20">
