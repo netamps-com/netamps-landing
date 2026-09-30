@@ -376,7 +376,7 @@ export default function Home() {
                 Advanced Threat Intelligence, Digital Forensics, and Incident Response (DFIR) solutions designed to safeguard critical infrastructure against evolving threat vectors.
               </motion.p>
               <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4">
-                <a href="#contact" className="rainbow-btn bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
+                <a href="#services" className="rainbow-btn bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
                   Engage Our Experts <ArrowRight className="w-5 h-5" />
                 </a>
                 <a href="#about" className="rainbow-btn bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold text-lg transition-all text-center hover:-translate-y-1 shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
@@ -770,7 +770,7 @@ export default function Home() {
                 <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Infrastructure</a></li>
                 <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Risk & Vulnerability</a></li>
                 <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Data Security</a></li>
-                <li><a href="#support" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Digital Forensics</a></li>
+                <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Digital Forensics</a></li>
               </ul>
             </div>
             
