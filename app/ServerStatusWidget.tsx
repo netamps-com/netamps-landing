@@ -20,18 +20,18 @@ export default function ServerStatusWidget() {
 
   return (
     <div 
-      className="fixed bottom-6 left-6 z-[9999]"
+      className="relative z-[9999]"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <AnimatePresence>
         {isHovered && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-12 left-0 mb-2 w-64 bg-slate-900 border border-slate-700 shadow-2xl rounded-xl overflow-hidden font-mono text-xs"
+            className="absolute top-10 right-0 w-64 bg-slate-900 border border-slate-700 shadow-2xl rounded-xl overflow-hidden font-mono text-xs"
           >
             <div className="bg-slate-800/80 px-3 py-2 border-b border-slate-700 flex items-center justify-between">
               <span className="text-slate-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -85,16 +85,16 @@ export default function ServerStatusWidget() {
       </AnimatePresence>
 
       <motion.div 
-        className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 px-3 py-1.5 rounded-full shadow-lg cursor-help transition-colors hover:bg-slate-800"
+        className="flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 px-2 py-1 rounded-full shadow-lg cursor-help transition-colors hover:bg-slate-800"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
       >
-        <div className="relative flex items-center justify-center w-2.5 h-2.5">
+        <div className="relative flex items-center justify-center w-2 h-2">
           <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-75"></div>
-          <div className="relative bg-emerald-500 w-1.5 h-1.5 rounded-full"></div>
+          <div className="relative bg-emerald-500 w-1 h-1 rounded-full"></div>
         </div>
-        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
-          Netamps <span className="text-emerald-400">Live</span>
+        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider font-mono">
+          <span className="text-emerald-400 hidden lg:inline">Netamps</span> Live
         </span>
       </motion.div>
     </div>

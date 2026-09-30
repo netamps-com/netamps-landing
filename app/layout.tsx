@@ -78,7 +78,7 @@ export const metadata: Metadata = {
 import SecurityWrapper from "./SecurityWrapper";
 import CookieConsent from "./CookieConsent";
 import TrustSeal from "./TrustSeal";
-import ServerStatusWidget from "./ServerStatusWidget";
+
 
 export default function RootLayout({
   children,
@@ -98,7 +98,7 @@ export default function RootLayout({
           {children}
           <TrustSeal />
           <CookieConsent />
-          <ServerStatusWidget />
+          
         </SecurityWrapper>
       </body>
     </html>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import SecureLoginButton from './SecureLoginButton';
 import PartnerNewsBulletin from './PartnerNewsBulletin';
+import ServerStatusWidget from './ServerStatusWidget';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
 import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
 
@@ -229,7 +230,8 @@ export default function Home() {
                 {currentTimeIST}
               </div>
             )}
-            <nav className="hidden lg:flex items-center gap-4">
+            <ServerStatusWidget />
+              <nav className="hidden lg:flex items-center gap-4">
               {[
                 { name: 'Home', href: '#' },
                 { name: 'About Us', href: '#about' },
