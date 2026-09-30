@@ -413,7 +413,7 @@ export default function Home() {
                 <a href="#services" className="rainbow-btn bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
                   Engage Our Experts <ArrowRight className="w-5 h-5" />
                 </a>
-                <a href="#services" className="rainbow-btn bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold text-lg transition-all text-center hover:-translate-y-1 shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
+                <a href="#solutions" className="rainbow-btn bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold text-lg transition-all text-center hover:-translate-y-1 shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
                   Explore Capabilities
                 </a>
               </motion.div>
