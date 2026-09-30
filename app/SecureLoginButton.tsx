@@ -35,10 +35,6 @@ export default function SecureLoginButton() {
   const handleSecureLogin = () => {
     setIsVerifying(true);
     
-    // MUST open the tab synchronously during the click event to bypass aggressive popup blockers
-    // We open it normally first so we don't lose the Javascript reference to the window object
-    const secureTab = window.open('about:blank', '_blank');
-    
     // Industry standard URL obfuscation for bot protection
     const encryptedUrl = 'aHR0cHM6Ly93ZWJtYWlsLm5ldGFtcHMuaW4v';
     
@@ -46,19 +42,11 @@ export default function SecureLoginButton() {
     setTimeout(() => {
       const cleanUrl = atob(encryptedUrl);
       
-      // Safely route the clean URL into the secured background tab
-      if (secureTab) {
-        // Apply strict cross-site scripting (XSS) protections programmatically before navigating
-        // We drop 'noreferrer' so Cloudflare WAF can verify the traffic originated from netamps.com
-        secureTab.opener = null; 
-        secureTab.location.href = cleanUrl;
-      } else {
-        // Absolute fallback if the browser completely blocked the popup creation
-        window.location.href = cleanUrl;
-      }
+      // Standard same-tab redirect (preserves Referer header for Cloudflare WAF natively)
+      window.location.href = cleanUrl;
       
-      // Reset the verification modal immediately after routing
-      setIsVerifying(false);
+      // Fallback reset slightly after redirect initiates to clear bfcache state
+      setTimeout(() => { setIsVerifying(false) }, 800);
     }, 2500);
   };
 
