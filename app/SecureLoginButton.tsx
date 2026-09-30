@@ -91,8 +91,17 @@ export default function SecureLoginButton() {
                 <span className="text-sm font-bold text-slate-700">Establishing Secure Connection...</span>
               </div>
               
-              <div className="mt-6 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest">
-                <Lock className="w-3 h-3" /> Encrypted Gateway
+              <div className="mt-6 w-full text-left bg-slate-900 rounded-lg p-3 border border-slate-800">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-800">
+                  <Lock className="w-3 h-3" /> Active Protocol Handshake
+                </div>
+                <ul className="text-[9px] text-slate-400 font-mono space-y-1">
+                  <li className="flex items-center gap-1"><span className="text-emerald-500">▶</span> HTTPS over TLS 1.3 + HSTS</li>
+                  <li className="flex items-center gap-1"><span className="text-emerald-500">▶</span> OIDC / SAML 2.0 with FIDO2</li>
+                  <li className="flex items-center gap-1"><span className="text-emerald-500">▶</span> IMAPS (Port 993) / SMTPS (Port 465)</li>
+                  <li className="flex items-center gap-1"><span className="text-emerald-500">▶</span> Zero-Trust Network Access (ZTNA)</li>
+                  <li className="flex items-center gap-1 text-emerald-400 animate-pulse"><span className="text-emerald-500">▶</span> Behavioral Anomaly Detection: CLEAR</li>
+                </ul>
               </div>
             </motion.div>
           </motion.div>
