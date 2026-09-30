@@ -7,5 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
     },
     sitemap: 'https://netamps.com/sitemap.xml',
+    host: 'https://netamps.com',
   };
 }
