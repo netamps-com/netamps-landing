@@ -61,16 +61,16 @@ const heroBadges = [
 ];
 
 const expertiseAreas = [
-  { title: "Digital Forensics (DFIR)", desc: "Deep-dive forensic analysis, chain-of-custody preservation, and rapid incident post-mortems for critical infrastructure breaches.", color: "border-indigo-200 bg-indigo-100 text-indigo-600", icon: Fingerprint },
-  { title: "Risk & Compliance", desc: "Enterprise architecture alignment with stringent global frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-200 bg-emerald-100 text-emerald-600", icon: Shield },
-  { title: "Network Infrastructure", desc: "Implementation of enterprise-grade networking foundations, Zero Trust Network Access, and Next-Gen IPS/IDS.", color: "border-blue-200 bg-blue-100 text-blue-600", icon: Network },
-  { title: "Smart Surveillance & AI Analytics", desc: "Deploying intelligent AI-driven surveillance networks for proactive physical security and behavioral anomaly detection.", color: "border-purple-200 bg-purple-100 text-purple-600", icon: Cctv },
-  { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-200 bg-rose-100 text-rose-600", icon: Cpu },
-  { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-200 bg-teal-100 text-teal-600", icon: ShoppingCart },
-  { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-200 bg-amber-100 text-amber-600", icon: Repeat },
-  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600", icon: Target },
-  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-orange-200 bg-orange-100 text-orange-600", icon: BookOpen },
-  { title: "Cloud Architecture Management (MSP)", desc: "Assisting with migration, day-to-day administration, and resource spend optimization on major platforms like AWS, Microsoft Azure, or Google Cloud from for all types of infrastructure.", color: "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-600", icon: Server }
+  { title: "Digital Forensics (DFIR)", desc: "Deep-dive forensic analysis, chain-of-custody preservation, and rapid incident post-mortems for critical infrastructure breaches.", color: "border-indigo-200 bg-indigo-100 text-indigo-600", icon: Fingerprint, bgImage: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=600" },
+  { title: "Risk & Compliance", desc: "Enterprise architecture alignment with stringent global frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-200 bg-emerald-100 text-emerald-600", icon: Shield, bgImage: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=600" },
+  { title: "Network Infrastructure", desc: "Implementation of enterprise-grade networking foundations, Zero Trust Network Access, and Next-Gen IPS/IDS.", color: "border-blue-200 bg-blue-100 text-blue-600", icon: Network, bgImage: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=600" },
+  { title: "Smart Surveillance & AI Analytics", desc: "Deploying intelligent AI-driven surveillance networks for proactive physical security and behavioral anomaly detection.", color: "border-purple-200 bg-purple-100 text-purple-600", icon: Cctv, bgImage: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&q=80&w=600" },
+  { title: "Internet of Things (IoT)", desc: "Securing and managing vast networks of connected devices to prevent edge-network compromises.", color: "border-rose-200 bg-rose-100 text-rose-600", icon: Cpu, bgImage: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=600" },
+  { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-200 bg-teal-100 text-teal-600", icon: ShoppingCart, bgImage: "https://images.unsplash.com/photo-1591405351990-4726e331f141?auto=format&fit=crop&q=80&w=600" },
+  { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-200 bg-amber-100 text-amber-600", icon: Repeat, bgImage: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&q=80&w=600" },
+  { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600", icon: Target, bgImage: "https://images.unsplash.com/photo-1510511459019-5d01a80c9e65?auto=format&fit=crop&q=80&w=600" },
+  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-orange-200 bg-orange-100 text-orange-600", icon: BookOpen, bgImage: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&q=80&w=600" },
+  { title: "Cloud Architecture Management (MSP)", desc: "Assisting with migration, day-to-day administration, and resource spend optimization on major platforms like AWS, Microsoft Azure, or Google Cloud from for all types of infrastructure.", color: "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-600", icon: Server, bgImage: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600" }
 ];
 
 export default function Home() {
@@ -664,17 +664,21 @@ export default function Home() {
 
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
-                { icon: Key, title: "Zero Trust Architecture", desc: "Never trust, always verify. We implement micro-segmentation and continuous authentication.", color: "border-amber-200 bg-amber-100 text-amber-600" },
-                { icon: Cloud, title: "Cloud Security Posture", desc: "Automated identification and remediation of risks across AWS, Azure, and GCP environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600" },
-                { icon: AlertTriangle, title: "Advanced Threat Hunting", desc: "Proactive searching through networks to detect and isolate advanced persistent threats.", color: "border-rose-200 bg-rose-100 text-rose-600" },
-                { icon: Eye, title: "Identity & Access Management", desc: "Streamline user identities and access privileges with MFA and SSO integration.", color: "border-pink-200 bg-pink-100 text-pink-600" },
+                { icon: Key, title: "Zero Trust Architecture", desc: "Never trust, always verify. We implement micro-segmentation and continuous authentication.", color: "border-amber-200 bg-amber-100 text-amber-600", bgImage: "https://images.unsplash.com/photo-1614064641913-6b71a3061283?auto=format&fit=crop&q=80&w=600" },
+                { icon: Cloud, title: "Cloud Security Posture", desc: "Automated identification and remediation of risks across AWS, Azure, and GCP environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600", bgImage: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&q=80&w=600" },
+                { icon: AlertTriangle, title: "Advanced Threat Hunting", desc: "Proactive searching through networks to detect and isolate advanced persistent threats.", color: "border-rose-200 bg-rose-100 text-rose-600", bgImage: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=600" },
+                { icon: Eye, title: "Identity & Access Management", desc: "Streamline user identities and access privileges with MFA and SSO integration.", color: "border-pink-200 bg-pink-100 text-pink-600", bgImage: "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&q=80&w=600" },
                 ...expertiseAreas
               ].map((sol, i) => (
-                <motion.div key={i} variants={fadeInUp} className="group flex flex-col md:flex-row gap-6 p-6 rounded-2xl hover:-translate-y-2 transition-all duration-500 hover:shadow-xl bg-white/40 backdrop-blur-sm border border-slate-200/50">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${sol.color} group-hover:scale-110 transition-transform shadow-sm`}>
+                <motion.div key={i} variants={fadeInUp} className="group relative flex flex-col md:flex-row gap-6 p-6 rounded-2xl hover:-translate-y-2 transition-all duration-500 hover:shadow-xl bg-white/40 hover:bg-white/80 backdrop-blur-sm border border-slate-200/50 overflow-hidden z-10">
+                  <div 
+                    className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-700 bg-cover bg-center -z-10"
+                    style={{ backgroundImage: `url(${sol.bgImage})` }}
+                  ></div>
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${sol.color} group-hover:scale-110 transition-transform shadow-sm relative z-10`}>
                     <sol.icon className="w-7 h-7" />
                   </div>
-                  <div>
+                  <div className="relative z-10">
                     <h3 className="text-xl font-bold text-slate-900 mb-2">{sol.title}</h3>
                     <p className="text-slate-600 leading-relaxed font-medium">{sol.desc}</p>
                   </div>
