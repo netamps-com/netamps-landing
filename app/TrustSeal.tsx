@@ -9,7 +9,7 @@ export default function TrustSeal() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 1, duration: 0.5 }}
-      className="fixed bottom-6 left-6 z-50 flex flex-col gap-2 group cursor-default"
+      className="fixed bottom-6 left-6 z-[9999] flex flex-col gap-2 group cursor-default"
     >
       <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 p-2 pr-4 rounded-full shadow-2xl hover:bg-slate-800 transition-colors">
         <div className="bg-emerald-500/20 p-2 rounded-full relative">
