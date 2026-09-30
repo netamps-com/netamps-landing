@@ -18,6 +18,9 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://netamps.com'),
+  alternates: {
+    canonical: 'https://netamps.com',
+  },
   title: {
     default: "Netamps Technologies | Enterprise Cyber Security & Digital Forensics",
     template: "%s | Netamps Technologies"
