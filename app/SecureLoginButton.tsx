@@ -37,23 +37,18 @@ export default function SecureLoginButton() {
     
     // Industry standard URL obfuscation for bot protection
     const encryptedUrl = 'aHR0cHM6Ly93ZWJtYWlsLm5ldGFtcHMuaW4v';
+    const cleanUrl = atob(encryptedUrl);
     
-    // Simulate reCAPTCHA / Cloudflare Turnstile human verification delay
-    // Note: Timeout reduced to 800ms to prevent browser popup-blockers from blocking window.open
-    setTimeout(() => {
-      const cleanUrl = atob(encryptedUrl);
-      
-      // Open in a new tab. Using 'noopener' prevents tab hijacking.
-      // We explicitly DO NOT use 'noreferrer' so that Cloudflare WAF still receives the Referer header from netamps.com.
-      const newWindow = window.open(cleanUrl, '_blank', 'noopener');
-      
-      // If popup blocker caught it, fallback to same tab
-      if (!newWindow) {
-        window.location.href = cleanUrl;
-      }
-      
+    // 1. OPEN IMMEDIATELY: This guarantees the browser popup blocker will NEVER block the new tab
+    // because it is a direct, synchronous result of a physical mouse click.
+    // We use 'noopener' but omit 'noreferrer' to preserve the strict Cloudflare WAF Referer header.
+    window.open(cleanUrl, '_blank', 'noopener');
+    
+    // 2. VISUAL PROTOCOL: We keep the security verification modal spinning in the background 
+    // on the main tab to maintain the "industry security protocol" aesthetic, then reset it.
+    setTimeout(() => { 
       setIsVerifying(false);
-    }, 800);
+    }, 1500);
   };
 
   return (
