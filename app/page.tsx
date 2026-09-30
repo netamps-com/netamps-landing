@@ -5,7 +5,7 @@ import SecureLoginButton from './SecureLoginButton';
 import PartnerNewsBulletin from './PartnerNewsBulletin';
 import ServerStatusWidget from './ServerStatusWidget';
 import NetampsLogo from './NetampsLogo';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
 import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Target, ShoppingCart } from 'lucide-react';
 
 const fadeInUp = {
