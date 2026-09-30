@@ -322,12 +322,12 @@ export default function Home() {
                 }
                 
                 return (
-                  <a key={`main-${i}`} href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group">
+                  <button key={`main-${i}`} onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")} className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none">
                     <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm ${badgeColor}`}>
                       {icon} {item.source}
                     </div>
                     <span className="rainbow-text-hover">{item.title}</span>
-                  </a>
+                    </button>
                 );
               })}
             </motion.div>
@@ -341,12 +341,12 @@ export default function Home() {
               className="flex items-center whitespace-nowrap pl-[180px] cursor-pointer py-2"
             >
               {[...hackersNews, ...hackersNews, ...hackersNews, ...hackersNews].map((item, i) => (
-                <a key={`hacker-${i}`} href={item.link} target="_blank" rel="noopener noreferrer" className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group">
+                <button key={`hacker-${i}`} onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")} className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none">
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm bg-green-600 text-white">
                     <Lock className="w-3 h-3" /> {item.source}
                   </div>
                   <span className="rainbow-text-hover">{item.title}</span>
-                </a>
+                    </button>
               ))}
             </motion.div>
           )}
@@ -823,6 +823,9 @@ export default function Home() {
     </div>
   );
 }
+
+
+
 
 
 
