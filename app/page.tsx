@@ -94,6 +94,36 @@ export default function Home() {
     const interval = setInterval(updateTime, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    // Generate Session ID if missing
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('sid')) {
+        const sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        url.searchParams.set('sid', sid);
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+
+    // Intercept anchor clicks to prevent # in URL
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+      const href = anchor?.getAttribute('href');
+      if (anchor && href?.startsWith('#')) {
+        e.preventDefault();
+        const id = href.substring(1);
+        if (id) {
+          document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
   
   // Ticker animation state
   const baseX = useMotionValue(0);
