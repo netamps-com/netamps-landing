@@ -36,12 +36,14 @@ export default function PartnerNewsBulletin() {
       try {
         const fetchPromises = RSS_FEEDS.map(async (feed) => {
           // Bypass CORS using rss2json proxy securely
-          const response = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`);
+          // Added random query to bypass aggressive browser caching on polls
+          const cacheBuster = `&_cb=${Date.now()}`;
+          const response = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}${cacheBuster}`);
           if (!response.ok) return [];
           const data = await response.json();
           
-          return (data.items || []).slice(0, 2).map((item: any, idx: number) => ({
-            id: `${feed.source.replace(/\s+/g, '')}-${idx}-${Date.now()}`,
+          return (data.items || []).slice(0, 3).map((item: any, idx: number) => ({
+            id: `${feed.source.replace(/\s+/g, '')}-${item.guid || item.link}`,
             title: item.title,
             link: item.link,
             pubDate: new Date(item.pubDate).toLocaleString('en-US', { hour12: false }),
@@ -50,8 +52,18 @@ export default function PartnerNewsBulletin() {
         });
 
         const results = await Promise.all(fetchPromises);
-        const allNews = results.flat().sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()).slice(0, 10);
-        setNews(allNews);
+        const fetchedNews = results.flat();
+        
+        setNews((prevNews) => {
+          // Deduplicate by strict URL matching to guarantee no repetitions
+          const newUniqueItems = fetchedNews.filter(n => !prevNews.some(p => p.link === n.link));
+          if (newUniqueItems.length === 0) return prevNews;
+          
+          // Merge, sort strictly by time, and slice to keep the interface fast
+          return [...newUniqueItems, ...prevNews]
+            .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+            .slice(0, 12);
+        });
       } catch (error) {
         console.error("Failed to load partner RSS feeds");
       } finally {
@@ -59,7 +71,12 @@ export default function PartnerNewsBulletin() {
       }
     };
 
+    // Initial fetch on component mount
     fetchFeeds();
+    
+    // Background polling every 5 minutes without user intervention
+    const pollInterval = setInterval(fetchFeeds, 300000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   // Auto-rotate items unless hovered
