@@ -36,8 +36,8 @@ export default function SecureLoginButton() {
     setIsVerifying(true);
     
     // MUST open the tab synchronously during the click event to bypass aggressive popup blockers
-    // Using 'noopener,noreferrer' strictly prevents the destination from accessing the origin tab via window.opener
-    const secureTab = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    // We open it normally first so we don't lose the Javascript reference to the window object
+    const secureTab = window.open('about:blank', '_blank');
     
     // Industry standard URL obfuscation for bot protection
     const encryptedUrl = 'aHR0cHM6Ly93ZWJtYWlsLm5ldGFtcHMuaW4v';
@@ -51,6 +51,8 @@ export default function SecureLoginButton() {
       
       // Safely route the tokenized URL into the secured background tab
       if (secureTab) {
+        // Apply strict cross-site scripting (XSS) protections programmatically before navigating
+        secureTab.opener = null; 
         secureTab.location.href = tokenizedUrl;
       } else {
         // Absolute fallback if the browser completely blocked the popup creation
