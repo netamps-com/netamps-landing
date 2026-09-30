@@ -379,7 +379,7 @@ export default function Home() {
               </motion.div>
               <motion.h1 variants={fadeInUp} className="text-5xl lg:text-[4.5rem] font-black tracking-tighter mb-6 leading-[1.05] text-slate-900 flex flex-col gap-1">
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-400 to-indigo-600 pb-2 drop-shadow-sm animate-text-glitter" style={{ filter: 'drop-shadow(0 10px 20px rgba(79,70,229,0.25))' }}>
-                  Securing the Digital Frontier
+                  Netamps Technologies
                 </span>
               </motion.h1>
               <motion.p variants={fadeInUp} className="text-lg lg:text-xl text-slate-600 mb-10 leading-relaxed font-medium">
