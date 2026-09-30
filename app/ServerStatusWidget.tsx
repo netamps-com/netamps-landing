@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import { Server, Activity, Zap, ShieldCheck, Globe } from 'lucide-react';
 
 export default function ServerStatusWidget() {
-  const [isHovered, setIsHovered] = useState(false);
+  
   const [cfLatency, setCfLatency] = useState(12);
   const [fbLatency, setFbLatency] = useState(24);
 
@@ -19,84 +19,39 @@ export default function ServerStatusWidget() {
   }, []);
 
   return (
-    <div 
-      className="relative z-[9999]"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <AnimatePresence>
-        {isHovered && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="absolute top-10 right-0 w-64 bg-slate-900 border border-slate-700 shadow-2xl rounded-xl overflow-hidden font-mono text-xs"
-          >
-            <div className="bg-slate-800/80 px-3 py-2 border-b border-slate-700 flex items-center justify-between">
-              <span className="text-slate-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" /> System Diagnostics
-              </span>
-              <span className="text-emerald-400 font-bold">99.999%</span>
-            </div>
-            
-            <div className="p-3 space-y-3">
-              {/* Cloudflare Stats */}
-              <div>
-                <div className="flex justify-between text-slate-400 mb-1">
-                  <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> Edge Routing</span>
-                  <span className="text-emerald-400">{cfLatency}ms</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <motion.div 
-                      className="h-full bg-blue-500"
-                      animate={{ width: `${Math.max(20, 100 - cfLatency)}%` }}
-                    />
-                  </div>
-                  <span className="text-slate-300 font-bold text-[10px]">CLOUDFLARE</span>
-                </div>
-              </div>
-
-              {/* Firebase Stats */}
-              <div>
-                <div className="flex justify-between text-slate-400 mb-1">
-                  <span className="flex items-center gap-1.5"><Server className="w-3.5 h-3.5" /> Core Infrastructure</span>
-                  <span className="text-emerald-400">{fbLatency}ms</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <motion.div 
-                      className="h-full bg-amber-500"
-                      animate={{ width: `${Math.max(20, 100 - (fbLatency/2))}%` }}
-                    />
-                  </div>
-                  <span className="text-slate-300 font-bold text-[10px]">FIREBASE</span>
-                </div>
-              </div>
-              
-              <div className="pt-2 border-t border-slate-800 flex items-center gap-2 text-[10px] text-slate-500 uppercase tracking-widest">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                Military-Grade Isolation Active
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <motion.div 
-        className="flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/50 px-2 py-1 rounded-full shadow-lg cursor-help transition-colors hover:bg-slate-800"
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
+    <div className="hidden lg:flex items-center bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full shadow-lg overflow-hidden font-mono text-[10px] uppercase tracking-wider divide-x divide-slate-700/50 cursor-default">
+      
+      {/* Live Indicator */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50">
         <div className="relative flex items-center justify-center w-2 h-2">
           <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-75"></div>
           <div className="relative bg-emerald-500 w-1 h-1 rounded-full"></div>
         </div>
-        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider font-mono">
-          <span className="text-emerald-400 hidden lg:inline">Netamps</span> Live
+        <span className="font-bold text-slate-300">
+          <span className="text-emerald-400">Netamps</span> Live
         </span>
-      </motion.div>
+      </div>
+
+      {/* Cloudflare Edge */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 group">
+        <Globe className="w-3 h-3 group-hover:text-blue-400 transition-colors" />
+        <span className="font-bold">Edge:</span>
+        <span className="text-emerald-400 font-bold w-6">{cfLatency}ms</span>
+      </div>
+
+      {/* Firebase Core */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 group">
+        <Server className="w-3 h-3 group-hover:text-amber-400 transition-colors" />
+        <span className="font-bold">Core:</span>
+        <span className="text-emerald-400 font-bold w-6">{fbLatency}ms</span>
+      </div>
+
+      {/* Uptime */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/30">
+        <Activity className="w-3 h-3 text-emerald-500" />
+        <span className="text-emerald-500 font-black tracking-tight">99.999%</span>
+      </div>
+      
     </div>
   );
 }
