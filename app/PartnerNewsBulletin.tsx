@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Rss, Activity, ShieldAlert, TerminalSquare } from 'lucide-react';
+import AdSenseBlock from './AdSenseBlock';
 
 interface NewsItem {
   id: string;
