@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import SecureLoginButton from './SecureLoginButton';
 import PartnerNewsBulletin from './PartnerNewsBulletin';
 import ServerStatusWidget from './ServerStatusWidget';
 import NetampsLogo from './NetampsLogo';
-import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
-import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Target, ShoppingCart } from 'lucide-react';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 60, scale: 0.95, filter: "blur(10px)" },
@@ -214,7 +214,7 @@ export default function Home() {
         className="fixed top-0 left-0 right-0 w-full z-50 backdrop-blur-3xl bg-slate-50/70 border-b border-slate-200/50 shadow-sm transition-all"
       >
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-          <a href="#" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
+          <a href="#" aria-label="Netamps Technologies – Home" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
             <div className="relative p-[3px] bg-white rounded-xl shadow-sm border border-slate-200 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.2)] group-hover:border-indigo-300 transition-all duration-500">
               <NetampsLogo className="h-10 w-10 md:h-12 md:w-12 group-hover:scale-[1.03] transition-transform duration-500" />
             </div>
@@ -324,7 +324,12 @@ export default function Home() {
                 }
                 
                 return (
-                  <button key={`main-${i}`} onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")} className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none">
+                  <button
+                    key={`main-${i}`}
+                    onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")}
+                    aria-label={`Read article: ${item.title} from ${item.source}`}
+                    className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none focus:ring-2 focus:ring-white/30 rounded"
+                  >
                     <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm ${badgeColor}`}>
                       {icon} {item.source}
                     </div>
@@ -343,7 +348,12 @@ export default function Home() {
               className="flex items-center whitespace-nowrap pl-[180px] cursor-pointer py-2"
             >
               {[...hackersNews, ...hackersNews, ...hackersNews, ...hackersNews].map((item, i) => (
-                <button key={`hacker-${i}`} onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")} className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none">
+                <button
+                  key={`hacker-${i}`}
+                  onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")}
+                  aria-label={`Read article: ${item.title} from ${item.source}`}
+                  className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none focus:ring-2 focus:ring-white/30 rounded"
+                >
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm bg-green-600 text-white">
                     <Lock className="w-3 h-3" /> {item.source}
                   </div>
@@ -746,7 +756,7 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
             <div className="col-span-2 lg:col-span-2">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center font-bold text-lg text-white">N</div>
+                <NetampsLogo className="w-10 h-10 rounded-lg" />
                 <span className="font-bold text-xl tracking-tight text-slate-900">Netamps Technologies</span>
               </div>
               <p className="text-slate-600 mb-8 max-w-sm font-medium">Leveraging big in the field of Digital Forensics & Cyber Security with emerging technologies.</p>

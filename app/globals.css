@@ -9,7 +9,7 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 14rem;
+  scroll-padding-top: 10rem;
 }
 
 @keyframes text-glitter {
@@ -47,7 +47,7 @@ h1, h2, h3, h4, h5, h6 {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(90deg, #ff0000, #ff7f00, #00ff00, #0000ff, #9400d3, #ff0000);
+  background: linear-gradient(90deg, #4f46e5, #7c3aed, #2563eb, #4f46e5);
   background-size: 300% 300%;
   z-index: -1;
   opacity: 0;
@@ -66,7 +66,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .rainbow-text-hover:hover {
-  background: linear-gradient(90deg, #ff0000, #ff7f00, #00ff00, #0000ff, #9400d3, #ff0000);
+  background: linear-gradient(90deg, #4f46e5, #7c3aed, #2563eb, #4f46e5);
   background-size: 300% 300%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -83,6 +83,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .animate-blob {
   animation: blob 10s infinite alternate ease-in-out;
+  will-change: transform;
 }
 
 .animation-delay-2000 {
@@ -94,12 +95,19 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .bg-grid-pattern {
-  background-image: radial-gradient(rgba(15, 23, 42, 0.1) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(15, 23, 42, 0.07) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
-html { scroll-behavior: smooth; }
-
+/* Accessibility: Respect OS-level reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 @supports (-webkit-touch-callout: none) {
   .min-h-screen {
