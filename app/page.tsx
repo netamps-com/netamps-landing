@@ -181,8 +181,14 @@ export default function Home() {
         className="fixed top-0 left-0 right-0 w-full z-50 backdrop-blur-3xl bg-slate-50/70 border-b border-slate-200/50 shadow-sm transition-all"
       >
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-          <a href="#" className="flex items-center group focus:outline-none focus:ring-2 focus:ring-primary rounded-lg shrink-0">
-            <img fetchPriority="high" decoding="async" src="/logo.jpg" alt="Netamps Technologies" className="h-16 w-16 md:h-[72px] md:w-[72px] object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />
+          <a href="#" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
+            <div className="relative p-[3px] bg-white rounded-xl shadow-sm border border-slate-200 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.2)] group-hover:border-indigo-300 transition-all duration-500">
+              <img fetchPriority="high" decoding="async" src="/logo.jpg" alt="Netamps Technologies" className="h-10 w-10 md:h-12 md:w-12 object-cover rounded-lg group-hover:scale-[1.03] transition-transform duration-500" />
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="font-black tracking-tight text-slate-900 text-xl leading-none">NETAMPS</span>
+              <span className="text-[9px] font-bold text-indigo-600 tracking-[0.25em] leading-none mt-1">TECHNOLOGIES</span>
+            </div>
           </a>
           <div className="flex items-center gap-6">
             {currentTimeIST && (
