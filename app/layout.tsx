@@ -97,6 +97,7 @@ export default function RootLayout({
           {children}
           <TrustSeal />
           <CookieConsent />
+          <ServerStatusWidget />
         </SecurityWrapper>
       </body>
     </html>
