@@ -524,11 +524,11 @@ export default function Home() {
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="text-center max-w-3xl mx-auto mb-20">
               <motion.div variants={fadeInUp} className="inline-block mb-4">
                 <span className="text-xs font-black tracking-[0.2em] text-indigo-600 uppercase bg-indigo-50 border border-indigo-100 px-4 py-1.5 rounded-full shadow-sm">
-                  Area of Expertise
+                  Next-Gen Solutions
                 </span>
               </motion.div>
               <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 tracking-tighter">
-                Core Capabilities
+                Advanced Threat Defense
               </motion.h2>
               <motion.p variants={fadeInUp} className="text-lg text-slate-600 font-medium">
                 We provide the critical expertise required to effectively investigate breaches and formulate comprehensive Incident Response plans.
@@ -598,9 +598,9 @@ export default function Home() {
           <div className="container mx-auto px-6">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="mb-16 text-center">
               <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 font-bold text-xs mb-4 uppercase tracking-widest">
-                Next-Gen Solutions
+                Area of Expertise
               </motion.div>
-              <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-extrabold text-slate-900 mb-6">Advanced Threat Defense</motion.h2>
+              <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-extrabold text-slate-900 mb-6">Core Capabilities</motion.h2>
             </motion.div>
 
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
