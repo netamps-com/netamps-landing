@@ -39,15 +39,21 @@ export default function SecureLoginButton() {
     const encryptedUrl = 'aHR0cHM6Ly93ZWJtYWlsLm5ldGFtcHMuaW4v';
     
     // Simulate reCAPTCHA / Cloudflare Turnstile human verification delay
+    // Note: Timeout reduced to 800ms to prevent browser popup-blockers from blocking window.open
     setTimeout(() => {
       const cleanUrl = atob(encryptedUrl);
       
-      // Standard same-tab redirect (preserves Referer header for Cloudflare WAF natively)
-      window.location.href = cleanUrl;
+      // Open in a new tab. Using 'noopener' prevents tab hijacking.
+      // We explicitly DO NOT use 'noreferrer' so that Cloudflare WAF still receives the Referer header from netamps.com.
+      const newWindow = window.open(cleanUrl, '_blank', 'noopener');
       
-      // Fallback reset slightly after redirect initiates to clear bfcache state
-      setTimeout(() => { setIsVerifying(false) }, 800);
-    }, 2500);
+      // If popup blocker caught it, fallback to same tab
+      if (!newWindow) {
+        window.location.href = cleanUrl;
+      }
+      
+      setIsVerifying(false);
+    }, 800);
   };
 
   return (
