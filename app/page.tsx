@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import SecureLoginButton from './SecureLoginButton';
+import SecureLoginButton from './SecureLoginButton';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
 import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Monitor, Target, ShoppingCart } from 'lucide-react';
 
