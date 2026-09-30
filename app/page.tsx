@@ -415,7 +415,7 @@ export default function Home() {
                 ))}
                 
                 <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent z-10 pointer-events-none"></div>
-                <div className="absolute bottom-6 left-6 right-6 z-20 h-[80px]">
+                <div className="absolute bottom-6 left-6 right-6 z-20 h-[64px]">
                   {heroBadges.map((badge, index) => {
                     const isActive = badgeIndex === index;
                     return (
@@ -428,20 +428,20 @@ export default function Home() {
                           pointerEvents: isActive ? 'auto' : 'none'
                         }}
                         transition={{ duration: 0.4, ease: "easeInOut" }}
-                        className="absolute inset-0 flex justify-between items-end bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-white shadow-sm"
+                        className="absolute inset-0 flex justify-between items-center bg-white/80 backdrop-blur-md px-4 py-2 rounded-xl border border-white shadow-sm"
                       >
-                        <div>
-                          <div className={`text-xs font-bold px-2 py-1 rounded inline-block mb-1 border ${badge.bgClass} ${badge.textClass} ${badge.borderClass}`}>
+                        <div className="flex flex-col justify-center">
+                          <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded inline-block mb-0.5 border ${badge.bgClass} ${badge.textClass} ${badge.borderClass}`}>
                             {badge.status}
                           </div>
-                          <div className="font-bold text-lg text-slate-900">{badge.text}</div>
+                          <div className="font-bold text-sm text-slate-900">{badge.text}</div>
                         </div>
                         <motion.div 
                           animate={{ rotate: 360 }} 
                           transition={{ duration: 12, repeat: Infinity, ease: "linear" }} 
-                          className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0"
+                          className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0"
                         >
-                          {React.createElement(badge.icon, { className: "w-5 h-5 text-primary" })}
+                          {React.createElement(badge.icon, { className: "w-4 h-4 text-primary" })}
                         </motion.div>
                       </motion.div>
                     );
