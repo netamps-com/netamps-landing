@@ -219,8 +219,8 @@ export default function Home() {
               <img fetchPriority="high" decoding="async" src="/logo.jpg" alt="Netamps Technologies" className="h-10 w-10 md:h-12 md:w-12 object-cover rounded-lg group-hover:scale-[1.03] transition-transform duration-500" />
             </div>
             <div className="hidden sm:flex flex-col">
-              <span className="font-black tracking-tight text-slate-900 text-xl leading-none">NETAMPS</span>
-              <span className="text-[9px] font-bold text-indigo-600 tracking-[0.25em] leading-none mt-1">TECHNOLOGIES</span>
+              <span className="font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-900 text-2xl leading-none">NETAMPS</span>
+              <span className="text-[10px] font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-600 to-slate-400 tracking-[0.3em] leading-none mt-1">TECHNOLOGIES</span>
             </div>
           </a>
           <div className="flex items-center gap-6">
