@@ -11,7 +11,7 @@ interface AdSenseBlockProps {
 }
 
 export default function AdSenseBlock({ 
-  adClient = 'ca-pub-XXXXXXXXXXXXXXXX', // Replace with actual Publisher ID
+  adClient = 'ca-pub-2386994198437604', // Replace with actual Publisher ID
   adSlot = 'XXXXXXXXXX',               // Replace with actual Ad Slot ID
   className = '' 
 }: AdSenseBlockProps) {
