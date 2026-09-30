@@ -775,73 +775,25 @@ export default function Home() {
       </main>
 
       {/* SECTION: FOOTER */}
-      <footer className="border-t border-white/20 pt-20 pb-10 bg-transparent">
+      <footer className="border-t border-slate-200 pt-8 pb-10 bg-transparent">
         <div className="container mx-auto px-6">
-          <div className="flex flex-col lg:flex-row gap-12 lg:gap-24 mb-16 items-start">
-            <div className="w-full lg:max-w-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <NetampsLogo className="w-10 h-10 rounded-lg" />
-              </div>
-              <div className="space-y-2">
-                {[
-                  { label: "Global cybercrime costs projected by 2025", value: "$10.5T/yr", color: "text-rose-600", bg: "bg-rose-50 border-rose-200" },
-                  { label: "Average data breach cost in 2024", value: "$4.88M", color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
-                  { label: "Cybersecurity market CAGR (2024–29)", value: "↑ 12.9%", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-                  { label: "Daily cyberattacks on businesses globally", value: "2,200+", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
-                ].map((stat, i) => (
-                  <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${stat.bg} gap-3`}>
-                    <span className="text-[11px] font-semibold text-slate-600 leading-tight">{stat.label}</span>
-                    <span className={`text-xs font-black whitespace-nowrap ${stat.color}`}>{stat.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="w-full lg:max-w-sm flex flex-col gap-8">
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Live Threat Trends</h4>
-                <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl p-4 w-full">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Threats Neutralized (24h)</span>
-                    <span className="text-[10px] font-bold text-emerald-600 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded"><Activity className="w-3 h-3 mr-1" /> +14.2%</span>
-                  </div>
-                  <div className="flex items-end gap-1.5 h-12 w-full">
-                    {[35, 45, 30, 65, 50, 75, 40, 85, 60, 100].map((h, i) => (
-                      <motion.div 
-                        key={i} 
-                        initial={{ height: 0 }}
-                        whileInView={{ height: `${h}%` }}
-                        viewport={{ once: true, margin: "-50px" }}
-                        transition={{ delay: i * 0.05, duration: 0.8, type: "spring" }}
-                        className="flex-1 bg-gradient-to-t from-primary to-indigo-400 rounded-t-sm opacity-80 hover:opacity-100 cursor-pointer"
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-4">Connect</h4>
-                <ul className="space-y-4 text-slate-600 text-sm font-bold">
-                  <li>
-                    <button 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        window.location.href = 'mailto:' + ['contact', 'netamps.com'].join('@');
-                      }}
-                      className="hover:text-primary transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1 cursor-pointer"
-                    >
-                      <Mail className="w-4 h-4" /> 
-                      <span>contact<span className="hidden">.spam.trap</span>@<span className="hidden">do.not.scrape.</span>netamps.com</span>
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-          <div className="border-t border-slate-200 pt-8 pb-4 flex flex-col lg:flex-row justify-between items-center gap-6 text-xs text-slate-500 font-bold">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-6 text-xs text-slate-500 font-bold">
             <div className="flex flex-col gap-1.5 text-center lg:text-left">
-              <p className="text-slate-600 uppercase tracking-widest font-black">Netamps Technologies Private Limited <span className="text-slate-400 font-medium ml-2">CIN: U72900KA2022PTC167699</span></p>
+              <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center md:items-start text-slate-600 uppercase tracking-widest font-black">
+                <span>Netamps Technologies Private Limited</span>
+                <span className="text-slate-400 font-medium">CIN: U72900KA2022PTC167699</span>
+                <span className="text-slate-300 hidden md:inline">|</span>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.location.href = 'mailto:' + ['contact', 'netamps.com'].join('@');
+                  }}
+                  className="hover:text-primary transition-colors flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1 cursor-pointer font-bold normal-case tracking-normal"
+                >
+                  <Mail className="w-3.5 h-3.5" /> 
+                  <span>contact<span className="hidden">.spam.trap</span>@<span className="hidden">do.not.scrape.</span>netamps.com</span>
+                </button>
+              </div>
               <p>&copy; {new Date().getFullYear()} Netamps Technologies. All rights reserved. All trademarks, logos and brand names are the property of their respective owners.</p>
               <div className="mt-2 flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-2 text-slate-400">
                 <span>Website developed & maintained by</span>
