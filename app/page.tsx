@@ -759,7 +759,19 @@ export default function Home() {
                 <NetampsLogo className="w-10 h-10 rounded-lg" />
                 <span className="font-bold text-xl tracking-tight text-slate-900">Netamps Technologies</span>
               </div>
-              <p className="text-slate-600 mb-8 max-w-sm font-medium">Leveraging big in the field of Digital Forensics & Cyber Security with emerging technologies.</p>
+              <div className="mb-8 max-w-sm space-y-2">
+                {[
+                  { label: "Global cybercrime costs projected by 2025", value: "$10.5T/yr", color: "text-rose-600", bg: "bg-rose-50 border-rose-200" },
+                  { label: "Average data breach cost in 2024", value: "$4.88M", color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
+                  { label: "Cybersecurity market CAGR (2024–29)", value: "↑ 12.9%", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+                  { label: "Daily cyberattacks on businesses globally", value: "2,200+", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
+                ].map((stat, i) => (
+                  <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${stat.bg} gap-3`}>
+                    <span className="text-[11px] font-semibold text-slate-600 leading-tight">{stat.label}</span>
+                    <span className={`text-xs font-black whitespace-nowrap ${stat.color}`}>{stat.value}</span>
+                  </div>
+                ))}
+              </div>
               <div className="space-y-4">
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Live Threat Trends</h4>
                 <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl p-4 w-full max-w-sm">

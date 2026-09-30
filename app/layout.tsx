@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     canonical: 'https://netamps.com',
   },
   title: {
-    default: "Netamps Technologies | Enterprise Cyber Security & Digital Forensics",
+    default: "Netamps Technologies",
     template: "%s | Netamps Technologies"
   },
   description: "Netamps Technologies specializes in enterprise cyber security, digital forensics (DFIR), zero trust architecture, network infrastructure, cloud architecture management, and risk management. We secure critical infrastructure with advanced threat defense and continuous SOC monitoring.",
