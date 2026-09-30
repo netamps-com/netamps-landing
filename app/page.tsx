@@ -412,7 +412,7 @@ export default function Home() {
                 ))}
                 
                 <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent z-10 pointer-events-none"></div>
-                <div className="absolute bottom-6 left-6 right-6 z-20 h-[64px]">
+                <div className="absolute bottom-6 left-6 right-6 z-20 h-[48px]">
                   {heroBadges.map((badge, index) => {
                     const isActive = badgeIndex === index;
                     return (
@@ -431,12 +431,12 @@ export default function Home() {
                           <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded inline-block mb-0.5 border ${badge.bgClass} ${badge.textClass} ${badge.borderClass}`}>
                             {badge.status}
                           </div>
-                          <div className="font-bold text-sm text-slate-900">{badge.text}</div>
+                          <div className="font-bold text-xs text-slate-900">{badge.text}</div>
                         </div>
                         <motion.div 
                           animate={{ rotate: 360 }} 
                           transition={{ duration: 12, repeat: Infinity, ease: "linear" }} 
-                          className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0"
+                          className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0"
                         >
                           {React.createElement(badge.icon, { className: "w-4 h-4 text-primary" })}
                         </motion.div>
@@ -554,8 +554,8 @@ export default function Home() {
                 ].map((val, i) => (
                   <motion.div key={i} variants={fadeInUp} className="p-6 hover:translate-x-2 transition-transform duration-500 group">
                     <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
-                        <CheckCircle className="w-4 h-4 text-primary" />
+                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                        <CheckCircle className="w-3 h-3 text-primary" />
                       </div>
                       {val.title}
                     </h3>
