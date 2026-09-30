@@ -172,10 +172,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setHeroImageIndex((prev) => (prev + 1) % heroImages.length);
-    }, 5000);
-    return () => clearInterval(interval);
+    // Pick a random image on page load and keep it idle
+    setHeroImageIndex(Math.floor(Math.random() * heroImages.length));
   }, []);
 
   useEffect(() => {
