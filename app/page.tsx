@@ -182,7 +182,7 @@ export default function Home() {
       >
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
           <a href="#" className="flex items-center group focus:outline-none focus:ring-2 focus:ring-primary rounded-lg shrink-0">
-            <img src="/logo.jpg" alt="Netamps Technologies" className="h-16 w-16 md:h-[72px] md:w-[72px] object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />
+            <img fetchPriority="high" decoding="async" src="/logo.jpg" alt="Netamps Technologies" className="h-16 w-16 md:h-[72px] md:w-[72px] object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />
           </a>
           <div className="flex items-center gap-6">
             {currentTimeIST && (
@@ -758,7 +758,7 @@ export default function Home() {
               <div className="mt-2 flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-2 text-slate-400">
                 <span>Website developed & maintained by</span>
                 <div className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md hover:border-indigo-300/50 cursor-default">
-                  <img src="/logo.jpg" alt="Netamps Logo" className="w-4 h-4 object-cover rounded-[3px]" />
+                  <img fetchPriority="high" decoding="async" src="/logo.jpg" alt="Netamps Logo" className="w-4 h-4 object-cover rounded-[3px]" />
                   <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 tracking-tight" style={{ fontFamily: 'var(--font-outfit)' }}>NETAMPS TECHNOLOGIES</span>
                 </div>
               </div>
@@ -767,7 +767,7 @@ export default function Home() {
               <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-5 py-2.5 rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-300/50 group cursor-pointer">
                 <span className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-0.5 group-hover:text-slate-600 transition-colors">Powered by</span>
                 <div className="flex items-center gap-1.5">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo" className="w-4 h-4 object-contain" />
+                  <img loading="lazy" decoding="async" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo" className="w-4 h-4 object-contain" />
                   <span className="font-black text-[15px] tracking-tight text-slate-700 group-hover:text-slate-900 transition-all duration-500">
                     Google
                   </span>
