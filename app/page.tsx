@@ -755,7 +755,13 @@ export default function Home() {
             <div className="flex flex-col gap-1.5 text-center lg:text-left">
               <p className="text-slate-600 uppercase tracking-widest font-black">Netamps Technologies Private Limited <span className="text-slate-400 font-medium ml-2">CIN: U72900KA2022PTC167699</span></p>
               <p>&copy; {new Date().getFullYear()} Netamps Technologies. All rights reserved. All trademarks, logos and brand names are the property of their respective owners.</p>
-              <p className="mt-0.5 text-slate-400">Website developed & maintained by <span className="font-bold text-slate-500">Netamps Technologies</span></p>
+              <div className="mt-2 flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-2 text-slate-400">
+                <span>Website developed & maintained by</span>
+                <div className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md hover:border-indigo-300/50 cursor-default">
+                  <img src="/logo.jpg" alt="Netamps Logo" className="w-4 h-4 object-cover rounded-[3px]" />
+                  <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 tracking-tight" style={{ fontFamily: 'var(--font-outfit)' }}>NETAMPS TECHNOLOGIES</span>
+                </div>
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-end gap-4">
               <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-5 py-2.5 rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-300/50 group cursor-pointer">
