@@ -781,7 +781,6 @@ export default function Home() {
             <div className="col-span-1 md:col-span-2">
               <div className="flex items-center gap-3 mb-6">
                 <NetampsLogo className="w-10 h-10 rounded-lg" />
-                <span className="font-bold text-xl tracking-tight text-slate-900">Netamps Technologies</span>
               </div>
               <div className="mb-8 max-w-sm space-y-2">
                 {[
