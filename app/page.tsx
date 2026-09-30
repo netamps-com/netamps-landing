@@ -803,11 +803,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-end gap-4">
-              <div title="Powered by Google Cloud" className="w-10 h-10 flex items-center justify-center bg-slate-100/50 backdrop-blur-sm rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-300/50 group cursor-pointer">
-                <img loading="lazy" decoding="async" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo" className="w-5 h-5 object-contain group-hover:scale-110 transition-transform" />
-              </div>
-            </div>
+
           </div>
         </div>
       </footer>
