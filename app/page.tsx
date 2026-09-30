@@ -230,7 +230,6 @@ export default function Home() {
                 {currentTimeIST}
               </div>
             )}
-            <ServerStatusWidget />
               <nav className="hidden lg:flex items-center gap-4">
               {[
                 { name: 'Home', href: '#' },
@@ -502,6 +501,9 @@ export default function Home() {
             
             {/* INJECT RSS BULLETIN COMPONENT */}
             <PartnerNewsBulletin />
+              <div className="flex justify-center mt-4 w-full max-w-4xl mx-auto">
+                <ServerStatusWidget />
+              </div>
             
           </div>
         </section>
