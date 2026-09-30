@@ -423,62 +423,49 @@ export default function Home() {
               <div className="w-full flex justify-end mb-6 z-20 relative">
                 <ServerStatusWidget />
               </div>
-              <div className="aspect-[4/3] rounded-3xl bg-slate-100 border border-slate-200 shadow-2xl overflow-hidden relative group">
-                <AnimatePresence>
-                  <motion.img 
-                    key={heroImages[heroImageIndex]}
-                    src={heroImages[heroImageIndex]} 
-                    alt=""
-                    loading="eager"
-                    decoding="async"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none'; // Completely hide the broken image element
-                    }}
-                    initial={{ opacity: 0, scale: 1.05 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0 }}
-                    style={{ willChange: "transform, opacity", transformOrigin: "center" }}
-                    transition={{ 
-                      duration: 1.2, 
-                      ease: [0.22, 1, 0.36, 1] 
-                    }}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none transform-gpu bg-slate-900 text-transparent" 
-                  />
-                </AnimatePresence>
+              <div className="w-full bg-white/40 backdrop-blur-xl border border-white/60 shadow-xl rounded-3xl p-6 overflow-hidden relative">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 tracking-tight">Live Intelligence Feed</h3>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Global Security Updates</p>
+                  </div>
+                </div>
                 
-                <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent z-10 pointer-events-none"></div>
-                <div className="absolute bottom-6 left-6 right-6 z-20 h-[48px]">
-                  {heroBadges.map((badge, index) => {
-                    const isActive = badgeIndex === index;
-                    return (
-                      <motion.div 
-                        key={badge.text}
-                        initial={false}
-                        animate={{ 
-                          opacity: isActive ? 1 : 0, 
-                          y: isActive ? 0 : 10,
-                          pointerEvents: isActive ? 'auto' : 'none'
-                        }}
-                        transition={{ duration: 0.4, ease: "easeInOut" }}
-                        className="absolute inset-0 flex justify-between items-center bg-white/80 backdrop-blur-md px-4 py-2 rounded-xl border border-white shadow-sm"
-                      >
-                        <div className="flex flex-col justify-center">
-                          <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded inline-block mb-0.5 border ${badge.bgClass} ${badge.textClass} ${badge.borderClass}`}>
-                            {badge.status}
-                          </div>
-                          <div className="font-bold text-xs text-slate-900">{badge.text}</div>
+                <div className="space-y-4">
+                  {[
+                    { time: "10m ago", tag: "THREAT ALERT", title: "New Zero-Day Vulnerability in Popular Enterprise VPN Services", severity: "High" },
+                    { time: "1h ago", tag: "INDUSTRY", title: "Global Ransomware Attacks Surge by 45% in Q3", severity: "Critical" },
+                    { time: "3h ago", tag: "ANALYSIS", title: "AI-Powered Phishing Campaigns Evade Traditional Defenses", severity: "Medium" },
+                    { time: "5h ago", tag: "COMPLIANCE", title: "Data Privacy Regulations Tighten Across Global Sectors", severity: "Low" }
+                  ].map((news, i) => (
+                    <motion.div 
+                      key={i}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.5 + (i * 0.15) }}
+                      className="group p-4 rounded-2xl bg-white/60 hover:bg-white border border-slate-100 hover:border-indigo-100 hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+                          <span className="text-slate-400">{news.time}</span>
+                          <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                          <span className={news.severity === 'Critical' || news.severity === 'High' ? 'text-rose-500' : 'text-indigo-500'}>{news.tag}</span>
                         </div>
-                        <motion.div 
-                          animate={{ rotate: 360 }} 
-                          transition={{ duration: 12, repeat: Infinity, ease: "linear" }} 
-                          className="w-6 h-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0"
-                        >
-                          {React.createElement(badge.icon, { className: "w-4 h-4 text-primary" })}
-                        </motion.div>
-                      </motion.div>
-                    );
-                  })}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          news.severity === 'Critical' ? 'bg-rose-100 text-rose-700' : 
+                          news.severity === 'High' ? 'bg-orange-100 text-orange-700' :
+                          news.severity === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                          'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {news.severity}
+                        </span>
+                      </div>
+                      <p className="font-bold text-slate-700 text-sm leading-snug group-hover:text-primary transition-colors">{news.title}</p>
+                    </motion.div>
+                  ))}
                 </div>
               </div>
             </motion.div>
