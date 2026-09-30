@@ -69,7 +69,8 @@ const expertiseAreas = [
   { title: "IT Product Sales", desc: "Strategic acquisition and deployment of enterprise-grade hardware, SIEM solutions, and advanced tools.", color: "border-teal-200 bg-teal-100 text-teal-600", icon: ShoppingCart },
   { title: "Reverse Logistics", desc: "Secure decommissioning, data wiping, and compliant e-waste management for enterprise hardware.", color: "border-amber-200 bg-amber-100 text-amber-600", icon: Repeat },
   { title: "Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous vulnerability assessments across hybrid environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600", icon: Target },
-  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-orange-200 bg-orange-100 text-orange-600", icon: BookOpen }
+  { title: "Interactive Classroom Solutions", desc: "Deploying next-generation smart learning environments with integrated collaboration tools and seamless network connectivity.", color: "border-orange-200 bg-orange-100 text-orange-600", icon: BookOpen },
+  { title: "Cloud Architecture Management (MSP)", desc: "Assisting with migration, day-to-day administration, and resource spend optimization on major platforms like AWS, Microsoft Azure, or Google Cloud and industry standard protocols.", color: "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-600", icon: Server }
 ];
 
 export default function Home() {
