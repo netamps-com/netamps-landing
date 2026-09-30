@@ -777,12 +777,12 @@ export default function Home() {
       {/* SECTION: FOOTER */}
       <footer className="border-t border-white/20 pt-20 pb-10 bg-transparent">
         <div className="container mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
-            <div className="col-span-1 md:col-span-2">
+          <div className="flex flex-col lg:flex-row gap-12 lg:gap-24 mb-16 items-start">
+            <div className="w-full lg:max-w-sm">
               <div className="flex items-center gap-3 mb-6">
                 <NetampsLogo className="w-10 h-10 rounded-lg" />
               </div>
-              <div className="mb-8 max-w-sm space-y-2">
+              <div className="space-y-2">
                 {[
                   { label: "Global cybercrime costs projected by 2025", value: "$10.5T/yr", color: "text-rose-600", bg: "bg-rose-50 border-rose-200" },
                   { label: "Average data breach cost in 2024", value: "$4.88M", color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
@@ -795,9 +795,12 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="w-full lg:max-w-sm flex flex-col gap-8">
               <div className="space-y-4">
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Live Threat Trends</h4>
-                <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl p-4 w-full max-w-sm">
+                <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl p-4 w-full">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Threats Neutralized (24h)</span>
                     <span className="text-[10px] font-bold text-emerald-600 flex items-center bg-emerald-50 px-1.5 py-0.5 rounded"><Activity className="w-3 h-3 mr-1" /> +14.2%</span>
@@ -816,24 +819,24 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <h4 className="font-bold text-slate-900 mb-6">Connect</h4>
-              <ul className="space-y-4 text-slate-600 text-sm font-bold">
-                <li>
-                  <button 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      window.location.href = 'mailto:' + ['contact', 'netamps.com'].join('@');
-                    }}
-                    className="hover:text-primary transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1 cursor-pointer"
-                  >
-                    <Mail className="w-4 h-4" /> 
-                    <span>contact<span className="hidden">.spam.trap</span>@<span className="hidden">do.not.scrape.</span>netamps.com</span>
-                  </button>
-                </li>
-              </ul>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-4">Connect</h4>
+                <ul className="space-y-4 text-slate-600 text-sm font-bold">
+                  <li>
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.location.href = 'mailto:' + ['contact', 'netamps.com'].join('@');
+                      }}
+                      className="hover:text-primary transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1 cursor-pointer"
+                    >
+                      <Mail className="w-4 h-4" /> 
+                      <span>contact<span className="hidden">.spam.trap</span>@<span className="hidden">do.not.scrape.</span>netamps.com</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
           <div className="border-t border-slate-200 pt-8 pb-4 flex flex-col lg:flex-row justify-between items-center gap-6 text-xs text-slate-500 font-bold">
