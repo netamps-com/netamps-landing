@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
 
@@ -42,9 +43,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: [
-      { url: '/logo.jpg', type: 'image/jpeg' },
-    ],
+    icon: [{ url: '/logo.jpg', type: 'image/jpeg' }],
     apple: '/logo.jpg',
     shortcut: '/logo.jpg',
   },
@@ -55,7 +54,7 @@ export const metadata: Metadata = {
     siteName: 'Netamps Technologies',
     images: [
       {
-        url: '/og-image.jpg',
+        url: '/logo.jpg',
         width: 1200,
         height: 630,
         alt: 'Netamps Technologies – Enterprise Cyber Security & Digital Forensics',
@@ -79,7 +78,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Netamps Technologies | Cyber Security & DFIR',
     description: 'Expert digital forensics, incident response, and zero trust security for enterprise infrastructure.',
-    images: ['/og-image.jpg'],
+    images: ['/logo.jpg'],
   },
   category: 'technology',
 };
@@ -96,12 +95,11 @@ export default function RootLayout({
   return (
     <html lang="en-IN">
       <head>
-        {/* Security Headers */}
+        {/* Security Headers via meta tags */}
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
         <meta httpEquiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
         <meta httpEquiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()" />
-        {/* Content Security Policy — tightened, no unsafe-eval */}
         <meta
           httpEquiv="Content-Security-Policy"
           content="default-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://www.googletagservices.com https://partner.googleadservices.com; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https:; media-src 'none'; object-src 'none'; base-uri 'self';"
@@ -112,12 +110,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://www.google.com" />
-        {/* Google AdSense */}
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2386994198437604"
-          crossOrigin="anonymous"
-        />
       </head>
       <body
         className={`${inter.variable} ${outfit.variable} font-sans select-none antialiased`}
@@ -127,6 +119,13 @@ export default function RootLayout({
           <TrustSeal />
           <CookieConsent />
         </SecurityWrapper>
+        {/* Google AdSense — loaded after interactive to not block render */}
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2386994198437604"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
