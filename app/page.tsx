@@ -356,8 +356,12 @@ export default function Home() {
       )}
 
       <main className="flex-grow">
+        <div className="w-full flex justify-center pt-10 relative z-30">
+          <ServerStatusWidget />
+        </div>
+        
         {/* SECTION 1: HERO */}
-        <section className="relative pt-24 pb-20 lg:pt-32 lg:pb-32 overflow-hidden bg-transparent border-b border-white/20">
+        <section className="relative pt-16 pb-20 lg:pt-24 lg:pb-32 overflow-hidden bg-transparent border-b border-white/20">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[100px] -z-10" />
           <div className="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center relative z-10">
             <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="max-w-3xl">
@@ -501,9 +505,6 @@ export default function Home() {
             
             {/* INJECT RSS BULLETIN COMPONENT */}
             <PartnerNewsBulletin />
-              <div className="flex justify-center mt-4 w-full max-w-4xl mx-auto">
-                <ServerStatusWidget />
-              </div>
             
           </div>
         </section>
