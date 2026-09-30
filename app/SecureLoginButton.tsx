@@ -44,17 +44,17 @@ export default function SecureLoginButton() {
     
     // Simulate reCAPTCHA / Cloudflare Turnstile human verification delay
     setTimeout(() => {
-      const tokenizedUrl = atob(encryptedUrl);
+      const cleanUrl = atob(encryptedUrl);
       
-      // Safely route the tokenized URL into the secured background tab
+      // Safely route the clean URL into the secured background tab
       if (secureTab) {
         // Apply strict cross-site scripting (XSS) protections programmatically before navigating
         // We drop 'noreferrer' so Cloudflare WAF can verify the traffic originated from netamps.com
         secureTab.opener = null; 
-        secureTab.location.href = tokenizedUrl;
+        secureTab.location.href = cleanUrl;
       } else {
         // Absolute fallback if the browser completely blocked the popup creation
-        window.location.href = tokenizedUrl;
+        window.location.href = cleanUrl;
       }
       
       // Reset the verification modal immediately after routing
