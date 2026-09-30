@@ -377,11 +377,35 @@ export default function Home() {
                   Next-Generation Enterprise Defense
                 </span>
               </motion.div>
-              <motion.h1 variants={fadeInUp} className="text-5xl lg:text-[4.5rem] font-black tracking-tighter mb-6 leading-[1.05] text-slate-900 flex flex-col gap-1">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-400 to-indigo-600 pb-2 drop-shadow-sm animate-text-glitter" style={{ filter: 'drop-shadow(0 10px 20px rgba(79,70,229,0.25))' }}>
-                  Netamps Technologies
-                </span>
-              </motion.h1>
+              <motion.div variants={fadeInUp} className="mb-6">
+                {(() => {
+                  const trends = [
+                    { label: "Global cybercrime costs projected by 2025", value: "$10.5T/yr", accent: "from-rose-500 to-rose-700", bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-600" },
+                    { label: "Average cost of a data breach in 2024", value: "$4.88M", accent: "from-amber-500 to-orange-600", bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-600" },
+                    { label: "Cybersecurity market CAGR (2024–29)", value: "↑ 12.9%", accent: "from-emerald-500 to-teal-600", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-600" },
+                    { label: "Cyberattacks on businesses daily, worldwide", value: "2,200+", accent: "from-indigo-500 to-blue-600", bg: "bg-indigo-50", border: "border-indigo-200", text: "text-indigo-600" },
+                  ];
+                  const trend = trends[badgeIndex % trends.length];
+                  return (
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={badgeIndex % trends.length}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.5, ease: "easeInOut" }}
+                        className={`inline-flex flex-col gap-1 px-5 py-3 rounded-2xl border ${trend.bg} ${trend.border} shadow-sm max-w-sm`}
+                      >
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">CYBER THREAT INTELLIGENCE</span>
+                        <div className="flex items-center justify-between gap-6">
+                          <span className="text-sm font-bold text-slate-700 leading-snug">{trend.label}</span>
+                          <span className={`text-2xl font-black whitespace-nowrap bg-gradient-to-r ${trend.accent} text-transparent bg-clip-text`}>{trend.value}</span>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  );
+                })()}
+              </motion.div>
               <motion.p variants={fadeInUp} className="text-lg lg:text-xl text-slate-600 mb-10 leading-relaxed font-medium">
                 Advanced Threat Intelligence, Digital Forensics, and Incident Response (DFIR) solutions designed to safeguard critical infrastructure against evolving threat vectors.
               </motion.p>
