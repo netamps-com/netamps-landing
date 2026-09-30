@@ -459,6 +459,7 @@ export default function Home() {
                 { name: 'Microsoft', domain: 'microsoft.com' },
                 { name: 'Cisco', domain: 'cisco.com' },
                 { name: 'Sectigo', domain: 'sectigo.com' },
+                { name: 'Hanwha Vision', domain: 'hanwhavision.com', extra: 'OEM Partner' },
                 { name: 'Synology', domain: 'synology.com' },
                 { name: 'Sonicwall', domain: 'sonicwall.com' },
                 { name: 'Acer', domain: 'acer.com' },
