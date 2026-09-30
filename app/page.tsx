@@ -777,8 +777,8 @@ export default function Home() {
       {/* SECTION: FOOTER */}
       <footer className="border-t border-white/20 pt-20 pb-10 bg-transparent">
         <div className="container mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
-            <div className="col-span-2 lg:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
+            <div className="col-span-1 md:col-span-2">
               <div className="flex items-center gap-3 mb-6">
                 <NetampsLogo className="w-10 h-10 rounded-lg" />
                 <span className="font-bold text-xl tracking-tight text-slate-900">Netamps Technologies</span>
@@ -817,25 +817,6 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </div>
-            
-            <div>
-              <h4 className="font-bold text-slate-900 mb-6">Services</h4>
-              <ul className="space-y-4 text-slate-600 text-sm font-bold">
-                <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Infrastructure</a></li>
-                <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Risk & Vulnerability</a></li>
-                <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Data Security</a></li>
-                <li><a href="#services" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Digital Forensics</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-bold text-slate-900 mb-6">Company</h4>
-              <ul className="space-y-4 text-slate-600 text-sm font-bold">
-                <li><a href="#about" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">About Us</a></li>
-                <li><a href="#about" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">Our Values</a></li>
-                <li><a href="#csr" className="rainbow-text-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded px-1 -ml-1">CSR</a></li>
-              </ul>
             </div>
 
             <div>
