@@ -88,7 +88,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://www.googletagservices.com; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https:;" />
-        <Script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2386994198437604" crossOrigin="anonymous" strategy="afterInteractive" />
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2386994198437604" crossOrigin="anonymous"></script>
       </head>
       <body 
         className={`${inter.variable} ${outfit.variable} font-sans select-none`}
