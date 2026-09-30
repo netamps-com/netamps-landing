@@ -358,7 +358,7 @@ export default function Home() {
       <main className="flex-grow">
         
         {/* SECTION 1: HERO */}
-        <section className="relative pt-16 pb-20 lg:pt-24 lg:pb-32 overflow-hidden bg-transparent border-b border-white/20">
+        <section className="relative pt-12 pb-16 lg:pt-16 lg:pb-24 overflow-hidden bg-transparent border-b border-white/20">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[100px] -z-10" />
           <div className="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center relative z-10">
             <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="max-w-3xl">
@@ -456,7 +456,7 @@ export default function Home() {
         </section>
 
         {/* SECTION: AUTHORIZED PARTNERS */}
-        <section className="py-16 border-y border-white/20 bg-transparent overflow-hidden relative">
+        <section className="py-12 border-y border-white/20 bg-transparent overflow-hidden relative">
           <div className="container mx-auto px-6">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-extrabold mb-4 text-slate-900">Strategic Vendor Ecosystem</h2>
@@ -516,7 +516,7 @@ export default function Home() {
         </section>
 
         {/* SECTION: ABOUT US & VALUES */}
-        <section id="about" className="py-24 bg-transparent relative border-b border-white/20">
+        <section id="about" className="py-16 lg:py-20 bg-transparent relative border-b border-white/20">
           <div className="container mx-auto px-6">
             <motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.8 }} className="mb-20 rounded-[2.5rem] overflow-hidden h-[350px] md:h-[500px] relative shadow-2xl group">
                <div className="absolute inset-0 bg-slate-900/20 z-10"></div>
@@ -574,7 +574,7 @@ export default function Home() {
         </section>
 
         {/* SECTION: SERVICES / AREA OF EXPERTISE */}
-        <section id="services" className="py-24 bg-transparent relative border-y border-white/20 overflow-hidden">
+        <section id="services" className="py-16 lg:py-20 bg-transparent relative border-y border-white/20 overflow-hidden">
           {/* Ambient Background Glows */}
           <div className="absolute top-1/4 left-0 w-96 h-96 bg-blue-400/10 rounded-full blur-[100px] -z-10 mix-blend-multiply"></div>
           <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-purple-400/10 rounded-full blur-[100px] -z-10 mix-blend-multiply"></div>
@@ -653,7 +653,7 @@ export default function Home() {
           </div>
         </section>
 `n        {/* SECTION: ADVANCED SOLUTIONS */}
-        <section id="solutions" className="py-24 bg-transparent border-y border-white/20">
+        <section id="solutions" className="py-16 lg:py-20 bg-transparent border-y border-white/20">
           <div className="container mx-auto px-6">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="mb-16 text-center">
               <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 font-bold text-xs mb-4 uppercase tracking-widest">
@@ -691,7 +691,7 @@ export default function Home() {
 
 
         {/* SECTION: CSR */}
-        <section id="csr" className="py-24 bg-transparent relative border-y border-white/20">
+        <section id="csr" className="py-16 lg:py-20 bg-transparent relative border-y border-white/20">
           <div className="container mx-auto px-6">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="text-center max-w-3xl mx-auto mb-16">
               <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 font-bold text-xs mb-4 uppercase tracking-widest">
@@ -827,14 +827,8 @@ export default function Home() {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-end gap-4">
-              <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-5 py-2.5 rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-300/50 group cursor-pointer">
-                <span className="text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mt-0.5 group-hover:text-slate-600 transition-colors">Powered by</span>
-                <div className="flex items-center gap-1.5">
-                  <img loading="lazy" decoding="async" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo" className="w-4 h-4 object-contain" />
-                  <span className="font-black text-[15px] tracking-tight text-slate-700 group-hover:text-slate-900 transition-all duration-500">
-                    Google
-                  </span>
-                </div>
+              <div title="Powered by Google Cloud" className="w-10 h-10 flex items-center justify-center bg-slate-100/50 backdrop-blur-sm rounded-full border border-slate-200/50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-300/50 group cursor-pointer">
+                <img loading="lazy" decoding="async" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo" className="w-5 h-5 object-contain group-hover:scale-110 transition-transform" />
               </div>
             </div>
           </div>
