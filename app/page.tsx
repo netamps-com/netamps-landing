@@ -390,32 +390,28 @@ export default function Home() {
                 <ServerStatusWidget />
               </div>
               <div className="aspect-[4/3] rounded-3xl bg-slate-100 border border-slate-200 shadow-2xl overflow-hidden relative group">
-                {heroImages.map((src, index) => (
+                <AnimatePresence>
                   <motion.img 
-                    key={src}
-                    src={src} 
-                    alt="Cyber Security Operations"
-                    loading={index === 0 ? "eager" : "lazy"}
+                    key={heroImages[heroImageIndex]}
+                    src={heroImages[heroImageIndex]} 
+                    alt=""
+                    loading="eager"
                     decoding="async"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      if (!target.src.startsWith('data:')) {
-                        target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1000' height='800' viewBox='0 0 1000 800'%3E%3Crect width='1000' height='800' fill='%230f172a'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='40' fill='%23ffffff' font-weight='bold' text-anchor='middle' dy='.3em'%3ENETAMPS TECHNOLOGIES%3C/text%3E%3C/svg%3E";
-                      }
+                      target.style.display = 'none'; // Completely hide the broken image element
                     }}
-                    initial={false}
-                    animate={{ 
-                      opacity: heroImageIndex === index ? 1 : 0,
-                      scale: heroImageIndex === index ? 1 : 1.05 
-                    }}
+                    initial={{ opacity: 0, scale: 1.05 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
                     style={{ willChange: "transform, opacity", transformOrigin: "center" }}
                     transition={{ 
                       duration: 1.2, 
                       ease: [0.22, 1, 0.36, 1] 
                     }}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none transform-gpu" 
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none transform-gpu bg-slate-900 text-transparent" 
                   />
-                ))}
+                </AnimatePresence>
                 
                 <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/20 to-transparent z-10 pointer-events-none"></div>
                 <div className="absolute bottom-6 left-6 right-6 z-20 h-[48px]">
