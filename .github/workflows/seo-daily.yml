@@ -1,0 +1,17 @@
+name: Daily SEO IndexNow Ping
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs at 00:00 UTC every day
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  ping-indexnow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Bing (IndexNow)
+        run: |
+          curl "https://www.bing.com/ping?sitemap=https://netamps.com/sitemap.xml"
+      
+      - name: Log SEO Ping Success
+        run: echo "Daily SEO sitemap ping dispatched successfully."
