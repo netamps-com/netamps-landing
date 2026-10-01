@@ -54,9 +54,9 @@ export default function PrivacyPolicy() {
           </section>
           
           <div className="mt-12 text-center">
-            <a href="/" className="inline-flex items-center gap-2 text-primary font-bold hover:text-indigo-700 transition-colors bg-indigo-50 px-6 py-3 rounded-full">
+            <button onClick={() => window.location.href = '/'} className="inline-flex items-center gap-2 text-primary font-bold hover:text-indigo-700 transition-colors bg-indigo-50 px-6 py-3 rounded-full">
               &larr; Return to Homepage
-            </a>
+            </button>
           </div>
         </div>
       </div>

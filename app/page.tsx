@@ -217,7 +217,7 @@ export default function Home() {
         className="fixed top-0 left-0 right-0 w-full z-50 backdrop-blur-3xl bg-slate-50/70 border-b border-slate-200/50 shadow-sm transition-all"
       >
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-          <a href="#" aria-label="Netamps Technologies – Home" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
+          <button onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label="Netamps Technologies – Home" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
             <div className="relative p-[3px] bg-white rounded-xl shadow-sm border border-slate-200 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.2)] group-hover:border-indigo-300 transition-all duration-500">
               <NetampsLogo className="h-10 w-10 md:h-12 md:w-12 group-hover:scale-[1.03] transition-transform duration-500" />
             </div>
@@ -225,7 +225,7 @@ export default function Home() {
               <span className="font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-900 text-2xl leading-none">NETAMPS</span>
               <span className="text-[10px] font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-600 to-slate-400 tracking-[0.3em] leading-none mt-1">TECHNOLOGIES</span>
             </div>
-          </a>
+          </button>
           <div className="flex items-center gap-6">
             {currentTimeIST && (
               <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200 shadow-sm cursor-default hover:text-slate-900 transition-colors">
@@ -241,13 +241,17 @@ export default function Home() {
                 { name: 'Solutions', href: '#solutions' },
                 { name: 'CSR', href: '#csr' }
               ].map((item) => (
-                <a 
+                <button 
                   key={item.name}
-                  href={item.href} 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (item.href === '#') { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                    else { document.getElementById(item.href.substring(1))?.scrollIntoView({ behavior: 'smooth' }); }
+                  }} 
                   className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm group overflow-hidden"
                 >
                   <span className="relative z-10 group-hover:text-white transition-colors">{item.name}</span>
-                </a>
+                </button>
               ))}
               <SecureLoginButton />
             </nav>
@@ -274,14 +278,18 @@ export default function Home() {
                   { name: 'Solutions', href: '#solutions' },
                   { name: 'CSR', href: '#csr' }
                 ].map((item) => (
-                  <a 
+                  <button 
                     key={item.name}
-                    href={item.href} 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsMobileMenuOpen(false);
+                      if (item.href === '#') { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                      else { document.getElementById(item.href.substring(1))?.scrollIntoView({ behavior: 'smooth' }); }
+                    }} 
+                    className="w-full text-left text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100"
                   >
                     {item.name}
-                  </a>
+                  </button>
                 ))}
                 <div className="pt-2 border-t border-slate-100 flex justify-center mt-2 w-full">
                   <SecureLoginButton />
@@ -413,12 +421,12 @@ export default function Home() {
                 Advanced Threat Intelligence, Digital Forensics, and Incident Response (DFIR) solutions designed to safeguard critical infrastructure against evolving threat vectors.
               </motion.p>
               <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4">
-                <a href="#services" className="rainbow-btn bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
+                <button onClick={(e) => { e.preventDefault(); document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }); }} className="rainbow-btn bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
                   Engage Our Experts <ArrowRight className="w-5 h-5" />
-                </a>
-                <a href="#solutions" className="rainbow-btn bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold text-lg transition-all text-center hover:-translate-y-1 shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
+                </button>
+                <button onClick={(e) => { e.preventDefault(); document.getElementById('solutions')?.scrollIntoView({ behavior: 'smooth' }); }} className="rainbow-btn bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold text-lg transition-all text-center hover:-translate-y-1 shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
                   Explore Capabilities
-                </a>
+                </button>
               </motion.div>
             </motion.div>
             
@@ -735,7 +743,7 @@ export default function Home() {
               <div className="flex items-center flex-wrap gap-2 justify-center md:justify-start">
                 <p>&copy; {new Date().getFullYear()} Netamps Technologies. All rights reserved. All trademarks, logos and brand names are the property of their respective owners.</p>
                 <span className="text-slate-300 hidden md:inline">|</span>
-                <a href="/privacy" className="hover:text-primary transition-colors underline decoration-slate-300 underline-offset-2">Privacy Policy</a>
+                <button onClick={(e) => { e.preventDefault(); window.location.href = '/privacy'; }} className="hover:text-primary transition-colors underline decoration-slate-300 underline-offset-2">Privacy Policy</button>
               </div>
               <div className="mt-2 flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-2 text-slate-400">
                 <span>Website developed & maintained by</span>
