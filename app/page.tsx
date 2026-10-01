@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import SecureLoginButton from './SecureLoginButton';
 import PartnerNewsBulletin from './PartnerNewsBulletin';
+import AINewsBulletin from './AINewsBulletin';
 import LiveIntelligenceFeed from './LiveIntelligenceFeed';
 import ServerStatusWidget from './ServerStatusWidget';
 import NetampsLogo from './NetampsLogo';
@@ -483,8 +484,11 @@ export default function Home() {
               ))}
             </div>
             
-            {/* INJECT RSS BULLETIN COMPONENT */}
-            <PartnerNewsBulletin />
+            {/* INJECT RSS BULLETIN COMPONENTS */}
+            <div className="grid lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
+              <PartnerNewsBulletin />
+              <AINewsBulletin />
+            </div>
             
           </div>
         </section>
