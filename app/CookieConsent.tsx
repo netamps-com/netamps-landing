@@ -42,7 +42,7 @@ export default function CookieConsent() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                Strictly Necessary Cookies are mandatory for basic operation and performance and do not require user consent.
+                Strictly Necessary Cookies are mandatory for basic operation and performance and do not require user consent. These include Load-Balancing Cookies, State & Routing Cookies, CDN Configuration Cookies, CSRF (Cross-Site Request Forgery) Tokens, Authentication/Session Identifiers, and Bot-Prevention Cookies.
               </p>
               <div className="flex gap-3 mt-2">
                 <button 
