@@ -8,7 +8,7 @@ export default function CookieConsent() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const consent = localStorage.getItem('netamps_cookie_consent');
+    const consent = localStorage.getItem('netamps_cookie_notice_dismissed');
     if (!consent) {
       // Show banner after a short delay
       const timer = setTimeout(() => setIsVisible(true), 1500);
@@ -16,9 +16,8 @@ export default function CookieConsent() {
     }
   }, []);
 
-  const handleAccept = () => {
-    localStorage.setItem('netamps_cookie_consent', 'accepted');
-    document.cookie = "netamps_consent=1; path=/; max-age=31536000; SameSite=Lax; Secure";
+  const handleDismiss = () => {
+    localStorage.setItem('netamps_cookie_notice_dismissed', 'true');
     setIsVisible(false);
   };
 
@@ -37,26 +36,20 @@ export default function CookieConsent() {
             </div>
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <h4 className="font-black text-slate-800 text-sm">Privacy & Cookies</h4>
+                <h4 className="font-black text-slate-800 text-sm">Strictly Necessary Cookies</h4>
                 <button onClick={() => setIsVisible(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                We use strict security cookies and tracking technologies to ensure optimal performance, verify user sessions, and maintain industry-standard data protection.
+                Strictly Necessary Cookies are mandatory for basic operation and performance and do not require user consent.
               </p>
               <div className="flex gap-3 mt-2">
                 <button 
-                  onClick={handleAccept}
-                  className="flex-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors"
+                  onClick={handleDismiss}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors"
                 >
-                  Accept & Secure
-                </button>
-                <button 
-                  onClick={() => setIsVisible(false)}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 px-4 rounded-lg transition-colors"
-                >
-                  Strict Only
+                  Understood
                 </button>
               </div>
             </div>
