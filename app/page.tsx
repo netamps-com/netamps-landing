@@ -2,14 +2,11 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import SecureLoginButton from './SecureLoginButton';
-import PartnerNewsBulletin from './PartnerNewsBulletin';
-import AINewsBulletin from './AINewsBulletin';
-import LiveIntelligenceFeed from './LiveIntelligenceFeed';
 import FirmOverviewBanner from './FirmOverviewBanner';
 import ServerStatusWidget from './ServerStatusWidget';
 import NetampsLogo from './NetampsLogo';
-import { motion, AnimatePresence, useAnimationFrame, useMotionValue } from 'framer-motion';
-import { ArrowRight, CheckCircle, Mail, MapPin, Phone, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Target, ShoppingCart } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle, Mail, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Target, ShoppingCart } from 'lucide-react';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 60, scale: 0.95, filter: "blur(10px)" },
@@ -39,30 +36,6 @@ const staggerContainer = {
   }
 };
 
-const heroImages = [
-  "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1563206767-5b18f218e8de?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1510511459019-5d01a80c9e65?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1614064641913-6b71a3061283?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1504384764586-bb4cdc1707b0?auto=format&fit=crop&q=80&w=1000",
-  "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?auto=format&fit=crop&q=80&w=1000"
-];
-
-const heroBadges = [
-  { status: "VULNERABILITY ASSESSMENT", text: "Penetration Testing (VAPT)", bgClass: "bg-emerald-100", textClass: "text-emerald-600", borderClass: "border-emerald-200", icon: Shield },
-  { status: "COMPLIANCE VERIFIED", text: "Risk & Compliance", bgClass: "bg-rose-100", textClass: "text-rose-600", borderClass: "border-rose-200", icon: AlertTriangle },
-  { status: "NETWORK SECURED", text: "Network Infrastructure", bgClass: "bg-indigo-100", textClass: "text-indigo-600", borderClass: "border-indigo-200", icon: Key },
-  { status: "AI ANALYTICS ACTIVE", text: "Smart Surveillance", bgClass: "bg-purple-100", textClass: "text-purple-600", borderClass: "border-purple-200", icon: Activity },
-  { status: "EDGE SECURED", text: "Internet of Things (IoT)", bgClass: "bg-cyan-100", textClass: "text-cyan-600", borderClass: "border-cyan-200", icon: Eye },
-  { status: "FORENSICS LOGGED", text: "Digital Forensics (DFIR)", bgClass: "bg-amber-100", textClass: "text-amber-600", borderClass: "border-amber-200", icon: Fingerprint }
-];
-
 const expertiseAreas = [
   { title: "Digital Forensics & Incident Response (DFIR)", desc: "Rapid artifact acquisition, chain-of-custody preservation, and post-mortem root cause analysis for critical enterprise breaches.", color: "border-indigo-200 bg-indigo-100 text-indigo-600", icon: Fingerprint, bgImage: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=600" },
   { title: "Governance, Risk, and Compliance (GRC)", desc: "Strategic enterprise architecture alignment with stringent regulatory frameworks including ISO 27001, SOC 2, HIPAA, and GDPR.", color: "border-emerald-200 bg-emerald-100 text-emerald-600", icon: Shield, bgImage: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=600" },
@@ -77,10 +50,6 @@ const expertiseAreas = [
 ];
 
 export default function Home() {
-  const [news, setNews] = useState<{title: string, link: string, source: string}[]>([]);
-  const [hackersNews, setHackersNews] = useState<{title: string, link: string, source: string}[]>([]);
-  const [heroImageIndex, setHeroImageIndex] = useState(0);
-  const [badgeIndex, setBadgeIndex] = useState(0);
   const [hoveredExpertise, setHoveredExpertise] = useState<number | null>(null);
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [currentTimeIST, setCurrentTimeIST] = useState<string>('');
@@ -132,34 +101,6 @@ export default function Home() {
     document.addEventListener('click', handleGlobalClick);
     return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
-  
-  // Ticker animation state
-  const baseX = useMotionValue(0);
-  const baseX2 = useMotionValue(-3500);
-  const [isFeedHovered, setIsFeedHovered] = useState(false);
-  const velocity = useMotionValue(-1.5);
-  const velocity2 = useMotionValue(1.5);
-
-  useAnimationFrame((t, delta) => {
-    // Smoothly interpolate velocity: -0.2 (slow) when hovered, -1.5 (normal) when not
-    const target = isFeedHovered ? -0.2 : -1.5;
-    const target2 = isFeedHovered ? 0.2 : 1.5;
-    
-    velocity.set(velocity.get() + (target - velocity.get()) * 0.1); 
-    velocity2.set(velocity2.get() + (target2 - velocity2.get()) * 0.1);
-    
-    // Apply movement
-    baseX.set(baseX.get() + velocity.get() * (delta / 16));
-    baseX2.set(baseX2.get() + velocity2.get() * (delta / 16));
-    
-    // Wrap around seamlessly (assuming content is long enough)
-    if (baseX.get() <= -3500) {
-      baseX.set(0);
-    }
-    if (baseX2.get() >= 0) {
-      baseX2.set(-3500);
-    }
-  });
 
   const handleMouseEnter = (index: number) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -174,34 +115,10 @@ export default function Home() {
     setHoveredExpertise(null);
   };
 
-  useEffect(() => {
-    // Pick a random image on page load and keep it idle
-    setHeroImageIndex(Math.floor(Math.random() * heroImages.length));
-  }, []);
-
-  useEffect(() => {
-    const badgeInterval = setInterval(() => {
-      setBadgeIndex((prev) => (prev + 1) % heroBadges.length);
-    }, 2000);
-    return () => clearInterval(badgeInterval);
-  }, []);
-
-  useEffect(() => {
-    fetch('/api/feed')
-      .then(res => res.json())
-      .then(data => {
-        if (data.main && data.main.length > 0) {
-          setNews([...data.main, ...data.main]); // Duplicate for seamless infinite scroll
-        }
-        if (data.hackersNews && data.hackersNews.length > 0) {
-          setHackersNews([...data.hackersNews, ...data.hackersNews, ...data.hackersNews, ...data.hackersNews]);
-        }
-      })
-      .catch(console.error);
-  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col overflow-x-hidden pt-[150px] relative">
+
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col overflow-x-hidden pt-[80px] relative">
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-indigo-200/50 blur-[100px] mix-blend-multiply animate-blob"></div>
@@ -236,7 +153,6 @@ export default function Home() {
               <nav className="hidden lg:flex items-center gap-4">
               {[
                 { name: 'Home', href: '#' },
-                { name: 'About Us', href: '#about' },
                 { name: 'Services', href: '#services' },
                 { name: 'Solutions', href: '#solutions' },
                 { name: 'CSR', href: '#csr' }
@@ -273,7 +189,6 @@ export default function Home() {
               <div className="container mx-auto px-6 py-6 flex flex-col gap-4">
                 {[
                   { name: 'Home', href: '#' },
-                  { name: 'About Us', href: '#about' },
                   { name: 'Services', href: '#services' },
                   { name: 'Solutions', href: '#solutions' },
                   { name: 'CSR', href: '#csr' }
@@ -300,146 +215,56 @@ export default function Home() {
         </AnimatePresence>
       </motion.header>
 
-      {/* NON-STOP NEWS TICKER */}
-      {(news.length > 0 || hackersNews.length > 0) && (
-        <div className="fixed top-20 left-0 right-0 z-40 bg-slate-900 border-b border-slate-800 overflow-hidden flex flex-col text-slate-300 shadow-md">
-          <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-slate-900 to-transparent z-10 pointer-events-none"></div>
-          <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-slate-900 to-transparent z-10 pointer-events-none"></div>
-          <div className="flex items-center justify-center gap-2 px-6 bg-primary text-white font-bold text-[10px] uppercase tracking-widest absolute left-0 z-20 h-full top-0 shadow-[4px_0_15px_rgba(0,0,0,0.5)]">
-            <Activity className="w-3.5 h-3.5 animate-pulse" /> CYBER FEED
-          </div>
-          
-          {news.length > 0 && (
-            <motion.div 
-              style={{ x: baseX }}
-              onMouseEnter={() => setIsFeedHovered(true)}
-              onMouseLeave={() => setIsFeedHovered(false)}
-              className="flex items-center whitespace-nowrap pl-[180px] cursor-pointer py-2 border-b border-white/5"
-            >
-              {[...news, ...news, ...news, ...news].map((item, i) => {
-                let badgeColor = "bg-primary text-white";
-                let icon = <Activity className="w-3 h-3" />;
-                
-                if (item.source === 'AWS Security') {
-                  badgeColor = "bg-orange-500 text-white";
-                  icon = <Cloud className="w-3 h-3" />;
-                } else if (item.source === 'CrowdStrike') {
-                  badgeColor = "bg-red-600 text-white";
-                  icon = <Shield className="w-3 h-3" />;
-                } else if (item.source === 'BleepingComputer') {
-                  badgeColor = "bg-blue-600 text-white";
-                  icon = <Network className="w-3 h-3" />;
-                } else if (item.source === 'Cisco Security') {
-                  badgeColor = "bg-teal-600 text-white";
-                  icon = <Server className="w-3 h-3" />;
-                }
-                
-                return (
-                  <button
-                    key={`main-${i}`}
-                    onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")}
-                    aria-label={`Read article: ${item.title} from ${item.source}`}
-                    className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none focus:ring-2 focus:ring-white/30 rounded"
-                  >
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm ${badgeColor}`}>
-                      {icon} {item.source}
-                    </div>
-                    <span className="rainbow-text-hover">{item.title}</span>
-                    </button>
-                );
-              })}
-            </motion.div>
-          )}
 
-          {hackersNews.length > 0 && (
-            <motion.div 
-              style={{ x: baseX2 }}
-              onMouseEnter={() => setIsFeedHovered(true)}
-              onMouseLeave={() => setIsFeedHovered(false)}
-              className="flex items-center whitespace-nowrap pl-[180px] cursor-pointer py-2"
-            >
-              {[...hackersNews, ...hackersNews, ...hackersNews, ...hackersNews].map((item, i) => (
-                <button
-                  key={`hacker-${i}`}
-                  onClick={() => window.open(item.link, "_blank", "noopener,noreferrer")}
-                  aria-label={`Read article: ${item.title} from ${item.source}`}
-                  className="flex items-center text-xs font-semibold hover:text-white transition-colors mx-8 group focus:outline-none focus:ring-2 focus:ring-white/30 rounded"
-                >
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider mr-4 shadow-sm bg-green-600 text-white">
-                    <Lock className="w-3 h-3" /> {item.source}
-                  </div>
-                  <span className="rainbow-text-hover">{item.title}</span>
-                    </button>
-              ))}
-            </motion.div>
-          )}
-        </div>
-      )}
 
       <main className="flex-grow">
         
-        {/* SECTION 1: HERO */}
-        <section className="relative pt-12 pb-16 lg:pt-16 lg:pb-24 overflow-hidden bg-transparent border-b border-white/20">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[100px] -z-10" />
-          <div className="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center relative z-10">
-            <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="max-w-3xl">
-              <motion.div variants={fadeInUp} className="inline-block mb-6">
-                <span className="text-xs font-extrabold tracking-[0.2em] text-primary uppercase bg-primary/10 border border-primary/20 px-4 py-1.5 rounded-full shadow-sm">
-                  Next-Generation Enterprise Defense
-                </span>
+        {/* SECTION: FIRM OVERVIEW */}
+        <section className="py-16 lg:py-20 bg-transparent relative border-b border-white/20">
+          <div className="container mx-auto px-6">
+            <FirmOverviewBanner />
+            <div className="grid lg:grid-cols-2 gap-16 items-start">
+              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer}>
+                <motion.h2 variants={fadeInUp} className="text-4xl font-extrabold mb-8 flex items-center gap-4 text-slate-900">
+                  <span className="w-10 h-1.5 bg-primary rounded-full shrink-0"></span>
+                  Firm Overview
+                </motion.h2>
+                <div className="pl-14">
+                  <motion.p variants={fadeInUp} className="text-slate-600 leading-relaxed mb-6 text-lg font-medium text-justify">
+                    At <strong className="text-slate-900">Netamps Technologies</strong>, our expertise is defined by our ability to architect, engineer, and deliver resilient solutions across an increasingly complex cyberspace. While no digital infrastructure can be considered absolutely impervious to compromise, we enable organizations to establish robust layers of defense designed to mitigate risk, safeguard critical information, and protect digital assets against unauthorized access and manipulation.
+                  </motion.p>
+                  <motion.p variants={fadeInUp} className="text-slate-600 leading-relaxed mb-6 text-lg font-medium text-justify">
+                    The rapid proliferation of technology has fundamentally transformed how enterprises operate and create value. We believe that the convergence of cutting-edge technological innovation with human intelligence and strategic thinking creates a powerful foundation for solving complex enterprise security challenges.
+                  </motion.p>
+                  <motion.p variants={fadeInUp} className="text-slate-600 leading-relaxed mb-10 text-lg font-medium text-justify">
+                    Our approach is rooted in a simple principle: technology becomes truly transformative when intelligent systems are guided by human insight. By combining our deep expertise in Digital Forensics and Cyber Security with an understanding of the evolving digital landscape, we deliver next-generation solutions that are secure, scalable, and purpose-built for the challenges of tomorrow.
+                  </motion.p>
+                </div>
               </motion.div>
-              <motion.div variants={fadeInUp} className="mb-6">
-                {(() => {
-                  const trends = [
-                    { label: "Global cybercrime costs projected by 2025", value: "$10.5T/yr", accent: "from-rose-500 to-rose-700", bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-600" },
-                    { label: "Average cost of a data breach in 2024", value: "$4.88M", accent: "from-amber-500 to-orange-600", bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-600" },
-                    { label: "Cybersecurity market CAGR (2024–29)", value: "↑ 12.9%", accent: "from-emerald-500 to-teal-600", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-600" },
-                    { label: "Cyberattacks on businesses daily, worldwide", value: "2,200+", accent: "from-indigo-500 to-blue-600", bg: "bg-indigo-50", border: "border-indigo-200", text: "text-indigo-600" },
-                  ];
-                  const trend = trends[badgeIndex % trends.length];
-                  return (
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={badgeIndex % trends.length}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.5, ease: "easeInOut" }}
-                        className={`inline-flex flex-col gap-1 px-5 py-3 rounded-2xl border ${trend.bg} ${trend.border} shadow-sm max-w-sm`}
-                      >
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">CYBER THREAT INTELLIGENCE</span>
-                        <div className="flex items-center justify-between gap-6">
-                          <span className="text-sm font-bold text-slate-700 leading-snug">{trend.label}</span>
-                          <span className={`text-2xl font-black whitespace-nowrap bg-gradient-to-r ${trend.accent} text-transparent bg-clip-text`}>{trend.value}</span>
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
-                  );
-                })()}
+              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="space-y-6">
+                <motion.h2 variants={fadeInUp} className="text-3xl font-extrabold mb-8 text-slate-900 pl-6 border-l-4 border-primary">Core Principles</motion.h2>
+                {[
+                  { title: "Human Capital & Operational Excellence", desc: "We believe human expertise is the cornerstone of every successful organization. We logically align technology with human insight to solve complex security challenges efficiently." },
+                  { title: "Integrity & Governance", desc: "Our methodology is strictly bound by ethical principles. We maintain a robust governance framework and culture that drives exceptional value and compliance for our clientele." },
+                  { title: "Strategic Vision", desc: "Our objective is to architect resilient cyber environments by leveraging emerging technologies to redefine security paradigms in Cyberspace and Digital Forensics." }
+                ].map((val, i) => (
+                  <motion.div key={i} variants={fadeInUp} className="p-6 hover:translate-x-2 transition-transform duration-500 group">
+                    <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                        <CheckCircle className="w-3 h-3 text-primary" />
+                      </div>
+                      {val.title}
+                    </h3>
+                    <p className="text-slate-600 text-base leading-relaxed font-medium pl-11 text-justify">{val.desc}</p>
+                  </motion.div>
+                ))}
               </motion.div>
-              <motion.p variants={fadeInUp} className="text-lg lg:text-xl text-slate-600 mb-10 leading-relaxed font-medium">
-                Advanced Threat Intelligence, Digital Forensics, and Incident Response (DFIR) solutions designed to safeguard critical infrastructure against evolving threat vectors.
-              </motion.p>
-              <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4">
-                <button onClick={(e) => { e.preventDefault(); document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }); }} className="rainbow-btn bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
-                  Engage Our Experts <ArrowRight className="w-5 h-5" />
-                </button>
-                <button onClick={(e) => { e.preventDefault(); document.getElementById('solutions')?.scrollIntoView({ behavior: 'smooth' }); }} className="rainbow-btn bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold text-lg transition-all text-center hover:-translate-y-1 shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/50 focus:ring-offset-2">
-                  Explore Capabilities
-                </button>
-              </motion.div>
-            </motion.div>
-            
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 1, ease: "easeOut" }} className="relative hidden lg:block flex flex-col items-end">
-              <div className="w-full flex justify-end mb-6 z-20 relative">
-                <ServerStatusWidget />
-              </div>
-              <LiveIntelligenceFeed />
-            </motion.div>
+            </div>
           </div>
         </section>
 
         {/* SECTION: AUTHORIZED PARTNERS */}
+
         <section className="py-12 border-y border-white/20 bg-transparent overflow-hidden relative">
           <div className="container mx-auto px-6">
             <div className="text-center mb-12">
@@ -493,61 +318,12 @@ export default function Home() {
               ))}
             </div>
             
-            {/* INJECT RSS BULLETIN COMPONENTS */}
-            <div className="grid lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-              <PartnerNewsBulletin />
-              <AINewsBulletin />
-            </div>
+
             
           </div>
         </section>
 
-        {/* SECTION: ABOUT US & VALUES */}
-        <section id="about" className="py-16 lg:py-20 bg-transparent relative border-b border-white/20">
-          <div className="container mx-auto px-6">
-            <FirmOverviewBanner />
-            
-            <div className="grid lg:grid-cols-2 gap-16 items-start">
-              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer}>
-                <motion.h2 variants={fadeInUp} className="text-4xl font-extrabold mb-8 flex items-center gap-4 text-slate-900">
-                  <span className="w-10 h-1.5 bg-primary rounded-full shrink-0"></span>
-                  Firm Overview
-                </motion.h2>
-                <div className="pl-14">
-                  <motion.p variants={fadeInUp} className="text-slate-600 leading-relaxed mb-6 text-lg font-medium text-justify">
-                    At <strong className="text-slate-900">Netamps Technologies</strong>, our expertise is defined by our ability to architect, engineer, and deliver resilient solutions across an increasingly complex cyberspace. While no digital infrastructure can be considered absolutely impervious to compromise, we enable organizations to establish robust layers of defense designed to mitigate risk, safeguard critical information, and protect digital assets against unauthorized access and manipulation.
-                  </motion.p>
-                  <motion.p variants={fadeInUp} className="text-slate-600 leading-relaxed mb-6 text-lg font-medium text-justify">
-                    The rapid proliferation of technology has fundamentally transformed how enterprises operate and create value. We believe that the convergence of cutting-edge technological innovation with human intelligence and strategic thinking creates a powerful foundation for solving complex enterprise security challenges.
-                  </motion.p>
-                  <motion.p variants={fadeInUp} className="text-slate-600 leading-relaxed mb-10 text-lg font-medium text-justify">
-                    Our approach is rooted in a simple principle: technology becomes truly transformative when intelligent systems are guided by human insight. By combining our deep expertise in Digital Forensics and Cyber Security with an understanding of the evolving digital landscape, we deliver next-generation solutions that are secure, scalable, and purpose-built for the challenges of tomorrow.
-                  </motion.p>
-                </div>
-              </motion.div>
 
-              <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="space-y-6">
-                <motion.h2 variants={fadeInUp} className="text-3xl font-extrabold mb-8 text-slate-900 pl-6 border-l-4 border-primary">Core Principles</motion.h2>
-                
-                {[
-                  { title: "Human Capital & Operational Excellence", desc: "We believe human expertise is the cornerstone of every successful organization. We logically align technology with human insight to solve complex security challenges efficiently." },
-                  { title: "Integrity & Governance", desc: "Our methodology is strictly bound by ethical principles. We maintain a robust governance framework and culture that drives exceptional value and compliance for our clientele." },
-                  { title: "Strategic Vision", desc: "Our objective is to architect resilient cyber environments by leveraging emerging technologies to redefine security paradigms in Cyberspace and Digital Forensics." }
-                ].map((val, i) => (
-                  <motion.div key={i} variants={fadeInUp} className="p-6 hover:translate-x-2 transition-transform duration-500 group">
-                    <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
-                        <CheckCircle className="w-3 h-3 text-primary" />
-                      </div>
-                      {val.title}
-                    </h3>
-                    <p className="text-slate-600 text-base leading-relaxed font-medium pl-11 text-justify">{val.desc}</p>
-                  </motion.div>
-                ))}
-              </motion.div>
-            </div>
-          </div>
-        </section>
 
         {/* SECTION: SERVICES / AREA OF EXPERTISE */}
         <section id="services" className="py-16 lg:py-20 bg-transparent relative border-y border-white/20 overflow-hidden">
