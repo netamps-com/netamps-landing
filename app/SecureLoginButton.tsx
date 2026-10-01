@@ -55,10 +55,10 @@ export default function SecureLoginButton() {
     <>
       <button 
         onClick={handleSecureLogin}
-        className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2 rounded-full font-bold text-sm hover:bg-slate-800 transition-all border border-slate-700 shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 group"
+        className="rainbow-btn flex items-center gap-2 bg-slate-900 text-white px-5 py-2 rounded-full font-bold text-sm transition-all border border-slate-700 shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 group overflow-hidden relative"
       >
-        <KeyRound className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-        Employee Login
+        <KeyRound className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform relative z-10" />
+        <span className="relative z-10 group-hover:text-white transition-colors">Sign-In</span>
       </button>
 
       <AnimatePresence>
