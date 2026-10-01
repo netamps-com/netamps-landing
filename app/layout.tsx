@@ -84,7 +84,6 @@ export const metadata: Metadata = {
 };
 
 import SecurityWrapper from "./SecurityWrapper";
-import CookieConsent from "./CookieConsent";
 import TrustSeal from "./TrustSeal";
 
 export default function RootLayout({
@@ -117,7 +116,6 @@ export default function RootLayout({
         <SecurityWrapper>
           {children}
           <TrustSeal />
-          <CookieConsent />
         </SecurityWrapper>
         {/* Google AdSense — loaded after interactive to not block render */}
         <Script

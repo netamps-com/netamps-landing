@@ -732,7 +732,11 @@ export default function Home() {
                   <span>contact<span className="hidden">.spam.trap</span>@<span className="hidden">do.not.scrape.</span>netamps.com</span>
                 </button>
               </div>
-              <p>&copy; {new Date().getFullYear()} Netamps Technologies. All rights reserved. All trademarks, logos and brand names are the property of their respective owners.</p>
+              <div className="flex items-center flex-wrap gap-2 justify-center md:justify-start">
+                <p>&copy; {new Date().getFullYear()} Netamps Technologies. All rights reserved. All trademarks, logos and brand names are the property of their respective owners.</p>
+                <span className="text-slate-300 hidden md:inline">|</span>
+                <a href="/privacy" className="hover:text-primary transition-colors underline decoration-slate-300 underline-offset-2">Privacy Policy</a>
+              </div>
               <div className="mt-2 flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-2 text-slate-400">
                 <span>Website developed & maintained by</span>
                 <div className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md hover:border-indigo-300/50 cursor-default">
