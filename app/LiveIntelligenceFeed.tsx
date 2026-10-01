@@ -17,6 +17,8 @@ interface NewsItem {
 }
 
 const RSS_FEEDS = [
+  { source: 'Cyber Security Hub (Threat Defense)', tag: 'THREAT ALERT', url: 'https://www.cshub.com/rss/categories/threat-defense' },
+  { source: 'Cyber Security Hub (Demos)', tag: 'INDUSTRY', url: 'https://www.cshub.com/rss/demos' },
   { source: 'The Hacker News', tag: 'THREAT ALERT', url: 'https://feeds.feedburner.com/TheHackersNews' },
   { source: 'Dark Reading', tag: 'INDUSTRY', url: 'https://www.darkreading.com/rss.xml' },
   { source: 'CISA Alerts', tag: 'COMPLIANCE', url: 'https://www.cisa.gov/cybersecurity-advisories/all.xml' },
