@@ -555,10 +555,10 @@ export default function Home() {
                 </span>
               </motion.div>
               <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 tracking-tighter">
-                Advanced Threat Defense
+                Advanced Cyber Defense Operations
               </motion.h2>
               <motion.p variants={fadeInUp} className="text-lg text-slate-600 font-medium">
-                We provide the critical expertise required to effectively investigate breaches and formulate comprehensive Incident Response plans.
+                Delivering military-grade cyber defense infrastructure, continuous adversarial simulation, and sovereign data governance to preempt and neutralize advanced persistent threats.
               </motion.p>
             </motion.div>
             
@@ -566,21 +566,21 @@ export default function Home() {
               {[
                 { 
                   icon: Server, 
-                  title: "Security Operations Center", 
+                  title: "Next-Generation Security Operations Center (NG-SOC)", 
                   gradient: "from-blue-500 to-indigo-500", 
                   desc: "Next-generation 24/7/365 infrastructure monitoring aligned with the MITRE ATT&CK framework and NIST SP 800-61 Rev. 2. We utilize AI-driven SIEM and automated threat intelligence feeds to detect, triage, and execute rapid incident response protocols before lateral movement occurs.", 
                   items: ['MITRE ATT&CK Aligned Threat Hunting', 'Automated SOAR Playbooks', 'NIST-Compliant Incident Response', 'Cloud-Native XDR Integration'] 
                 },
                 { 
                   icon: Activity, 
-                  title: "Vulnerability & Risk Management", 
+                  title: "Continuous Threat Exposure Management (CTEM)", 
                   gradient: "from-purple-500 to-pink-500", 
                   desc: "Enterprise risk quantification and continuous attack surface management mapped to CIS Controls v8 and ISO/IEC 27001 standards. We actively prevent exploitation caused by configuration drift, supply chain vulnerabilities, and shadow IT environments.", 
                   items: ['Continuous Automated Red Teaming (CART)', 'CIS v8 Benchmark Auditing', 'Zero Trust Architecture (ZTA) Mapping', 'Third-Party Risk Management (TPRM)'] 
                 },
                 { 
                   icon: Lock, 
-                  title: "Data Protection & Privacy", 
+                  title: "Data Security Posture Management (DSPM)", 
                   gradient: "from-emerald-400 to-teal-500", 
                   desc: "Comprehensive data lifecycle governance ensuring strict compliance with global mandates like GDPR, CCPA, and HIPAA. We enforce cryptographic controls, granular role-based access (RBAC), and endpoint protections to maintain sovereign data integrity.", 
                   items: ['FIPS 140-3 Validated Cryptography', 'Regulatory Compliance Mapping', 'Data Loss Prevention (DLP) Policies', 'Identity-First Security (IAM/MFA)'] 
