@@ -1,3 +1,5 @@
+import ClientReturnButton from './ClientReturnButton';
+
 export const metadata = {
   title: 'Privacy Policy | Netamps Technologies',
   description: 'Privacy Policy and Cookie Information for Netamps Technologies.',
@@ -54,9 +56,7 @@ export default function PrivacyPolicy() {
           </section>
           
           <div className="mt-12 text-center">
-            <button onClick={() => window.location.href = '/'} className="inline-flex items-center gap-2 text-primary font-bold hover:text-indigo-700 transition-colors bg-indigo-50 px-6 py-3 rounded-full">
-              &larr; Return to Homepage
-            </button>
+            <ClientReturnButton />
           </div>
         </div>
       </div>
