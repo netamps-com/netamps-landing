@@ -101,10 +101,10 @@ export default function LiveIntelligenceFeed() {
 
   // Fallback data while loading or if API fails
   const displayNews = news.length > 0 ? news : [
-    { timeLabel: "10m ago", tag: "THREAT ALERT", title: "New Zero-Day Vulnerability in Popular Enterprise VPN Services", severity: "High" as const, desc: "A critical flaw (CVE-2024-XXXX) allows unauthenticated remote code execution. Patch immediately.", link: "#" },
-    { timeLabel: "1h ago", tag: "INDUSTRY", title: "Global Ransomware Attacks Surge by 45% in Q3", severity: "Critical" as const, desc: "Financial and healthcare sectors face unprecedented multi-extortion campaigns driven by RaaS cartels.", link: "#" },
-    { timeLabel: "3h ago", tag: "ANALYSIS", title: "AI-Powered Phishing Campaigns Evade Traditional Defenses", severity: "Medium" as const, desc: "Attackers are utilizing LLMs to generate highly personalized spear-phishing emails with zero language errors.", link: "#" },
-    { timeLabel: "5h ago", tag: "COMPLIANCE", title: "Data Privacy Regulations Tighten Across Global Sectors", severity: "Low" as const, desc: "New mandates require stricter breach reporting timelines and enhanced data sovereignty controls.", link: "#" }
+    { id: 'fb-1', timeLabel: "10m ago", tag: "THREAT ALERT", title: "New Zero-Day Vulnerability in Popular Enterprise VPN Services", severity: "High" as const, desc: "A critical flaw (CVE-2024-XXXX) allows unauthenticated remote code execution. Patch immediately.", link: "#" },
+    { id: 'fb-2', timeLabel: "1h ago", tag: "INDUSTRY", title: "Global Ransomware Attacks Surge by 45% in Q3", severity: "Critical" as const, desc: "Financial and healthcare sectors face unprecedented multi-extortion campaigns driven by RaaS cartels.", link: "#" },
+    { id: 'fb-3', timeLabel: "3h ago", tag: "ANALYSIS", title: "AI-Powered Phishing Campaigns Evade Traditional Defenses", severity: "Medium" as const, desc: "Attackers are utilizing LLMs to generate highly personalized spear-phishing emails with zero language errors.", link: "#" },
+    { id: 'fb-4', timeLabel: "5h ago", tag: "COMPLIANCE", title: "Data Privacy Regulations Tighten Across Global Sectors", severity: "Low" as const, desc: "New mandates require stricter breach reporting timelines and enhanced data sovereignty controls.", link: "#" }
   ];
 
   return (
