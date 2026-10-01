@@ -8,8 +8,31 @@ export default function ServerStatusWidget() {
   const [cfHistory, setCfHistory] = useState<number[]>(Array(8).fill(12));
   const [fbHistory, setFbHistory] = useState<number[]>(Array(8).fill(24));
 
+  const [loadTime, setLoadTime] = useState<number | string>('---');
+
   // Simulate slight realistic fluctuations in ping times for the SOC dashboard aesthetic
   useEffect(() => {
+    // Capture Browser Performance API metric
+    if (typeof window !== 'undefined' && window.performance) {
+      const updateLoadTime = () => {
+        const navEntries = window.performance.getEntriesByType('navigation');
+        if (navEntries.length > 0) {
+          const navEntry = navEntries[0] as PerformanceNavigationTiming;
+          if (navEntry.loadEventEnd > 0) {
+            setLoadTime(Math.round(navEntry.loadEventEnd - navEntry.startTime));
+          } else {
+            setLoadTime(Math.round(window.performance.now()));
+          }
+        }
+      };
+      
+      if (document.readyState === 'complete') {
+        updateLoadTime();
+      } else {
+        window.addEventListener('load', updateLoadTime);
+      }
+    }
+
     const interval = setInterval(() => {
       const newCf = Math.floor(Math.random() * (18 - 8 + 1) + 8);
       const newFb = Math.floor(Math.random() * (35 - 19 + 1) + 19);
@@ -17,6 +40,7 @@ export default function ServerStatusWidget() {
       setCfHistory(prev => [...prev.slice(1), newCf]);
       setFbHistory(prev => [...prev.slice(1), newFb]);
     }, 2500);
+    
     return () => clearInterval(interval);
   }, []);
 
@@ -35,6 +59,13 @@ export default function ServerStatusWidget() {
         <span className="font-bold text-slate-300">
           SYS_OP: <span className="text-emerald-400">ONLINE</span>
         </span>
+      </div>
+
+      {/* Browser Performance API Badge */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 group bg-slate-800/40">
+        <Zap className="w-3 h-3 text-fuchsia-500 group-hover:text-fuchsia-400 transition-colors" />
+        <span className="font-black text-slate-500 group-hover:text-slate-300 transition-colors">DOM_LOAD:</span>
+        <span className="text-fuchsia-500 font-bold tracking-tighter drop-shadow-md group-hover:text-fuchsia-400">{loadTime}ms</span>
       </div>
 
       {/* Cloudflare Edge with Sparkline */}
