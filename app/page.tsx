@@ -425,34 +425,37 @@ export default function Home() {
                 Corporate Social Responsibility
               </motion.div>
               <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-black mb-6 text-slate-900 tracking-tighter">
-                Securing a Sustainable Future
+                Responsible technology. Wider access. Thoughtful product life cycles.
               </motion.h2>
+              <motion.p variants={fadeInUp} className="text-slate-600 font-medium text-lg mb-8 leading-relaxed">
+                Netamps Technologies works to make technology more useful and responsible. Our priorities are digital inclusion, responsible product life cycles, data trust and more efficient digital operations. We aim to expand access to digital learning and, where suitable, support the safe reuse of equipment through appropriate partners. We protect the information entrusted to us and work to reduce avoidable resource use in our operations.
+              </motion.p>
             </motion.div>
 
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="grid md:grid-cols-2 gap-8">
               {[
                 { 
                   icon: "🌐", title: "Digital Inclusion", 
-                  subtitle: "Bridging the digital divide and securing the next generation.",
-                  desc: "We believe technology should empower everyone. We actively donate refurbished hardware to schools and community organisations to provide vital digital access. Additionally, we fund cybersecurity scholarships to help cultivate and diversify the next generation of tech talent.",
+                  subtitle: "Support access to digital learning and useful technology.",
+                  desc: "Where feasible, assess suitable equipment for secure data erasure, safety testing and reuse through appropriate community or education partners.",
                   bg: "bg-blue-100", text: "text-blue-600"
                 },
                 { 
-                  icon: "🌱", title: "E-Waste & Green IT", 
-                  subtitle: "Responsible lifecycle management for a cleaner planet.",
-                  desc: "Technology should move us forward, not clutter our planet. We partner exclusively with certified e-waste recyclers to ensure old, decommissioned client hardware is disposed of or repurposed responsibly, keeping hazardous materials out of landfills.",
+                  icon: "♻️", title: "Circular Products & E-Waste", 
+                  subtitle: "Responsible lifecycle management for decommissioned products.",
+                  desc: "Prioritise continued use or repair where safe and suitable; send end-of-life equipment and batteries through the applicable authorized channels.",
                   bg: "bg-emerald-100", text: "text-emerald-600"
                 },
                 { 
                   icon: "🔒", title: "Data Ethics & Trust", 
-                  subtitle: "Uncompromising transparency, security, and integrity.",
-                  desc: "Trust is our core currency. We maintain absolute transparency in how we handle and protect client data. We strictly adhere to ethical data practices and refuse to support or sell technologies involved in unethical AI processing or mass surveillance.",
+                  subtitle: "Protect personal and client information with absolute integrity.",
+                  desc: "Use access controls, handle data transparently and assess privacy and security risks. These are business conduct commitments essential to our operations.",
                   bg: "bg-purple-100", text: "text-purple-600"
                 },
                 { 
-                  icon: "☁️", title: "Carbon-Neutral Cloud Solutions", 
-                  subtitle: "Powering the future of IT with sustainable infrastructure.",
-                  desc: "We help our clients scale efficiently and sustainably. By intentionally partnering with leading data center providers (such as AWS, Microsoft Azure, and Google Cloud) that commit to 100% renewable energy, we ensure your IT infrastructure leaves a minimal carbon footprint.",
+                  icon: "🏢", title: "Responsible Digital Infrastructure", 
+                  subtitle: "Improve energy and resource efficiency in our own operations.",
+                  desc: "Consider environmental information when selecting digital infrastructure. We make no carbon-neutral or renewable-energy claim without reliable evidence and a defined boundary.",
                   bg: "bg-cyan-100", text: "text-cyan-600"
                 }
               ].map((csr, i) => (
@@ -466,6 +469,29 @@ export default function Home() {
                   </div>
                 </motion.div>
               ))}
+            </motion.div>
+
+            {/* E-Waste & Product Take-Back Banner */}
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="mt-12 p-8 lg:p-12 rounded-3xl bg-slate-900 text-white shadow-2xl relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8 border border-slate-800">
+              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[100px] -z-10"></div>
+              <div className="flex-1">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs mb-4 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Product Stewardship
+                </div>
+                <h3 className="text-3xl font-black mb-4">E-waste and Product Take-Back</h3>
+                <p className="text-slate-300 font-medium leading-relaxed max-w-3xl text-lg mb-4">
+                  We commit to receiving eligible decommissioned products supplied by Netamps Technologies. We assess returned equipment for safe reuse or refurbishment where appropriate and route end-of-life products to authorized channels under applicable requirements.
+                </p>
+                <p className="text-slate-400 text-sm max-w-3xl leading-relaxed">
+                  Our approach: We set practical annual actions, keep records and share progress we can substantiate. Our corporate responsibility programme does not replace our legal duties. Where statutory CSR provisions apply to the Company, we follow the requirements of Section 135 of the Companies Act, 2013 and the applicable rules.
+                </p>
+              </div>
+              <div className="shrink-0 w-full lg:w-auto">
+                <a href="mailto:contact@netamps.com" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                  Request a Return
+                </a>
+              </div>
             </motion.div>
           </div>
         </section>
