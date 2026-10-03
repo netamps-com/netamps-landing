@@ -36,7 +36,7 @@ export default function SecureLoginButton() {
     setIsVerifying(true);
     
     // Industry standard URL obfuscation for bot protection
-    const encryptedUrl = 'aHR0cHM6Ly93ZWJtYWlsLm5ldGFtcHMuaW4v';
+    const encryptedUrl = 'aHR0cDovL2xvY2FsaG9zdDo4MDAwL3N0YWZmL2xvZ2lu';
     const cleanUrl = atob(encryptedUrl);
     
     // 1. OPEN IMMEDIATELY: This guarantees the browser popup blocker will NEVER block the new tab
