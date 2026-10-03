@@ -83,23 +83,6 @@ export default function Home() {
       }
     }
 
-    // Intercept anchor clicks to prevent # in URL
-    const handleGlobalClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const anchor = target.closest('a');
-      const href = anchor?.getAttribute('href');
-      if (anchor && href?.startsWith('#')) {
-        e.preventDefault();
-        const id = href.substring(1);
-        if (id) {
-          document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-        } else {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }
-    };
-    document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
   const handleMouseEnter = (index: number) => {
@@ -134,7 +117,7 @@ export default function Home() {
         className="fixed top-0 left-0 right-0 w-full z-50 backdrop-blur-3xl bg-slate-50/70 border-b border-slate-200/50 shadow-sm transition-all"
       >
         <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-          <button onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label="Netamps Technologies – Home" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
+          <a href="#" aria-label="Netamps Technologies – Home" className="flex items-center gap-3 group focus:outline-none rounded-lg shrink-0">
             <div className="relative p-[3px] bg-white rounded-xl shadow-sm border border-slate-200 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.2)] group-hover:border-indigo-300 transition-all duration-500">
               <NetampsLogo className="h-10 w-10 md:h-12 md:w-12 group-hover:scale-[1.03] transition-transform duration-500" />
             </div>
@@ -142,7 +125,7 @@ export default function Home() {
               <span className="font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-900 text-2xl leading-none">NETAMPS</span>
               <span className="text-[10px] font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-600 to-slate-400 tracking-[0.3em] leading-none mt-1">TECHNOLOGIES</span>
             </div>
-          </button>
+          </a>
           <div className="flex items-center gap-6">
             {currentTimeIST && (
               <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-slate-200 shadow-sm cursor-default hover:text-slate-900 transition-colors">
@@ -157,17 +140,13 @@ export default function Home() {
                 { name: 'Solutions', href: '#solutions' },
                 { name: 'CSR', href: '#csr' }
               ].map((item) => (
-                <button 
+                <a 
                   key={item.name}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (item.href === '#') { window.scrollTo({ top: 0, behavior: 'smooth' }); }
-                    else { document.getElementById(item.href.substring(1))?.scrollIntoView({ behavior: 'smooth' }); }
-                  }} 
-                  className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm group overflow-hidden"
+                  href={item.href}
+                  className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm group overflow-hidden block"
                 >
                   <span className="relative z-10 group-hover:text-white transition-colors">{item.name}</span>
-                </button>
+                </a>
               ))}
               <SecureLoginButton />
             </nav>
@@ -193,18 +172,14 @@ export default function Home() {
                   { name: 'Solutions', href: '#solutions' },
                   { name: 'CSR', href: '#csr' }
                 ].map((item) => (
-                  <button 
+                  <a 
                     key={item.name}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setIsMobileMenuOpen(false);
-                      if (item.href === '#') { window.scrollTo({ top: 0, behavior: 'smooth' }); }
-                      else { document.getElementById(item.href.substring(1))?.scrollIntoView({ behavior: 'smooth' }); }
-                    }} 
-                    className="w-full text-left text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100"
+                    href={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)} 
+                    className="block w-full text-left text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100"
                   >
                     {item.name}
-                  </button>
+                  </a>
                 ))}
                 <div className="pt-2 border-t border-slate-100 flex justify-center mt-2 w-full">
                   <SecureLoginButton />
