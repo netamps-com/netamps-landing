@@ -138,7 +138,7 @@ export default function Home() {
                 { name: 'Home', href: '#' },
                 { name: 'Services', href: '#services' },
                 { name: 'Solutions', href: '#solutions' },
-                { name: 'CSR', href: '#csr' }
+                { name: 'ESG Initiatives', href: '#csr' }
               ].map((item) => (
                 <a 
                   key={item.name}
@@ -170,7 +170,7 @@ export default function Home() {
                   { name: 'Home', href: '#' },
                   { name: 'Services', href: '#services' },
                   { name: 'Solutions', href: '#solutions' },
-                  { name: 'CSR', href: '#csr' }
+                  { name: 'ESG Initiatives', href: '#csr' }
                 ].map((item) => (
                   <a 
                     key={item.name}
@@ -422,7 +422,7 @@ export default function Home() {
           <div className="container mx-auto px-6">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="text-center max-w-3xl mx-auto mb-16">
               <motion.div variants={fadeInUp} className="inline-block px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 font-bold text-xs mb-4 uppercase tracking-widest">
-                Corporate Social Responsibility
+                Responsible Business Practices
               </motion.div>
               <motion.h2 variants={fadeInUp} className="text-4xl lg:text-5xl font-black mb-6 text-slate-900 tracking-tighter">
                 Responsible technology. Wider access. Thoughtful product life cycles.
@@ -483,12 +483,9 @@ export default function Home() {
                 <p className="text-slate-300 font-medium leading-relaxed max-w-3xl text-lg mb-4">
                   We commit to receiving eligible decommissioned products supplied by Netamps Technologies. We assess returned equipment for safe reuse or refurbishment where appropriate and route end-of-life products to authorized channels under applicable requirements.
                 </p>
-                <p className="text-slate-400 text-sm max-w-3xl leading-relaxed">
-                  Our approach: We set practical annual actions, keep records and share progress we can substantiate. Our corporate responsibility programme does not replace our legal duties. Where statutory CSR provisions apply to the Company, we follow the requirements of Section 135 of the Companies Act, 2013 and the applicable rules.
-                </p>
               </div>
               <div className="shrink-0 w-full lg:w-auto">
-                <a href="mailto:contact@netamps.com" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                <a href="http://localhost:8000/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                   Request a Return
                 </a>
               </div>
