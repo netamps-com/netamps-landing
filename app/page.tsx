@@ -481,11 +481,11 @@ export default function Home() {
                 </div>
                 <h3 className="text-3xl font-black mb-4">E-waste and Product Take-Back</h3>
                 <p className="text-slate-300 font-medium leading-relaxed max-w-3xl text-lg mb-4">
-                  We commit to receiving eligible decommissioned products supplied by Netamps Technologies. We assess returned equipment for safe reuse or refurbishment where appropriate and route end-of-life products to authorized channels under applicable requirements.
+                  We commit to receiving eligible decommissioned products supplied by Netamps Technologies or other vendors. We assess returned equipment for safe reuse or refurbishment where appropriate and route end-of-life products to authorized channels under applicable requirements.
                 </p>
               </div>
               <div className="shrink-0 w-full lg:w-auto">
-                <a href="http://localhost:8000/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                <a href={process.env.NEXT_PUBLIC_RETURN_PORTAL_URL || 'https://returns.example.invalid/'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                   Request a Return
                 </a>
               </div>
