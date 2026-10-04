@@ -1,4 +1,4 @@
-# This file is used for manual deployments with wrangler
-# Cloudflare Pages CI automatically builds from the 'out' directory
+# Cloudflare Pages configuration
 name = "netamps-landing"
 compatibility_date = "2024-01-01"
+pages_build_output_dir = "./out"
