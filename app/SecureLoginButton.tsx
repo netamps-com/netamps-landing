@@ -34,15 +34,14 @@ export default function SecureLoginButton() {
 
   const handleSecureLogin = () => {
     setIsVerifying(true);
-    
-    // Industry standard URL obfuscation for bot protection
-    const encryptedUrl = 'aHR0cDovL2xvY2FsaG9zdDo4MDAwL3N0YWZmL2xvZ2lu';
-    const cleanUrl = atob(encryptedUrl);
+
+    // Production login URL from environment variable
+    const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://netamps.com/login';
     
     // 1. OPEN IMMEDIATELY: This guarantees the browser popup blocker will NEVER block the new tab
     // because it is a direct, synchronous result of a physical mouse click.
     // We use 'noopener' but omit 'noreferrer' to preserve the strict Cloudflare WAF Referer header.
-    window.open(cleanUrl, '_blank', 'noopener');
+    window.open(loginUrl, '_blank', 'noopener');
     
     // 2. VISUAL PROTOCOL: We keep the security verification modal spinning in the background 
     // on the main tab to maintain the "industry security protocol" aesthetic, then reset it.
