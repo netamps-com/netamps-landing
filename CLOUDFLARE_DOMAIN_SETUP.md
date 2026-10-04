@@ -1,11 +1,64 @@
-# Cloudflare Custom Domain Setup for netamps.com
+# Cloudflare Pages Deployment Guide for netamps.com
+
+## Quick Summary
+
+✅ **Code**: Deployed and live on Cloudflare Pages
+✅ **Manual Deployment**: Working (https://netamps-landing.pages.dev)
+⚠️ **Cloudflare Pages CI**: Deploy command error needs fixing in dashboard
+📋 **Recommended**: Use GitHub Actions for automatic deployments
+
+## Immediate Action Required
+
+The Cloudflare Pages CI is failing because it's using `wrangler deploy` instead of `wrangler pages deploy`. Choose one of these fixes:
+
+### Fix 1: Update Cloudflare Pages Dashboard (Quickest)
+1. Go to Cloudflare Dashboard → Workers & Pages → netamps-landing
+2. Settings → Builds & deployments
+3. **Remove** the "Deploy command" field (clear it)
+4. Save
+
+### Fix 2: Use GitHub Actions (Recommended)
+1. Add secrets to GitHub: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (see below)
+2. Disable Cloudflare Pages CI (optional but recommended)
+3. GitHub Actions will handle deployments automatically
 
 ## Current Status
 
 ✅ **Git Repository**: All changes committed and pushed to GitHub
 ✅ **Cloudflare Pages Project**: Created and deployed successfully
-✅ **Latest Deployment**: https://9fa40895.netamps-landing.pages.dev
+✅ **Latest Manual Deployment**: https://9fa40895.netamps-landing.pages.dev
 ✅ **Permanent URL**: https://netamps-landing.pages.dev
+⚠️ **Cloudflare Pages CI**: Deploy command needs to be fixed in dashboard
+
+## Fix Cloudflare Pages CI Deploy Command
+
+The Cloudflare Pages CI is currently configured with the wrong deploy command. Here's how to fix it:
+
+### Option 1: Fix Cloudflare Pages CI (Recommended)
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Navigate to **Workers & Pages** → **netamps-landing**
+3. Click **Settings** → **Builds & deployments**
+4. Find **Build configuration** section
+5. **Remove** or **clear** the "Deploy command" field (Cloudflare Pages automatically deploys the build output)
+6. Click **Save**
+
+**Why this works**: Cloudflare Pages automatically deploys the output directory specified in `wrangler.toml` (`pages_build_output_dir = "./out"`). You don't need a custom deploy command.
+
+### Option 2: Use Correct Deploy Command
+
+If you prefer to keep a deploy command, change it to:
+
+```
+npx wrangler pages deploy out --project-name=netamps-landing
+```
+
+### Option 3: Disable Cloudflare Pages CI, Use GitHub Actions
+
+1. Go to Cloudflare Pages project → **Settings** → **Builds & deployments**
+2. Click **Disconnect** next to Git integration
+3. Use the GitHub Actions workflow (`.github/workflows/cloudflare-pages.yml`)
+4. Add required secrets in GitHub (see below)
 
 ## Next Step: Configure Custom Domain
 
@@ -68,27 +121,45 @@ If you prefer to keep the domain DNS in Cloudflare and point to Pages:
    - **Target**: `netamps-landing.pages.dev`
    - **Proxy status**: Proxied (orange cloud)
 
-## GitHub Actions Deployment
+## GitHub Actions Deployment (Recommended)
 
-The GitHub Actions workflow is configured but requires secrets:
+Since Cloudflare Pages CI has configuration issues, we recommend using GitHub Actions for automatic deployments.
 
 ### Required Secrets
 
-Add these in GitHub repository settings (Settings → Secrets and variables → Actions):
+Add these in GitHub repository settings (Settings → Secrets and variables → Actions → New repository secret):
 
 1. **CLOUDFLARE_API_TOKEN**
-   - Get from: https://dash.cloudflare.com/profile/api-tokens
-   - Create custom token with permissions:
+   - Go to: https://dash.cloudflare.com/profile/api-tokens
+   - Click **Create Token**
+   - Choose **Custom Token**
+   - Set permissions:
      - Account → Cloudflare Pages → Edit
-     - Zone → Zone → Read
+     - Account → Account Settings → Read
      - User → User Details → Read
+   - Create token and copy the value
+   - Paste in GitHub secret: `CLOUDFLARE_API_TOKEN`
 
 2. **CLOUDFLARE_ACCOUNT_ID**
-   - Found in Cloudflare Dashboard → Workers & Pages → Overview (right sidebar)
+   - Go to Cloudflare Dashboard → Workers & Pages → Overview
+   - Find **Account ID** in the right sidebar
+   - Copy the value
+   - Paste in GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
+
+### Disable Cloudflare Pages CI (Optional but Recommended)
+
+To avoid conflicts between Cloudflare Pages CI and GitHub Actions:
+
+1. Go to Cloudflare Pages project → **Settings** → **Builds & deployments**
+2. Click **Disconnect** next to the Git integration
+3. Confirm disconnection
+4. Now GitHub Actions will be the only deployment method
 
 ### Once Secrets Are Set
 
-GitHub Actions will automatically deploy on every push to `main` branch.
+GitHub Actions will automatically deploy on every push to `main` branch. You can monitor deployments in:
+- GitHub: Repository → Actions tab
+- Cloudflare: Workers & Pages → netamps-landing → Deployments
 
 ## Current Deployment URLs
 
@@ -97,6 +168,18 @@ GitHub Actions will automatically deploy on every push to `main` branch.
 - **Custom Domain**: https://netamps.com (after configuration)
 
 ## Troubleshooting
+
+### Cloudflare Pages CI Deploy Error
+
+**Error**: `wrangler deploy` on a Pages project, `wrangler pages deploy` should be used instead
+
+**Solution**: The deploy command in Cloudflare Pages settings is incorrect. Go to:
+- Cloudflare Dashboard → Workers & Pages → netamps-landing
+- Settings → Builds & deployments
+- **Remove** the deploy command field (or change to `npx wrangler pages deploy out --project-name=netamps-landing`)
+- Save
+
+**Alternative**: Use GitHub Actions workflow instead (recommended)
 
 ### Custom Domain Not Working
 
@@ -129,8 +212,22 @@ NEXT_PUBLIC_RETURN_PORTAL_URL=https://netamps.com/login
 ## Summary
 
 ✅ Code is deployed to Cloudflare Pages
-✅ Working at: https://netamps-landing.pages.dev
+✅ Manual deployment working at: https://netamps-landing.pages.dev
+⚠️ Cloudflare Pages CI deploy command needs fixing (remove deploy command or use GitHub Actions)
 ⏳ Custom domain netamps.com needs manual configuration in Cloudflare Dashboard
-⏳ GitHub Actions needs secrets configuration for auto-deployment
+⏳ GitHub Actions needs secrets configuration for auto-deployment (recommended)
 
-The manual deployment is complete. Custom domain configuration requires access to the Cloudflare Dashboard.
+## Recommended Next Steps
+
+1. **Fix Cloudflare Pages CI** (choose one):
+   - Option A: Remove deploy command in Cloudflare Pages dashboard
+   - Option B: Use GitHub Actions (add secrets, disable Pages CI)
+
+2. **Configure Custom Domain**:
+   - Add netamps.com in Cloudflare Pages Custom Domains
+   - Wait for DNS propagation
+
+3. **Set Environment Variables**:
+   - Add `NEXT_PUBLIC_LOGIN_URL` and `NEXT_PUBLIC_RETURN_PORTAL_URL` in Cloudflare Pages settings
+
+The manual deployment is complete and working. The CI issue is a configuration problem in the Cloudflare Dashboard, not in the code.
