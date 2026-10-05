@@ -34,7 +34,7 @@ export default function LoginPage() {
       
       // Known hashes for Netamps2026! 
       // In a real app, this verification happens on the backend database.
-      const EXPECTED_HASH = '1f1cd5f7c00af26a1e80ea4eb4306352934ff24cf24cbf130fccb483b28b6d85'; // Hash of 'Netamps2026!'
+      const EXPECTED_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec'; // Hash of 'Netamps2026!'
 
       if ((email === 'admin@netamps.com' || email === 'staff@netamps.com') && hashedPassword === EXPECTED_HASH) {
         // Create secure session ID
