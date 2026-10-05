@@ -7,7 +7,8 @@
     "build": "node build.js",
     "deploy": "npx wrangler pages deploy .open-next",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "node setup-wrangler.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1145.0",
