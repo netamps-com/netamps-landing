@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
@@ -33,6 +34,35 @@ export default function LoginPage() {
     setIsSubmitting(true);
     setErrorMsg('');
 
+    try {
+      // Execute reCAPTCHA v3 verification
+      if (typeof window !== 'undefined' && (window as any).grecaptcha) {
+        (window as any).grecaptcha.ready(async () => {
+          try {
+            const token = await (window as any).grecaptcha.execute('6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'login' });
+            if (!token) {
+               setErrorMsg('reCAPTCHA verification failed.');
+               setIsSubmitting(false);
+               return;
+            }
+            
+            // Proceed with secure login if captcha passes
+            await processLogin();
+          } catch (captchaErr) {
+            setErrorMsg('reCAPTCHA error occurred.');
+            setIsSubmitting(false);
+          }
+        });
+      } else {
+        await processLogin(); // Fallback if script didn't load
+      }
+    } catch (err) {
+      setErrorMsg('Encryption error occurred.');
+      setIsSubmitting(false);
+    }
+  };
+
+  const processLogin = async () => {
     try {
       const hashedPassword = await hashPassword(password);
       
@@ -66,6 +96,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <Script src="https://www.google.com/recaptcha/api.js?render=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" strategy="beforeInteractive" />
+      
       {/* Background Effects */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>

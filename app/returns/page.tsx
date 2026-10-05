@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Script from 'next/script';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
@@ -18,6 +19,28 @@ export default function ReturnsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     
+    // Execute reCAPTCHA v3 verification
+    if (typeof window !== 'undefined' && (window as any).grecaptcha) {
+      (window as any).grecaptcha.ready(async () => {
+        try {
+          const token = await (window as any).grecaptcha.execute('6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'submit_return' });
+          if (!token) {
+             console.error('reCAPTCHA failed');
+             setIsSubmitting(false);
+             return;
+          }
+          processReturnSubmit(e);
+        } catch (err) {
+          console.error(err);
+          setIsSubmitting(false);
+        }
+      });
+    } else {
+      processReturnSubmit(e);
+    }
+  };
+
+  const processReturnSubmit = (e: React.FormEvent) => {
     // Simulate database insertion (storing in localStorage for demo)
     setTimeout(() => {
       try {
@@ -47,6 +70,7 @@ export default function ReturnsPage() {
 
   return (
     <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <Script src="https://www.google.com/recaptcha/api.js?render=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" strategy="beforeInteractive" />
       {/* Background Effects */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
