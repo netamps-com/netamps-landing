@@ -35,8 +35,7 @@ export default function SecureLoginButton() {
   const handleSecureLogin = () => {
     setIsVerifying(true);
 
-    // Production login URL from environment variable
-    const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || 'https://returns.netamps.com/staff/login';
+    const loginUrl = '/login';
     
     // 1. OPEN IMMEDIATELY: This guarantees the browser popup blocker will NEVER block the new tab
     // because it is a direct, synchronous result of a physical mouse click.
