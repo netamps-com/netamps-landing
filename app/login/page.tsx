@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, Lock, ArrowRight, ShieldCheck, Github, Laptop } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
 export default function LoginPage() {
@@ -11,14 +12,46 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const router = useRouter();
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Helper to hash password (Industry standard SHA-256 for client-side transmission simulation)
+  const hashPassword = async (password: string) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate network request
-    setTimeout(() => {
+    setErrorMsg('');
+
+    try {
+      const hashedPassword = await hashPassword(password);
+      
+      // Known hashes for Netamps2026! 
+      // In a real app, this verification happens on the backend database.
+      const EXPECTED_HASH = '1f1cd5f7c00af26a1e80ea4eb4306352934ff24cf24cbf130fccb483b28b6d85'; // Hash of 'Netamps2026!'
+
+      if ((email === 'admin@netamps.com' || email === 'staff@netamps.com') && hashedPassword === EXPECTED_HASH) {
+        // Create secure session ID
+        const sessionId = crypto.randomUUID();
+        document.cookie = `session_id=${sessionId}; path=/; max-age=3600; SameSite=Strict; Secure`;
+        document.cookie = `user_role=${email.split('@')[0]}; path=/; max-age=3600; SameSite=Strict; Secure`;
+        
+        // Redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        setErrorMsg('Invalid credentials. Please try again.');
+        setIsSubmitting(false);
+      }
+    } catch (err) {
+      setErrorMsg('Encryption error occurred.');
       setIsSubmitting(false);
-      // Logic would go here
-    }, 1500);
+    }
   };
 
   return (
@@ -38,12 +71,6 @@ export default function LoginPage() {
         <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-white">
           Access your ITAD portal
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-400">
-          Or{' '}
-          <Link href="/returns" className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
-            request a return without an account
-          </Link>
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
@@ -53,6 +80,12 @@ export default function LoginPage() {
           className="bg-slate-900/50 backdrop-blur-xl py-8 px-4 shadow-2xl sm:rounded-3xl sm:px-10 border border-slate-800"
         >
           <form className="space-y-6" onSubmit={handleSubmit}>
+            {errorMsg && (
+              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                {errorMsg}
+              </div>
+            )}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-300">
                 Email address

@@ -13,8 +13,29 @@ export default function ReturnsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate network request
+    
+    // Simulate database insertion (storing in localStorage for demo)
     setTimeout(() => {
+      try {
+        const formData = new FormData(e.target as HTMLFormElement);
+        const returnReq = {
+          id: `RMA-${Math.floor(Math.random() * 100000)}`,
+          name: formData.get('name'),
+          company: formData.get('company'),
+          email: formData.get('email'),
+          phone: formData.get('phone'),
+          equipment: formData.get('equipment'),
+          details: formData.get('details'),
+          date: new Date().toISOString(),
+          status: 'Pending'
+        };
+        
+        const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
+        localStorage.setItem('netamps_returns', JSON.stringify([returnReq, ...existingReturns]));
+      } catch (err) {
+        console.error('Failed to save to database', err);
+      }
+      
       setIsSubmitting(false);
       setIsSuccess(true);
     }, 1500);
