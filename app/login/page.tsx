@@ -127,6 +127,29 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-700" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-slate-900/50 text-slate-500 backdrop-blur-xl">Employee Access</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <a
+                href="https://webmail.netamps.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-slate-700 rounded-xl shadow-sm text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-500 transition-all"
+              >
+                <Mail className="w-4 h-4" />
+                Webmail Login
+              </a>
+            </div>
+          </div>
         </motion.div>
         
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
