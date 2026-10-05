@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npx @cloudflare/next-on-pages",
+    "build": "node build.js",
     "deploy": "npx wrangler pages deploy .open-next",
     "start": "next start",
     "lint": "next lint"
