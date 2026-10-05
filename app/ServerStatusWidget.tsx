@@ -1,7 +1,8 @@
 ﻿'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Server, Activity, Zap, Globe, Wifi, WifiOff, Radio } from 'lucide-react';
+import Link from 'next/link';
+import { Server, Activity, Zap, Globe, Wifi, WifiOff, Radio, ExternalLink } from 'lucide-react';
 
 type InfraStatus = 'ONLINE' | 'DEGRADED' | 'OFFLINE' | 'CHECKING';
 
@@ -212,6 +213,16 @@ export default function ServerStatusWidget() {
         <span className="text-slate-400 font-bold">SLA:</span>
         <span className="text-emerald-500 font-black tracking-tighter drop-shadow-md">99.999%</span>
       </div>
+
+      {/* ── STATUS PAGE LINK ── */}
+      <Link
+        href="/status"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800/60 transition-all cursor-pointer"
+        title="View System Status Page"
+      >
+        <ExternalLink className="w-3 h-3" />
+        <span className="font-bold">STATUS</span>
+      </Link>
 
     </div>
   );

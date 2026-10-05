@@ -6,7 +6,8 @@ on: pull_request
 permissions:
   checks: write
   contents: read
-  pull-requests: write
+  pull_requests: write
+  deployments: write
 jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
@@ -14,7 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci && npm run build
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+        env:
+          FIREBASE: '1'
+      - uses: FirebaseExtended/action-hosting-deploy@v0.11.0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NETAMPS_LOAD_BAL__FAIL_OVER }}

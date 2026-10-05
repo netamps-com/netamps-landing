@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 import { motion } from 'framer-motion';
-import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
 export default function LoginPage() {
@@ -235,6 +235,23 @@ export default function LoginPage() {
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
           <ShieldCheck className="w-4 h-4 text-emerald-500" />
           <span>Protected by Enterprise TLS 1.3 & SOC2 Compliance</span>
+        </div>
+
+        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
+          <Link href="/status" className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
+            <Activity className="w-3 h-3" />
+            System Status
+          </Link>
+          <span className="text-slate-700">|</span>
+          <a
+            href="https://status.netamps.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Public Status Page
+          </a>
         </div>
       </div>
     </div>

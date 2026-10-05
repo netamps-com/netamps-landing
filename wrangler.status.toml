@@ -1,0 +1,29 @@
+# Cloudflare Worker Configuration for Status Monitoring
+# Deploy with: wrangler deploy --config wrangler.status.toml
+
+name = "netamps-status-monitor"
+main = "workers/status-monitor.ts"
+compatibility_date = "2024-01-01"
+
+# KV Namespace for storing incidents and maintenance windows
+[[kv_namespaces]]
+binding = "STATUS_KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+# D1 Database for historical uptime data
+[[d1_databases]]
+binding = "STATUS_D1"
+database_name = "netamps-status-db"
+database_id = "your-database-id"
+
+# Scheduled cron for periodic health checks (every minute)
+[triggers]
+crons = ["* * * * *"]
+
+# Environment variables (set via wrangler secret put)
+# vars = { ENVIRONMENT = "production" }
+
+# Secrets (set via: wrangler secret put WEBHOOK_URL)
+# WEBHOOK_URL - Optional webhook for status change notifications
+# SLACK_WEBHOOK - Optional Slack webhook for alerts
