@@ -1,19 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
+
+interface ProductItem {
+  id: string;
+  category: string;
+  details: string;
+  quantity: number;
+}
 
 interface ReturnRequest {
   id: string;
+  intent: 'sell' | 'buy';
   name: string;
   company: string;
   email: string;
   phone: string;
-  equipment: string;
-  details: string;
+  products: ProductItem[];
   date: string;
   status: string;
 }
@@ -23,6 +30,7 @@ export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState('');
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
   // Password Management State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -121,6 +129,13 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  const toggleRow = (id: string) => {
+    const newSet = new Set(expandedRows);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setExpandedRows(newSet);
+  };
+
   if (!isAuthenticated) return null; // Prevent flash of content
 
   return (
@@ -132,7 +147,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <NetampsLogo />
               <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                ITAD Admin
+                Enterprise DB
               </span>
             </div>
             
@@ -238,14 +253,14 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-end mb-8">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Incoming Return Requests</h1>
-            <p className="mt-2 text-sm text-slate-400">Manage equipment decommissioning and logistics requests securely.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Active Requests Dashboard</h1>
+            <p className="mt-2 text-sm text-slate-400">Manage all IT asset procurement (BUY) and liquidation (SELL) orders.</p>
           </div>
           
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input type="text" placeholder="Search RMAs..." className="pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 w-64" />
+              <input type="text" placeholder="Search orders..." className="pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 w-64" />
             </div>
             <button className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors">
               <Filter className="w-4 h-4 text-slate-300" />
@@ -259,52 +274,97 @@ export default function DashboardPage() {
             <table className="min-w-full divide-y divide-slate-800">
               <thead className="bg-slate-800/50">
                 <tr>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">RMA ID</th>
+                  <th scope="col" className="w-10 px-4 py-4"></th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Tracking ID</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Client Details</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Equipment</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Order Size</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Date Submitted</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 bg-slate-900">
+              <tbody className="divide-y divide-slate-800/50 bg-slate-900">
                 {returns.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                       <ArchiveX className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                      <p>No return requests found in the database.</p>
-                      <p className="text-xs mt-1">Submit a test request at /returns</p>
+                      <p>No active requests found in the database.</p>
+                      <p className="text-xs mt-1">New requests from the portal will appear here.</p>
                     </td>
                   </tr>
                 ) : (
-                  returns.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-800/50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-400">
-                        {req.id}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-bold text-white">{req.name}</div>
-                        <div className="text-xs text-slate-400">{req.company} &bull; {req.email}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Package className="w-4 h-4 text-slate-500" />
-                          <span className="text-sm text-slate-300 capitalize">{req.equipment}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
-                        {new Date(req.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full">
-                          {req.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button className="text-indigo-400 hover:text-indigo-300 transition-colors">Review</button>
-                      </td>
-                    </tr>
-                  ))
+                  returns.map((req) => {
+                    const isExpanded = expandedRows.has(req.id);
+                    const isSell = req.intent === 'sell';
+                    
+                    return (
+                      <React.Fragment key={req.id}>
+                        <tr 
+                          className="hover:bg-slate-800/30 transition-colors cursor-pointer group"
+                          onClick={() => toggleRow(req.id)}
+                        >
+                          <td className="px-4 py-4 whitespace-nowrap text-slate-500 group-hover:text-white">
+                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${isSell ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                              {req.id}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-bold text-white">{req.name}</div>
+                            <div className="text-xs text-slate-400">{req.company} &bull; {req.email}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Package className="w-4 h-4 text-slate-500" />
+                              <span className="text-sm text-slate-300 font-medium">{req.products?.length || 0} Products</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                            {new Date(req.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <span className="px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full">
+                              {req.status}
+                            </span>
+                          </td>
+                        </tr>
+                        {/* Expandable Tree Row */}
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={6} className="px-0 py-0 bg-slate-950/50">
+                              <div className="px-14 py-6 border-l-2 border-indigo-500/30 ml-8 my-4">
+                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                  <Tag className="w-4 h-4" /> Order Manifest
+                                </h4>
+                                <div className="space-y-3">
+                                  {req.products && req.products.length > 0 ? (
+                                    req.products.map((product, idx) => (
+                                      <div key={product.id || idx} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 flex justify-between items-center">
+                                        <div>
+                                          <div className="text-sm font-bold text-slate-200 capitalize mb-1">
+                                            {product.category.replace('_', ' ')}
+                                          </div>
+                                          <div className="text-xs text-slate-400 max-w-2xl">
+                                            {product.details}
+                                          </div>
+                                        </div>
+                                        <div className="text-lg font-mono font-bold text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-lg border border-indigo-500/20">
+                                          x{product.quantity}
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-sm text-slate-500 italic">No products listed. (Legacy request)</div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
