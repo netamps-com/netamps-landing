@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2 } from 'lucide-react';
@@ -9,6 +9,10 @@ import NetampsLogo from '../NetampsLogo';
 export default function ReturnsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  useEffect(() => {
+    document.title = 'Request IT Asset Return - Netamps Technologies';
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -14,6 +14,10 @@ export default function LoginPage() {
 
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    document.title = 'ITAD Login - Netamps Technologies';
+  }, []);
 
   // Helper to hash password (Industry standard SHA-256 for client-side transmission simulation)
   const hashPassword = async (password: string) => {
