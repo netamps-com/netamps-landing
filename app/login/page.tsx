@@ -32,11 +32,17 @@ export default function LoginPage() {
     try {
       const hashedPassword = await hashPassword(password);
       
-      // Known hashes for Netamps2026! 
-      // In a real app, this verification happens on the backend database.
-      const EXPECTED_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec'; // Hash of 'Netamps2026!'
+      const DEFAULT_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec'; // Netamps2026!
+      
+      let expectedHash = '';
+      if (email === 'admin@netamps.com') {
+        expectedHash = localStorage.getItem('netamps_admin_hash') || DEFAULT_HASH;
+      } else if (email === 'staff@netamps.com') {
+        expectedHash = localStorage.getItem('netamps_staff_hash') || DEFAULT_HASH;
+      }
 
-      if ((email === 'admin@netamps.com' || email === 'staff@netamps.com') && hashedPassword === EXPECTED_HASH) {
+      // Strictly allow ONLY admin and staff, and ONLY with correct hashes
+      if ((email === 'admin@netamps.com' || email === 'staff@netamps.com') && expectedHash && hashedPassword === expectedHash) {
         // Create secure session ID
         const sessionId = crypto.randomUUID();
         document.cookie = `session_id=${sessionId}; path=/; max-age=3600; SameSite=Strict; Secure`;
