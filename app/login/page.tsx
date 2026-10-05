@@ -8,6 +8,48 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
+const ServerStatusWidget = () => {
+  const [status, setStatus] = useState<string>('checking');
+
+  useEffect(() => {
+    fetch('/api/status')
+      .then(res => res.json())
+      .then(data => setStatus(data.overallStatus))
+      .catch(() => setStatus('unknown'));
+  }, []);
+
+  const getStatusColor = () => {
+    if (status === 'operational') return 'bg-emerald-500';
+    if (status === 'degraded') return 'bg-amber-500';
+    if (status === 'outage') return 'bg-red-500';
+    if (status === 'checking') return 'bg-slate-500 animate-pulse';
+    return 'bg-slate-500';
+  };
+
+  const getStatusText = () => {
+    if (status === 'operational') return 'All Systems Operational';
+    if (status === 'degraded') return 'Degraded Performance';
+    if (status === 'outage') return 'System Outage';
+    if (status === 'checking') return 'Checking status...';
+    return 'Status Unknown';
+  };
+
+  return (
+    <Link href="/status" className="fixed bottom-6 right-6 z-50 bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-3 rounded-2xl shadow-2xl flex items-center gap-3 hover:bg-slate-800 hover:border-slate-700 transition-all group">
+      <div className="relative flex h-3 w-3">
+        {status === 'operational' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+        <span className={`relative inline-flex rounded-full h-3 w-3 ${getStatusColor()}`}></span>
+      </div>
+      <div>
+        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">System Status</div>
+        <div className="text-sm font-medium text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1">
+          {getStatusText()} <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+      </div>
+    </Link>
+  );
+};
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -98,6 +140,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       <Script src="https://www.google.com/recaptcha/api.js?render=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" />
       
+      {/* Floating Status Widget */}
+      <ServerStatusWidget />
+
       {/* Background Effects */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
