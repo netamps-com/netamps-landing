@@ -205,8 +205,8 @@ GitHub Actions will automatically deploy on every push to `main` branch. You can
 For production, set these in Cloudflare Pages project settings:
 
 ```
-NEXT_PUBLIC_LOGIN_URL=https://netamps.com/login
-NEXT_PUBLIC_RETURN_PORTAL_URL=https://netamps.com/login
+NEXT_PUBLIC_LOGIN_URL=https://returns.netamps.com/staff/login
+NEXT_PUBLIC_RETURN_PORTAL_URL=https://returns.netamps.com
 ```
 
 ## Summary
