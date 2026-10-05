@@ -96,7 +96,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      <Script src="https://www.google.com/recaptcha/api.js?render=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" strategy="beforeInteractive" />
+      <Script src="https://www.google.com/recaptcha/api.js?render=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" />
       
       {/* Background Effects */}
       <div className="absolute inset-0 z-0">
@@ -201,6 +201,11 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+            <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
+              This site is protected by reCAPTCHA and the Google{' '}
+              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Privacy Policy</a> and{' '}
+              <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Terms of Service</a> apply.
+            </p>
           </form>
 
           <div className="mt-6">
