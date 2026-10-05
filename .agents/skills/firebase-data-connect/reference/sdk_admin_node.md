@@ -36,6 +36,12 @@ generate:
     package: "@dataconnect/admin-generated"
     packageJsonDir: "." # Directory containing package.json
 ```
+"scripts": {
+  "build": "npx @opennextjs/cloudflare build",
+  "deploy": "npx wrangler deploy",
+  "preview": "npx wrangler dev",
+  "dev": "next dev"
+}
 
 ### Generation
 

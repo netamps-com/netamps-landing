@@ -485,7 +485,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="shrink-0 w-full lg:w-auto">
-                <a href={process.env.NEXT_PUBLIC_RETURN_PORTAL_URL || 'https://returns.example.invalid/'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                <a href={process.env.NEXT_PUBLIC_RETURN_PORTAL_URL || 'https://returns.netamps.com/'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                   Request a Return
                 </a>
               </div>
