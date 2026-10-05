@@ -86,21 +86,7 @@ export default function StatusPage() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
 
-  // Mock data - In production, this would come from Cloudflare Workers / KV / D1
-  useEffect(() => {
-    loadMockData();
-  }, []);
-
-  useEffect(() => {
-    if (autoRefresh) {
-      const interval = setInterval(() => {
-        loadMockData();
-        setLastRefresh(new Date());
-      }, 30000); // Refresh every 30 seconds
-      return () => clearInterval(interval);
-    }
-  }, [autoRefresh]);
-
+  // Mock data loading function - In production, this would come from Cloudflare Workers / KV / D1
   const loadMockData = () => {
     const mockServices: Service[] = [
       {
@@ -279,6 +265,21 @@ export default function StatusPage() {
     setIncidents(mockIncidents);
     setMaintenanceWindows(mockMaintenance);
   };
+
+  // Mock data - In production, this would come from Cloudflare Workers / KV / D1
+  useEffect(() => {
+    loadMockData();
+  }, []);
+
+  useEffect(() => {
+    if (autoRefresh) {
+      const interval = setInterval(() => {
+        loadMockData();
+        setLastRefresh(new Date());
+      }, 30000); // Refresh every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh]);
 
   const categories = ['All', 'Core Infrastructure', 'Edge/CDN', 'Application Services', 'Business Functions'];
 
