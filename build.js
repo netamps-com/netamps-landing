@@ -9,12 +9,9 @@ try {
     console.log('-> Running Firebase static export build');
     execSync('npx next build', { stdio: 'inherit' });
   } else {
-    console.log('-> Running Cloudflare next-on-pages compiler');
-    // Set an extra env var just in case VERCEL is not set
-    execSync('npx @cloudflare/next-on-pages', {
-      stdio: 'inherit',
-      env: { ...process.env, NEXT_ON_PAGES: '1' }
-    });
+    console.log('-> Running standard Next.js build with static export');
+    // Use standard Next.js build which works reliably on all platforms
+    execSync('npx next build', { stdio: 'inherit' });
   }
 } catch (error) {
   process.exit(1);

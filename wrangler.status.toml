@@ -2,7 +2,7 @@
 # Deploy with: wrangler deploy --config wrangler.status.toml
 
 name = "netamps-status-monitor"
-main = "workers/status-monitor.ts"
+main = "cloudflare-workers/status-monitor.ts"
 compatibility_date = "2024-01-01"
 
 # KV Namespace for storing incidents and maintenance windows

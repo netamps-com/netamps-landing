@@ -86,7 +86,6 @@ export default function StatusPage() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
 
-  // Mock data loading function - In production, this would come from Cloudflare Workers / KV / D1
   const loadMockData = () => {
     const mockServices: Service[] = [
       {
@@ -207,7 +206,7 @@ export default function StatusPage() {
         title: 'Elevated latency in Notification Service',
         severity: 'monitoring',
         status: 'degraded',
-        startTime: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+        startTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
         affectedServices: ['app-3'],
         updates: [
           {
@@ -266,7 +265,6 @@ export default function StatusPage() {
     setMaintenanceWindows(mockMaintenance);
   };
 
-  // Mock data - In production, this would come from Cloudflare Workers / KV / D1
   useEffect(() => {
     loadMockData();
   }, []);
@@ -276,7 +274,7 @@ export default function StatusPage() {
       const interval = setInterval(() => {
         loadMockData();
         setLastRefresh(new Date());
-      }, 30000); // Refresh every 30 seconds
+      }, 30000);
       return () => clearInterval(interval);
     }
   }, [autoRefresh]);
@@ -340,7 +338,6 @@ export default function StatusPage() {
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, this would subscribe to Cloudflare Workers / email service
     setIsSubscribed(true);
     setSubscribedEmail('');
   };
@@ -369,7 +366,6 @@ export default function StatusPage() {
 
   return (
     <div className="min-h-screen bg-[#020817] text-white">
-      {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -403,7 +399,7 @@ export default function StatusPage() {
                 onClick={copyPageUrl}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-all"
               >
-                {copySuccess ? <Check className="w-4 h-4 text-emerald-400" /> <Copy className="w-4 h-4" />}
+                {copySuccess ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                 {copySuccess ? 'Copied!' : 'Share'}
               </button>
             </div>
@@ -412,7 +408,6 @@ export default function StatusPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Overall Status Banner */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -440,7 +435,6 @@ export default function StatusPage() {
           </div>
         </motion.div>
 
-        {/* Active Incidents */}
         {incidents.filter(i => i.status !== 'operational').length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -515,7 +509,6 @@ export default function StatusPage() {
           </motion.div>
         )}
 
-        {/* Services Grid */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -590,7 +583,6 @@ export default function StatusPage() {
           </div>
         </motion.div>
 
-        {/* Historical Incidents */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -645,7 +637,6 @@ export default function StatusPage() {
           </div>
         </motion.div>
 
-        {/* Upcoming Maintenance */}
         {maintenanceWindows.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -704,7 +695,6 @@ export default function StatusPage() {
           </motion.div>
         )}
 
-        {/* Subscribe to Updates */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -743,7 +733,6 @@ export default function StatusPage() {
           </p>
         </motion.div>
 
-        {/* API Status Endpoint */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -763,7 +752,6 @@ export default function StatusPage() {
         </motion.div>
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-slate-800 mt-16 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between text-sm text-slate-500">

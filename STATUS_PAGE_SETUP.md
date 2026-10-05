@@ -49,7 +49,7 @@ Production-grade system status page for the Netamps platform, meeting or exceedi
 - **Animations**: Framer Motion for smooth transitions
 
 ### Backend (Cloudflare Workers)
-- **Worker**: `workers/status-monitor.ts` - Real-time health checks
+- **Worker**: `cloudflare-workers/status-monitor.ts` - Real-time health checks
 - **Storage**: KV Namespace for incidents/maintenance
 - **Database**: D1 for historical uptime data
 - **Scheduled**: Cron job every minute for health checks
