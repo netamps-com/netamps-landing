@@ -83,3 +83,23 @@ export default function TurnstileWidget({ onVerify, onExpire, onError, resetSign
 
   return <div ref={containerRef} className="flex justify-center" />;
 }
+
+/**
+ * Verify a Turnstile token against the server-side endpoint
+ * (Cloudflare Pages Function at /api/verify-turnstile).
+ * Returns true only when Cloudflare confirms the token.
+ */
+export async function verifyTurnstileToken(token: string, action: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/verify-turnstile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, action })
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}

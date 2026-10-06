@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
-import TurnstileWidget from '../TurnstileWidget';
+import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
 
 const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
@@ -88,6 +88,16 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
+      // Server-side Turnstile verification — never trust the client token alone
+      if (TURNSTILE_ENABLED) {
+        const verified = await verifyTurnstileToken(turnstileToken, 'login');
+        if (!verified) {
+          setErrorMsg('Security verification failed. Please try again.');
+          resetTurnstile();
+          setIsSubmitting(false);
+          return;
+        }
+      }
       await processLogin(turnstileToken);
     } catch (err) {
       setErrorMsg('Encryption error occurred.');

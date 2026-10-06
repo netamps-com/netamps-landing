@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
-import TurnstileWidget from '../TurnstileWidget';
+import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
 
 const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
@@ -46,7 +46,7 @@ export default function ReturnsPage() {
     setProducts(products.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCaptchaError('');
 
@@ -57,7 +57,24 @@ export default function ReturnsPage() {
     }
 
     setIsSubmitting(true);
-    processReturnSubmit(e);
+
+    try {
+      // Server-side Turnstile verification — never trust the client token alone
+      if (TURNSTILE_ENABLED) {
+        const verified = await verifyTurnstileToken(turnstileToken, 'submit_return');
+        if (!verified) {
+          setCaptchaError('Security verification failed. Please try again.');
+          setTurnstileToken('');
+          setTurnstileReset((n) => n + 1);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      processReturnSubmit(e);
+    } catch (err) {
+      console.error(err);
+      setIsSubmitting(false);
+    }
   };
 
   // Generate Masked Snowflake ID
