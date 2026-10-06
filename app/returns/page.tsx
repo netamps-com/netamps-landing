@@ -34,11 +34,14 @@ export default function ReturnsPage() {
   }, []);
 
   useEffect(() => {
+    // Independent Returns Session ID
     try {
-      const sid = new URLSearchParams(window.location.search).get('sid');
-      if (sid) sessionStorage.setItem('netamps_sid', sid);
+      if (!sessionStorage.getItem('netamps_returns_sid')) {
+        const sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('netamps_returns_sid', sid);
+      }
     } catch {
-      // storage or URL parsing unavailable — continue without session tracking
+      // storage unavailable
     }
   }, []);
 
@@ -148,11 +151,11 @@ export default function ReturnsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
-        <div className="absolute top-0 right-0 w-full max-w-[800px] h-[600px] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none opacity-50"></div>
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Ambient Glassmorphism Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
+        <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
+        <div className="absolute bottom-0 left-0 w-[50vw] h-[50vw] bg-emerald-200/40 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl relative z-10">
@@ -161,10 +164,10 @@ export default function ReturnsPage() {
             <NetampsLogo />
           </Link>
         </div>
-        <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-white">
+        <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-slate-900">
           Enterprise ITAD Exchange Portal
         </h2>
-        <p className="mt-3 text-center text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+        <p className="mt-3 text-center text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
           The secure interface for high-velocity hardware liquidation, certified data sanitization, and premium secondary market sourcing
         </p>
       </div>
@@ -173,18 +176,18 @@ export default function ReturnsPage() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-900/80 backdrop-blur-xl shadow-2xl sm:rounded-3xl border border-slate-800 overflow-hidden"
+          className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl border border-slate-200/60 overflow-hidden"
         >
           {isSuccess ? (
             <div className="p-12 text-center">
-              <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="w-10 h-10 text-indigo-400" />
+              <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-indigo-600" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Request Submitted Successfully</h3>
-              <p className="text-slate-400 mb-2">Your request has been securely recorded.</p>
-              <p className="text-xl font-mono text-indigo-400 font-bold mb-8">Tracking ID: {generatedId}</p>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Request Submitted Successfully</h3>
+              <p className="text-slate-500 mb-2">Your request has been securely recorded.</p>
+              <p className="text-xl font-mono text-indigo-600 font-bold mb-8">Tracking ID: {generatedId}</p>
               
-              <Link href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors font-medium">
+              <Link href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl transition-colors font-medium border border-slate-200 shadow-sm">
                 <ArrowLeft className="w-4 h-4" />
                 Return to Home
               </Link>
@@ -193,16 +196,18 @@ export default function ReturnsPage() {
             <div className="p-8 sm:p-10">
               
               {/* Intent Toggle */}
-              <div className="flex bg-slate-800 p-1 rounded-xl mb-8">
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200">
                 <button 
+                  type="button"
                   onClick={() => setIntent('sell')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                  className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   I want to SELL (Return) Equipment
                 </button>
                 <button 
+                  type="button"
                   onClick={() => setIntent('buy')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                  className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   I want to BUY Equipment
                 </button>
@@ -211,72 +216,72 @@ export default function ReturnsPage() {
               <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-300">Full Name</label>
+                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-slate-500" />
+                        <User className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="text" name="name" id="name" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Rahul Verma" />
+                      <input type="text" name="name" id="name" required pattern="^[a-zA-Z\s.,'-]+$" maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Rahul Verma" />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="company" className="block text-sm font-medium text-slate-300">Company</label>
+                    <label htmlFor="company" className="block text-sm font-medium text-slate-700">Company</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Building2 className="h-5 w-5 text-slate-500" />
+                        <Building2 className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="text" name="company" id="company" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Acme Technologies Pvt. Ltd." />
+                      <input type="text" name="company" id="company" required pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Acme Technologies Pvt. Ltd." />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-slate-300">Work Email</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Work Email</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-slate-500 font-bold text-lg">@</span>
+                        <span className="text-slate-400 font-bold text-lg">@</span>
                       </div>
-                      <input type="email" name="email" id="email" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="procurement@yourcompany.com" />
+                      <input type="email" name="email" id="email" required maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="procurement@yourcompany.com" />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-slate-300">Phone Number</label>
+                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Phone className="h-5 w-5 text-slate-500" />
+                        <Phone className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="tel" name="phone" id="phone" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="+91 98765 43210" />
+                      <input type="tel" name="phone" id="phone" required pattern="^\+?[0-9\s\-()]+$" maxLength={20} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="+91 98765 43210" />
                     </div>
                   </div>
                 </div>
 
-                <div className="border-t border-slate-700 pt-6 mt-6">
+                <div className="border-t border-slate-200 pt-6 mt-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-lg font-bold text-white">Product Inventory</h4>
-                    <button type="button" onClick={addProduct} className="flex items-center gap-1 text-sm bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg border border-slate-700">
+                    <h4 className="text-lg font-bold text-slate-900">Product Inventory</h4>
+                    <button type="button" onClick={addProduct} className="flex items-center gap-1 text-sm bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-colors">
                       <Plus className="w-4 h-4" /> Add Product
                     </button>
                   </div>
 
                   <div className="space-y-4">
                     {products.map((product, index) => (
-                      <div key={product.id} className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-xl flex flex-col gap-4 relative">
+                      <div key={product.id} className="p-4 bg-slate-50/50 border border-slate-200/80 rounded-xl flex flex-col gap-4 relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
                         {products.length > 1 && (
-                          <button type="button" onClick={() => removeProduct(product.id)} className="absolute top-4 right-4 text-slate-500 hover:text-red-400">
+                          <button type="button" onClick={() => removeProduct(product.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
-                        <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Product #{index + 1}</h5>
+                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Product #{index + 1}</h5>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Equipment Category</label>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Equipment Category</label>
                             <select 
                               required
                               value={product.category}
                               onChange={(e) => updateProduct(product.id, 'category', e.target.value)}
-                              className="block w-full pl-3 pr-8 py-2 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm appearance-none"
+                              className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm appearance-none shadow-sm"
                             >
                               <option value="">Select...</option>
                               <option value="servers">Enterprise Servers & Storage</option>
@@ -286,25 +291,26 @@ export default function ReturnsPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Quantity</label>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Quantity</label>
                             <input 
                               type="number" 
                               min="1" 
                               required
                               value={product.quantity}
                               onChange={(e) => updateProduct(product.id, 'quantity', parseInt(e.target.value) || 1)}
-                              className="block w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                              className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm" 
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-400 mb-1">Details & Specs</label>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Details & Specs</label>
                           <textarea 
                             rows={2} 
                             required
+                            maxLength={500}
                             value={product.details}
                             onChange={(e) => updateProduct(product.id, 'details', e.target.value)}
-                            className="block w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm resize-none" 
+                            className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm resize-none shadow-sm" 
                             placeholder="e.g. 25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition"
                           />
                         </div>

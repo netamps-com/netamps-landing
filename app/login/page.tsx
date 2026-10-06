@@ -10,15 +10,18 @@ import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
 
 const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
-const ServerStatusWidget = () => {
+const ServerStatusWidget = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
   const [status, setStatus] = useState<string>('checking');
 
   useEffect(() => {
+    if (!visible) return;
     fetch('/api/status')
       .then(res => res.json())
       .then(data => setStatus(data.overallStatus))
       .catch(() => setStatus('unknown'));
-  }, []);
+  }, [visible]);
+
+  if (!visible) return null;
 
   const getStatusColor = () => {
     if (status === 'operational') return 'bg-emerald-500';
@@ -37,18 +40,28 @@ const ServerStatusWidget = () => {
   };
 
   return (
-    <Link href="/status" className="fixed bottom-6 right-6 z-50 bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-3 rounded-2xl shadow-2xl flex items-center gap-3 hover:bg-slate-800 hover:border-slate-700 transition-all group">
-      <div className="relative flex h-3 w-3">
-        {status === 'operational' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
-        <span className={`relative inline-flex rounded-full h-3 w-3 ${getStatusColor()}`}></span>
-      </div>
-      <div>
-        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">System Status</div>
-        <div className="text-sm font-medium text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1">
-          {getStatusText()} <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+    <div className="absolute top-4 right-4 z-50 bg-white border border-slate-200 p-3 rounded-xl shadow-lg flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <div className="relative flex h-3 w-3">
+          {status === 'operational' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+          <span className={`relative inline-flex rounded-full h-3 w-3 ${getStatusColor()}`}></span>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">System Status</div>
+          <div className="text-sm font-medium text-slate-900 flex items-center gap-1">
+            {getStatusText()}
+          </div>
         </div>
       </div>
-    </Link>
+      <div className="flex items-center gap-2 border-l border-slate-100 pl-3">
+        <Link href="/status" className="text-slate-400 hover:text-indigo-600 transition-colors" title="View Full Status">
+          <ExternalLink className="w-4 h-4" />
+        </Link>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors" title="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -62,16 +75,21 @@ export default function LoginPage() {
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
 
+  const [showStatus, setShowStatus] = useState(false);
+
   useEffect(() => {
     document.title = 'ITAD Login - Netamps Technologies';
   }, []);
 
   useEffect(() => {
+    // Independent Login Session ID
     try {
-      const sid = new URLSearchParams(window.location.search).get('sid');
-      if (sid) sessionStorage.setItem('netamps_sid', sid);
+      if (!sessionStorage.getItem('netamps_login_sid')) {
+        const sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('netamps_login_sid', sid);
+      }
     } catch {
-      // storage or URL parsing unavailable — continue without session tracking
+      // storage unavailable
     }
   }, []);
 
@@ -155,15 +173,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       
       {/* Floating Status Widget */}
-      <ServerStatusWidget />
+      <ServerStatusWidget visible={showStatus} onClose={() => setShowStatus(false)} />
 
-      {/* Background Effects */}
-      <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1000px] h-[500px] bg-emerald-500/20 blur-[120px] rounded-full pointer-events-none opacity-50"></div>
+      {/* Ambient Glassmorphism Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
+        <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
+        <div className="absolute bottom-0 left-0 w-[50vw] h-[50vw] bg-emerald-200/40 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
@@ -172,7 +190,7 @@ export default function LoginPage() {
             <NetampsLogo />
           </Link>
         </div>
-        <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-white">
+        <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-slate-900">
           Netamps Connect
         </h2>
       </div>
@@ -181,7 +199,7 @@ export default function LoginPage() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-900/50 backdrop-blur-xl py-8 px-4 shadow-2xl sm:rounded-3xl sm:px-10 border border-slate-800"
+          className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl sm:px-10 border border-slate-200/60"
         >
           <form className="space-y-6" onSubmit={handleSubmit}>
             {errorMsg && (
@@ -191,12 +209,12 @@ export default function LoginPage() {
               </div>
             )}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700">
                 Email address
               </label>
               <div className="mt-2 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-500" />
+                  <Mail className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="email"
@@ -206,19 +224,19 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm transition-all"
-                  placeholder="procurement@yourcompany.com"
+                  className="appearance-none block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                  placeholder="john.doe@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700">
                 Password
               </label>
               <div className="mt-2 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-500" />
+                  <Lock className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   id="password"
@@ -228,8 +246,8 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm transition-all"
-                  placeholder="Enter your secure password"
+                  className="appearance-none block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                  placeholder="••••••••"
                 />
               </div>
             </div>
@@ -240,9 +258,9 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-emerald-500 focus:ring-emerald-500 border-slate-700 rounded bg-slate-800"
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-400">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-500">
                   Remember me
                 </label>
               </div>
@@ -260,10 +278,10 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-slate-900 bg-emerald-400 hover:bg-emerald-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-emerald-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
-                  <div className="h-5 w-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
                     Sign in to Portal <ArrowRight className="w-4 h-4" />
@@ -273,18 +291,18 @@ export default function LoginPage() {
             </div>
             <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
               Protected by Cloudflare Turnstile. See the{' '}
-              <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Cloudflare Privacy Policy</a> and{' '}
-              <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Terms of Service</a> for details.
+              <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Cloudflare Privacy Policy</a> and{' '}
+              <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Terms of Service</a> for details.
             </p>
           </form>
 
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-700" />
+                <div className="w-full border-t border-slate-200" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-slate-900/50 text-slate-500 backdrop-blur-xl">Employee Access</span>
+                <span className="px-2 bg-white/90 text-slate-500 backdrop-blur-xl">Employee Access</span>
               </div>
             </div>
 
@@ -293,7 +311,7 @@ export default function LoginPage() {
                 href="https://webmail.netamps.in/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-slate-700 rounded-xl shadow-sm text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-500 transition-all"
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
               >
                 <Mail className="w-4 h-4" />
                 Employee Login
@@ -303,25 +321,15 @@ export default function LoginPage() {
         </motion.div>
         
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
-          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <span>Protected by Enterprise TLS 1.3 & SOC2 Compliance</span>
         </div>
 
         <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
-          <Link href="/status" className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
+          <button onClick={() => setShowStatus(!showStatus)} className="flex items-center gap-1 hover:text-indigo-600 transition-colors focus:outline-none">
             <Activity className="w-3 h-3" />
-            System Status
-          </Link>
-          {/* <span className="text-slate-700">|</span>
-          <a
-            href="https://status.netamps.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
-          >
-            <ExternalLink className="w-3 h-3" />
-            Public Status Page
-          </a> */}
+            System Status Toggle
+          </button>
         </div>
       </div>
     </div>
