@@ -32,6 +32,15 @@ export default function ReturnsPage() {
     document.title = 'Enterprise ITAD Exchange Portal - Netamps Technologies';
   }, []);
 
+  useEffect(() => {
+    try {
+      const sid = new URLSearchParams(window.location.search).get('sid');
+      if (sid) sessionStorage.setItem('netamps_sid', sid);
+    } catch {
+      // storage or URL parsing unavailable — continue without session tracking
+    }
+  }, []);
+
   const addProduct = () => {
     setProducts([...products, { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]);
   };

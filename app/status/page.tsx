@@ -163,6 +163,11 @@ export default function StatusPage() {
   const [selectedCategory, setSelectedCategory] = useState<'All' | ServiceCategory>('All');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [sessionId] = useState(() =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 
   const loadData = useCallback(async () => {
     try {
@@ -191,6 +196,14 @@ export default function StatusPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('netamps_sid', sessionId);
+    } catch {
+      // storage unavailable — links still carry ?sid=
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -258,8 +271,7 @@ export default function StatusPage() {
               <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <NetampsLogo />
               </Link>
-              <div className="h-6 w-px bg-slate-700" />
-              <h1 className="text-xl font-bold">System Status</h1>
+              <span className="sr-only">System Status</span>
             </div>
             <div className="flex items-center gap-4">
               <button
@@ -400,8 +412,11 @@ export default function StatusPage() {
               <Link href="/" className="hover:text-slate-300 transition-colors">
                 Back to Home
               </Link>
-              <Link href="/login" className="hover:text-slate-300 transition-colors">
+              <Link href={`/login?sid=${sessionId}`} className="hover:text-slate-300 transition-colors">
                 Login
+              </Link>
+              <Link href={`/returns?sid=${sessionId}`} className="hover:text-slate-300 transition-colors">
+                Returns
               </Link>
             </div>
             <div className="flex items-center gap-2">

@@ -66,6 +66,15 @@ export default function LoginPage() {
     document.title = 'ITAD Login - Netamps Technologies';
   }, []);
 
+  useEffect(() => {
+    try {
+      const sid = new URLSearchParams(window.location.search).get('sid');
+      if (sid) sessionStorage.setItem('netamps_sid', sid);
+    } catch {
+      // storage or URL parsing unavailable — continue without session tracking
+    }
+  }, []);
+
   // Helper to hash password (Industry standard SHA-256 for client-side transmission simulation)
   const hashPassword = async (password: string) => {
     const encoder = new TextEncoder();
