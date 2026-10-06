@@ -287,7 +287,7 @@ export default function LoginPage() {
             <Activity className="w-3 h-3" />
             System Status
           </Link>
-          <span className="text-slate-700">|</span>
+          {/* <span className="text-slate-700">|</span>
           <a
             href="https://status.netamps.com"
             target="_blank"
@@ -296,7 +296,7 @@ export default function LoginPage() {
           >
             <ExternalLink className="w-3 h-3" />
             Public Status Page
-          </a>
+          </a> */}
         </div>
       </div>
     </div>

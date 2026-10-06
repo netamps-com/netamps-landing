@@ -111,7 +111,7 @@ firebase deploy --only hosting
 In Cloudflare Dashboard:
 1. Go to Pages → netamps-status
 2. Settings → Custom Domains
-3. Add `status.netamps.com`
+3. Add `status.yourdomain.com` (or your preferred subdomain)
 4. Update DNS records
 
 ## API Usage
@@ -119,7 +119,7 @@ In Cloudflare Dashboard:
 ### Get Current Status
 
 ```bash
-curl https://status.netamps.com/api/status
+curl https://status.yourdomain.com/api/status
 ```
 
 Response:
@@ -148,7 +148,7 @@ Response:
 ### Create Incident
 
 ```bash
-curl -X POST https://status.netamps.com/api/status/incidents \
+curl -X POST https://status.yourdomain.com/api/status/incidents \
   -H "Content-Type: application/json" \
   -d '{
     "title": "API Gateway experiencing elevated latency",
@@ -161,7 +161,7 @@ curl -X POST https://status.netamps.com/api/status/incidents \
 ### Update Incident
 
 ```bash
-curl -X PUT https://status.netamps.com/api/status/incidents/{id} \
+curl -X PUT https://status.yourdomain.com/api/status/incidents/{id} \
   -H "Content-Type: application/json" \
   -d '{
     "severity": "monitoring",
@@ -176,7 +176,7 @@ curl -X PUT https://status.netamps.com/api/status/incidents/{id} \
 ### Get Historical Data
 
 ```bash
-curl https://status.netamps.com/api/status/history?range=90d
+curl https://status.yourdomain.com/api/status/history?range=90d
 ```
 
 ## Integration Examples
@@ -185,7 +185,7 @@ curl https://status.netamps.com/api/status/history?range=90d
 
 ```javascript
 // In PagerDuty integration service
-fetch('https://status.netamps.com/api/status')
+fetch('https://status.yourdomain.com/api/status')
   .then(r => r.json())
   .then(data => {
     if (data.overallStatus !== 'operational') {
@@ -198,7 +198,7 @@ fetch('https://status.netamps.com/api/status')
 
 ```javascript
 // Slack slash command
-fetch('https://status.netamps.com/api/status')
+fetch('https://status.yourdomain.com/api/status')
   .then(r => r.json())
   .then(data => {
     const status = data.overallStatus === 'operational' ? '✅' : '⚠️';
@@ -212,7 +212,7 @@ fetch('https://status.netamps.com/api/status')
 
 ```html
 <iframe
-  src="https://status.netamps.com"
+  src="https://status.yourdomain.com"
   width="100%"
   height="600"
   frameborder="0"
