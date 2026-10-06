@@ -136,6 +136,14 @@ export default function DashboardPage() {
     setExpandedRows(newSet);
   };
 
+  const handleUpdateStatus = (id: string, newStatus: string) => {
+    const updatedReturns = returns.map(req => 
+      req.id === id ? { ...req, status: newStatus } : req
+    );
+    setReturns(updatedReturns);
+    localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+  };
+
   if (!isAuthenticated) return null; // Prevent flash of content
 
   return (
@@ -324,7 +332,11 @@ export default function DashboardPage() {
                             {new Date(req.date).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <span className="px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full">
+                            <span className={`px-2.5 py-1 text-xs font-medium border rounded-full ${
+                              req.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                              req.status === 'Declined' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
+                              'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                            }`}>
                               {req.status}
                             </span>
                           </td>
@@ -357,6 +369,20 @@ export default function DashboardPage() {
                                   ) : (
                                     <div className="text-sm text-slate-500 italic">No products listed. (Legacy request)</div>
                                   )}
+                                </div>
+                                <div className="mt-6 flex gap-3 border-t border-slate-800 pt-4">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Approved'); }}
+                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                  >
+                                    Approve Request
+                                  </button>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Declined'); }}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                  >
+                                    Decline Request
+                                  </button>
                                 </div>
                               </div>
                             </td>

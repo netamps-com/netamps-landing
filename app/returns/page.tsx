@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,7 +20,20 @@ interface ProductItem {
 export default function ReturnsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [intent, setIntent] = useState<'sell' | 'buy'>('sell');
+  const [intent, setIntent] = useState<'sell' | 'buy' | 'track'>('sell');
+  
+  // OTP State
+  const [showOtp, setShowOtp] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [expectedOtp, setExpectedOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [formDataCache, setFormDataCache] = useState<FormData | null>(null);
+
+  // Tracking State
+  const [trackingId, setTrackingId] = useState('');
+  const [trackingResult, setTrackingResult] = useState<any>(null);
+  const [trackingError, setTrackingError] = useState('');
+
   const [products, setProducts] = useState<ProductItem[]>([
     { id: uuidv4(), category: '', details: '', quantity: 1 }
   ]);
@@ -76,7 +89,7 @@ export default function ReturnsPage() {
     setIsSubmitting(true);
 
     try {
-      // Server-side Turnstile verification — never trust the client token alone
+      // Server-side Turnstile verification
       if (TURNSTILE_ENABLED) {
         const verified = await verifyTurnstileToken(turnstileToken, 'submit_return');
         if (!verified) {
@@ -87,10 +100,48 @@ export default function ReturnsPage() {
           return;
         }
       }
-      processReturnSubmit(e);
+      
+      // Instead of submitting directly, show OTP
+      const formData = new FormData(e.target as HTMLFormElement);
+      setFormDataCache(formData);
+      
+      // Generate mock OTP
+      const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      setExpectedOtp(mockOtp);
+      console.log(`[MOCK EMAIL SENT] Your OTP is: ${mockOtp}`);
+      
+      setShowOtp(true);
+      setIsSubmitting(false);
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOtpVerify = () => {
+    if (otpCode !== expectedOtp) {
+      setOtpError('Invalid OTP Code. Please try again.');
+      return;
+    }
+    
+    setOtpError('');
+    setIsSubmitting(true);
+    processReturnSubmit();
+  };
+
+  const handleTrackSubmit = () => {
+    setTrackingError('');
+    setTrackingResult(null);
+    if (!trackingId.trim()) {
+      setTrackingError('Please enter a Tracking ID');
+      return;
+    }
+    const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
+    const found = existingReturns.find((r: any) => r.id === trackingId.trim());
+    if (found) {
+      setTrackingResult(found);
+    } else {
+      setTrackingError('Request not found. Please check your Tracking ID.');
     }
   };
 
@@ -121,20 +172,20 @@ export default function ReturnsPage() {
     return `${prefix}-${masked}${checksum}`;
   };
 
-  const processReturnSubmit = (e: React.FormEvent) => {
+  const processReturnSubmit = () => {
     setTimeout(() => {
       try {
-        const formData = new FormData(e.target as HTMLFormElement);
+        if (!formDataCache) return;
         const newId = generateMaskedSnowflake(intent);
         setGeneratedId(newId);
 
         const returnReq = {
           id: newId,
           intent,
-          name: formData.get('name'),
-          company: formData.get('company'),
-          email: formData.get('email'),
-          phone: formData.get('phone'),
+          name: formDataCache.get('name'),
+          company: formDataCache.get('company'),
+          email: formDataCache.get('email'),
+          phone: formDataCache.get('phone'),
           products: products,
           date: new Date().toISOString(),
           status: 'Pending',
@@ -200,24 +251,99 @@ export default function ReturnsPage() {
             <div className="p-8 sm:p-10">
               
               {/* Intent Toggle */}
-              <div className="flex bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200">
+              <div className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
                 <button 
                   type="button"
-                  onClick={() => setIntent('sell')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); }}
+                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  I want to SELL (Return) Equipment
+                  SELL Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => setIntent('buy')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); }}
+                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  I want to BUY Equipment
+                  BUY Equipment
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); }}
+                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  TRACK Request
                 </button>
               </div>
 
-              <form className="space-y-6" onSubmit={handleSubmit}>
+              {intent === 'track' ? (
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="trackingId" className="block text-sm font-medium text-slate-700">Tracking ID</label>
+                    <div className="mt-2 relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-5 w-5 text-slate-400" />
+                      </div>
+                      <input type="text" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" placeholder="e.g. S-1ABCD2E3" />
+                    </div>
+                  </div>
+                  <button type="button" onClick={handleTrackSubmit} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors">
+                    Track Request
+                  </button>
+                  {trackingError && <p className="text-red-500 text-center text-sm">{trackingError}</p>}
+                  
+                  {trackingResult && (
+                    <div className="mt-6 p-6 border border-slate-200 rounded-xl bg-slate-50 shadow-sm animate-in fade-in zoom-in duration-300">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="font-mono font-bold text-slate-900 text-lg">{trackingResult.id}</span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${trackingResult.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : trackingResult.status === 'Declined' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
+                          {trackingResult.status}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Name:</strong> {trackingResult.name}</p>
+                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {trackingResult.company}</p>
+                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(trackingResult.date).toLocaleDateString()}</p>
+                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Products:</strong> {trackingResult.products?.length || 0} items</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : showOtp ? (
+                <div className="space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 className="w-8 h-8 text-indigo-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900">Email Verification Required</h3>
+                  <p className="text-sm text-slate-500">
+                    For security purposes, we've sent a one-time passcode to your email. Please check the console output (simulated) and enter the OTP below.
+                  </p>
+                  <div>
+                    <input 
+                      type="text" 
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      className="block w-full max-w-xs mx-auto text-center tracking-widest text-2xl px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500" 
+                      placeholder="••••••"
+                      maxLength={6}
+                    />
+                    {otpError && <p className="text-red-500 text-sm mt-2">{otpError}</p>}
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleOtpVerify}
+                    disabled={isSubmitting}
+                    className="w-full max-w-xs mx-auto flex justify-center items-center py-4 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md transition-colors disabled:opacity-70"
+                  >
+                    {isSubmitting ? (
+                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : "Verify & Generate Request"}
+                  </button>
+                  <button type="button" onClick={() => setShowOtp(false)} className="text-sm text-indigo-600 hover:underline">
+                    Cancel and return to form
+                  </button>
+                </div>
+              ) : (
+                <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name</label>
@@ -291,6 +417,8 @@ export default function ReturnsPage() {
                               <option value="servers">Enterprise Servers & Storage</option>
                               <option value="network">Networking Gear (Switches, Routers)</option>
                               <option value="workstations">Laptops & Workstations</option>
+                              <option value="peripherals">Components & Peripherals</option>
+                              <option value="telecom">Telecom Equipment</option>
                               <option value="mixed">Mixed Pallet (Various)</option>
                             </select>
                           </div>
