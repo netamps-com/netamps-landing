@@ -158,9 +158,6 @@ export default function LoginPage() {
         <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-white">
           Netamps Connect
         </h2>
-        <p className="mt-3 text-center text-lg text-slate-300 max-w-md mx-auto leading-relaxed">
-          The secure interface for high-velocity hardware liquidation, certified data sanitization, and premium secondary market sourcing
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
@@ -268,13 +265,13 @@ export default function LoginPage() {
 
             <div className="mt-6">
               <a
-                href="https://www.netamps.com/returns"
+                href="https://webmail.netamps.in/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-emerald-500/50 rounded-xl shadow-sm text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-emerald-500 transition-all"
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-slate-700 rounded-xl shadow-sm text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-500 transition-all"
               >
                 <Mail className="w-4 h-4" />
-                Submit Return Request
+                Employee Login
               </a>
             </div>
           </div>
