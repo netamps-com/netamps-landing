@@ -127,7 +127,7 @@ export default function ReturnsPage() {
       setFormDataCache(formData);
       
       // Call the live OTP microservice via Cloudflare Tunnel
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://gifts-anaheim-revolutionary-tower.trycloudflare.com';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://netamps.cloudflareaccess.com';
       const res = await fetch(`${API_URL}/api/otp/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -167,7 +167,7 @@ export default function ReturnsPage() {
     try {
       if (!formDataCache) return;
       const email = formDataCache.get('email') as string;
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://gifts-anaheim-revolutionary-tower.trycloudflare.com';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://netamps.cloudflareaccess.com';
       const res = await fetch(`${API_URL}/api/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
