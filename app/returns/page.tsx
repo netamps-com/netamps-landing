@@ -393,14 +393,14 @@ export default function ReturnsPage() {
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
+                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setSelectedFiles([]); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   BUY Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); }}
+                  onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setSelectedFiles([]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   TRACK Request
@@ -624,11 +624,11 @@ export default function ReturnsPage() {
                   </div>
                 </div>
 
-                {/* Secure File Upload (SOC 2) */}
+                {/* Secure File Upload (SOC 2) — SELL only */}
+                {intent === 'sell' && (
                 <div className="border-t border-slate-200 pt-6 mt-6">
                   <div className="mb-4">
-                    <h4 className="text-lg font-bold text-slate-900">Attach Evidence / Photos (Optional)</h4>
-                    <p className="text-xs text-slate-500">Max 100MB per file. Only images and short videos (MP4, WEBM) are permitted as per industry security standard.</p>
+                    <h4 className="text-lg font-bold text-slate-900">Upload Photos/ Videos, Max 100MB Files only (MP4, WEBM)</h4>
                   </div>
                   <div className="flex flex-col gap-2">
                     <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
@@ -662,6 +662,7 @@ export default function ReturnsPage() {
                     )}
                   </div>
                 </div>
+                )}
 
                 {/* Submit */}
                 <div className="pt-6">
