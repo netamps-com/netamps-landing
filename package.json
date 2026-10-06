@@ -56,5 +56,8 @@
     "not dead",
     "Safari >= 12",
     "iOS >= 12"
-  ]
+  ],
+  "engines": {
+    "node": ">=20"
+  }
 }
