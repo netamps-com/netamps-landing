@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
+import { v4 as uuidv4 } from 'uuid';
 
 const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
@@ -21,7 +22,7 @@ export default function ReturnsPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [intent, setIntent] = useState<'sell' | 'buy'>('sell');
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }
+    { id: uuidv4(), category: '', details: '', quantity: 1 }
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
@@ -42,7 +43,7 @@ export default function ReturnsPage() {
   }, []);
 
   const addProduct = () => {
-    setProducts([...products, { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]);
+    setProducts([...products, { id: uuidv4(), category: '', details: '', quantity: 1 }]);
   };
 
   const removeProduct = (id: string) => {
