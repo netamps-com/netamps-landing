@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 type StatusType = 'operational' | 'degraded' | 'outage' | 'maintenance';
 
 interface Service {

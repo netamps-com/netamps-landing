@@ -9,8 +9,7 @@ try {
     console.log('-> Running Firebase static export build');
     execSync('npx next build', { stdio: 'inherit' });
   } else {
-    console.log('-> Running standard Next.js build with static export');
-    // Use standard Next.js build which works reliably on all platforms
+    console.log('-> Running standard Next.js build');
     execSync('npx next build', { stdio: 'inherit' });
   }
 } catch (error) {
