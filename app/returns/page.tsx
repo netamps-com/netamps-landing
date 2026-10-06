@@ -25,7 +25,6 @@ export default function ReturnsPage() {
   // OTP State
   const [showOtp, setShowOtp] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [expectedOtp, setExpectedOtp] = useState('');
   const [otpError, setOtpError] = useState('');
   const [formDataCache, setFormDataCache] = useState<FormData | null>(null);
   
@@ -109,33 +108,68 @@ export default function ReturnsPage() {
       const formData = new FormData(e.target as HTMLFormElement);
       setFormDataCache(formData);
       
-      // Generate mock OTP
-      const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      setExpectedOtp(mockOtp);
-      console.log(`[MOCK EMAIL SENT] Your OTP is: ${mockOtp}`);
-      
       const email = formData.get('email') as string;
+      
+      // Call the live OTP microservice via Cloudflare Tunnel
+      const res = await fetch('https://quiet-marble-otter.trycloudflare.com/api/otp/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      
+      const data = await res.json();
+      
+      if (!data.success) {
+        setCaptchaError(data.message || 'Failed to send OTP.');
+        setIsSubmitting(false);
+        return;
+      }
+      
       setDemoEmailAddress(email || 'user@example.com');
       setShowDemoEmail(true);
-      setTimeout(() => setShowDemoEmail(false), 15000);
+      setTimeout(() => setShowDemoEmail(false), 8000);
       
       setShowOtp(true);
       setIsSubmitting(false);
     } catch (err) {
       console.error(err);
+      setCaptchaError('Network error connecting to OTP service.');
       setIsSubmitting(false);
     }
   };
 
-  const handleOtpVerify = () => {
-    if (otpCode !== expectedOtp) {
-      setOtpError('Invalid OTP Code. Please try again.');
+  const handleOtpVerify = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      setOtpError('Please enter a 6-digit code.');
       return;
     }
     
     setOtpError('');
     setIsSubmitting(true);
-    processReturnSubmit();
+    
+    try {
+      if (!formDataCache) return;
+      const email = formDataCache.get('email') as string;
+      
+      const res = await fetch('https://quiet-marble-otter.trycloudflare.com/api/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: otpCode })
+      });
+      
+      const data = await res.json();
+      
+      if (!data.success) {
+        setOtpError(data.message || 'Invalid OTP Code.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      processReturnSubmit();
+    } catch(err) {
+      setOtpError('Network error verifying OTP.');
+      setIsSubmitting(false);
+    }
   };
 
   const handleTrackSubmit = () => {
@@ -241,14 +275,14 @@ export default function ReturnsPage() {
               To: <span className="font-medium text-indigo-600">{demoEmailAddress}</span>
             </div>
             <p className="text-sm text-slate-800 leading-relaxed mb-4">
-              Your secure Return Portal verification code is required to complete your request. Please enter the code below:
+              Your secure Return Portal verification code has been dispatched. Please check your actual email inbox.
             </p>
             <div className="bg-slate-100 rounded-lg py-3 px-4 text-center">
-              <span className="text-3xl font-black text-indigo-600 tracking-[0.2em]">{expectedOtp}</span>
+              <span className="text-sm font-semibold text-slate-500">Waiting for user input...</span>
             </div>
           </div>
           <div className="bg-indigo-50 px-4 py-2 text-[10px] text-indigo-600 text-center font-medium">
-            (DEMO SYSTEM: This simulates an actual email delivery)
+            (Connected to SOC 2 microservice backend)
           </div>
         </motion.div>
       )}
