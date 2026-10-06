@@ -431,13 +431,48 @@ export default function ReturnsPage() {
                           {trackingResult.status}
                         </span>
                       </div>
-                      <div className="space-y-2">
-                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Name:</strong> {trackingResult.name}</p>
-                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {trackingResult.company}</p>
-                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(trackingResult.date).toLocaleDateString()}</p>
-                        <p className="text-sm text-slate-600"><strong className="text-slate-800">Products:</strong> {trackingResult.products?.length || 0} items</p>
-                        {trackingResult.attachedFiles && trackingResult.attachedFiles.length > 0 && (
-                          <p className="text-sm text-slate-600"><strong className="text-slate-800">Evidence:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
+                      <div className="space-y-4">
+                        <div className="space-y-2 pb-4 border-b border-slate-200">
+                          <p className="text-sm text-slate-600"><strong className="text-slate-800">Name:</strong> {trackingResult.name}</p>
+                          <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {trackingResult.company}</p>
+                          <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(trackingResult.date).toLocaleDateString()}</p>
+                          {trackingResult.attachedFiles && trackingResult.attachedFiles.length > 0 && (
+                            <p className="text-sm text-slate-600"><strong className="text-slate-800">Evidence:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
+                          )}
+                        </div>
+
+                        {(trackingResult.status === 'Approved' || trackingResult.status === 'Declined') && trackingResult.products && (
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-800 mb-3">Equipment Evaluation Details</h4>
+                            <div className="space-y-3">
+                              {trackingResult.products.map((product: any, idx: number) => (
+                                <div key={product.id || idx} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                                  <div>
+                                    <div className="text-sm font-bold text-slate-700 capitalize mb-1">
+                                      {product.category.replace('_', ' ')}
+                                    </div>
+                                    <div className="text-xs text-slate-500 max-w-lg">
+                                      {product.details}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-4 shrink-0">
+                                    <div className="text-xs text-slate-500">
+                                      Qty: <span className="font-bold text-slate-700">{product.quantity}</span>
+                                    </div>
+                                    {product.price !== undefined ? (
+                                      <div className="text-sm font-mono font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+                                        ₹{product.price.toLocaleString('en-IN')}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
+                                        Pending Evaluation
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

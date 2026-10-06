@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video, Mail } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
 interface ProductItem {
@@ -11,6 +11,7 @@ interface ProductItem {
   category: string;
   details: string;
   quantity: number;
+  price?: number;
 }
 
 interface ReturnRequest {
@@ -22,6 +23,7 @@ interface ReturnRequest {
   phone: string;
   products: ProductItem[];
   attachedFiles?: string[];
+  emailDeliveryStatus?: 'pending' | 'sent' | 'failed';
   date: string;
   status: string;
 }
@@ -150,6 +152,56 @@ export default function DashboardPage() {
       const updatedReturns = returns.filter(req => req.id !== id);
       setReturns(updatedReturns);
       localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+    }
+  };
+
+  const handlePriceChange = (reqId: string, productId: string, newPrice: string) => {
+    if (userRole !== 'admin') return;
+    const price = parseFloat(newPrice);
+    
+    const updatedReturns = returns.map(req => {
+      if (req.id === reqId) {
+        return {
+          ...req,
+          products: req.products.map(p => p.id === productId ? { ...p, price: isNaN(price) ? undefined : price } : p)
+        };
+      }
+      return req;
+    });
+    setReturns(updatedReturns);
+    localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+  };
+
+  const handleEmailPush = async (req: ReturnRequest) => {
+    if (req.status !== 'Approved') return;
+    
+    const updatedReturns = returns.map(r => 
+      r.id === req.id ? { ...r, emailDeliveryStatus: 'pending' as const } : r
+    );
+    setReturns(updatedReturns);
+    localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+    
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://netamps.cloudflareaccess.com';
+      const res = await fetch(`${API_URL}/api/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: req.email, orderDetails: req })
+      });
+      const data = await res.json();
+      
+      const finalReturns = updatedReturns.map(r => 
+        r.id === req.id ? { ...r, emailDeliveryStatus: (data.success ? 'sent' : 'failed') as 'sent' | 'failed' } : r
+      );
+      setReturns(finalReturns);
+      localStorage.setItem('netamps_returns', JSON.stringify(finalReturns));
+    } catch (e) {
+      console.error(e);
+      const failedReturns = updatedReturns.map(r => 
+        r.id === req.id ? { ...r, emailDeliveryStatus: 'failed' as const } : r
+      );
+      setReturns(failedReturns);
+      localStorage.setItem('netamps_returns', JSON.stringify(failedReturns));
     }
   };
 
@@ -370,8 +422,25 @@ export default function DashboardPage() {
                                             {product.details}
                                           </div>
                                         </div>
-                                        <div className="text-lg font-mono font-bold text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-lg border border-indigo-500/20">
-                                          x{product.quantity}
+                                        <div className="flex items-center gap-4">
+                                          <div className="flex flex-col items-end">
+                                            <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Unit Price (INR)</label>
+                                            <div className="relative">
+                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                disabled={userRole !== 'admin'}
+                                                value={product.price || ''}
+                                                onChange={(e) => handlePriceChange(req.id, product.id, e.target.value)}
+                                                placeholder={userRole === 'admin' ? "Enter price" : "Pending"}
+                                                className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                                              />
+                                            </div>
+                                          </div>
+                                          <div className="text-lg font-mono font-bold text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-lg border border-indigo-500/20">
+                                            x{product.quantity}
+                                          </div>
                                         </div>
                                       </div>
                                     ))
@@ -408,27 +477,39 @@ export default function DashboardPage() {
                                   </div>
                                 )}
 
-                                <div className="mt-6 flex gap-3 border-t border-slate-800 pt-4">
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Approved'); }}
-                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors"
-                                  >
-                                    Approve Request
-                                  </button>
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Declined'); }}
-                                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors"
-                                  >
-                                    Decline Request
-                                  </button>
-                                  {userRole === 'admin' && (
+                                <div className="mt-6 flex gap-3 border-t border-slate-800 pt-4 items-center">
+                                  {req.status === 'Approved' && (
                                     <button 
-                                      onClick={(e) => { e.stopPropagation(); handleDeleteRequest(req.id); }}
-                                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-sm font-medium rounded-lg transition-colors ml-auto border border-red-500/20"
+                                      onClick={(e) => { e.stopPropagation(); handleEmailPush(req); }}
+                                      disabled={req.emailDeliveryStatus === 'pending'}
+                                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 mr-auto disabled:opacity-70 ${req.emailDeliveryStatus === 'sent' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-500'}`}
                                     >
-                                      Delete Request
+                                      {req.emailDeliveryStatus === 'pending' ? <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Mail className="w-4 h-4" />}
+                                      {req.emailDeliveryStatus === 'sent' ? 'Email Sent' : req.emailDeliveryStatus === 'failed' ? 'Retry Email' : 'Email Push'}
                                     </button>
                                   )}
+                                  <div className={req.status === 'Approved' ? 'flex gap-3' : 'ml-auto flex gap-3'}>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Approved'); }}
+                                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                    >
+                                      Approve Request
+                                    </button>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Declined'); }}
+                                      className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                    >
+                                      Decline Request
+                                    </button>
+                                    {userRole === 'admin' && (
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteRequest(req.id); }}
+                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-sm font-medium rounded-lg transition-colors border border-red-500/20"
+                                      >
+                                        Delete Request
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </td>

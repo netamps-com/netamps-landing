@@ -114,6 +114,37 @@ async function sendEmailWithRetry(to: string, otpCode: string, retries = 3, back
   return false;
 }
 
+export async function sendOrderEmail(to: string, orderDetails: any): Promise<boolean> {
+  let productsHtml = orderDetails.products.map((p: any) => 
+    `<li><strong>${p.category.replace('_', ' ')}</strong> (x${p.quantity}): ${p.details} <br/> 
+    <em>Price Evaluated: ${p.price !== undefined ? '₹' + p.price : 'Pending'}</em></li>`
+  ).join('');
+
+  const mailOptions = {
+    from: `"Netamps ITAD" <${process.env.SMTP_FROM || 'no-reply@example.com'}>`,
+    to,
+    subject: `Order Update: ${orderDetails.id} - ${orderDetails.status}`,
+    html: `<h2>Hello ${orderDetails.name},</h2>
+    <p>Your request (<strong>${orderDetails.id}</strong>) has been <strong>${orderDetails.status}</strong>.</p>
+    <p><strong>Intent:</strong> ${orderDetails.intent.toUpperCase()}</p>
+    <h3>Equipment & Pricing details:</h3>
+    <ul>
+      ${productsHtml}
+    </ul>
+    <p>Please track your ID on our portal for the most up-to-date information.</p>
+    <br/>
+    <p>Regards,<br/>Netamps Technologies</p>`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Failed to send order email:', error);
+    return false;
+  }
+}
+
 // ============================================================================
 // 3. CORE DOMAIN LOGIC (REQUEST & VERIFY)
 // ============================================================================

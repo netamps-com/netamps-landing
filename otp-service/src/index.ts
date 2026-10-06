@@ -1,5 +1,5 @@
 import express from 'express';
-import { requestOTP, verifyOTP } from './otpService';
+import { requestOTP, verifyOTP, sendOrderEmail } from './otpService';
 import { generateUploadUrl } from './r2Service';
 
 const app = express();
@@ -56,6 +56,20 @@ app.post('/api/upload-url', async (req, res) => {
     res.status(200).json(result);
   } else {
     res.status(400).json(result);
+  }
+});
+
+app.post('/api/send-email', async (req, res) => {
+  const { to, orderDetails } = req.body;
+  if (!to || !orderDetails) {
+    return res.status(400).json({ success: false, message: 'Missing parameters.' });
+  }
+
+  const success = await sendOrderEmail(to, orderDetails);
+  if (success) {
+    res.status(200).json({ success: true, message: 'Email pushed successfully.' });
+  } else {
+    res.status(500).json({ success: false, message: 'Failed to push email.' });
   }
 });
 
