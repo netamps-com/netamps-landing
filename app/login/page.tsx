@@ -156,7 +156,7 @@ export default function LoginPage() {
           </Link>
         </div>
         <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-white">
-          Enterprise ITAD Exchange Portal
+          Netamps Connect
         </h2>
         <p className="mt-3 text-center text-lg text-slate-300 max-w-md mx-auto leading-relaxed">
           The secure interface for high-velocity hardware liquidation, certified data sanitization, and premium secondary market sourcing
