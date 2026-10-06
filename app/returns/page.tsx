@@ -34,14 +34,16 @@ export default function ReturnsPage() {
   }, []);
 
   useEffect(() => {
-    // Independent Returns Session ID
+    // Independent Returns Session ID in URL
     try {
-      if (!sessionStorage.getItem('netamps_returns_sid')) {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('sid')) {
         const sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        sessionStorage.setItem('netamps_returns_sid', sid);
+        url.searchParams.set('sid', sid);
+        window.history.replaceState({}, '', url.toString());
       }
     } catch {
-      // storage unavailable
+      // URL manipulation unavailable
     }
   }, []);
 

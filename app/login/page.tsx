@@ -10,18 +10,17 @@ import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
 
 const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
-const ServerStatusWidget = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
+const ServerStatusWidget = () => {
+  const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<string>('checking');
 
   useEffect(() => {
-    if (!visible) return;
+    if (!isOpen) return;
     fetch('/api/status')
       .then(res => res.json())
       .then(data => setStatus(data.overallStatus))
       .catch(() => setStatus('unknown'));
-  }, [visible]);
-
-  if (!visible) return null;
+  }, [isOpen]);
 
   const getStatusColor = () => {
     if (status === 'operational') return 'bg-emerald-500';
@@ -39,8 +38,20 @@ const ServerStatusWidget = ({ visible, onClose }: { visible: boolean; onClose: (
     return 'Status Unknown';
   };
 
+  if (!isOpen) {
+    return (
+      <button 
+        onClick={() => setIsOpen(true)} 
+        className="absolute top-4 right-4 z-50 bg-white/90 backdrop-blur-md border border-slate-200 p-2.5 rounded-full shadow-md text-slate-500 hover:text-indigo-600 transition-all hover:scale-110 focus:outline-none"
+        title="View System Status"
+      >
+        <Activity className="w-5 h-5" />
+      </button>
+    );
+  }
+
   return (
-    <div className="absolute top-4 right-4 z-50 bg-white border border-slate-200 p-3 rounded-xl shadow-lg flex items-center gap-4">
+    <div className="absolute top-4 right-4 z-50 bg-white border border-slate-200 p-3 rounded-xl shadow-lg flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
       <div className="flex items-center gap-3">
         <div className="relative flex h-3 w-3">
           {status === 'operational' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
@@ -57,7 +68,7 @@ const ServerStatusWidget = ({ visible, onClose }: { visible: boolean; onClose: (
         <Link href="/status" className="text-slate-400 hover:text-indigo-600 transition-colors" title="View Full Status">
           <ExternalLink className="w-4 h-4" />
         </Link>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors" title="Close">
+        <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors" title="Close">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
@@ -82,14 +93,16 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    // Independent Login Session ID
+    // Independent Login Session ID in URL
     try {
-      if (!sessionStorage.getItem('netamps_login_sid')) {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('sid')) {
         const sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        sessionStorage.setItem('netamps_login_sid', sid);
+        url.searchParams.set('sid', sid);
+        window.history.replaceState({}, '', url.toString());
       }
     } catch {
-      // storage unavailable
+      // URL manipulation unavailable
     }
   }, []);
 
@@ -176,7 +189,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       
       {/* Floating Status Widget */}
-      <ServerStatusWidget visible={showStatus} onClose={() => setShowStatus(false)} />
+      <ServerStatusWidget />
 
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
@@ -323,13 +336,6 @@ export default function LoginPage() {
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <span>Protected by Enterprise TLS 1.3 & SOC2 Compliance</span>
-        </div>
-
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
-          <button onClick={() => setShowStatus(!showStatus)} className="flex items-center gap-1 hover:text-indigo-600 transition-colors focus:outline-none">
-            <Activity className="w-3 h-3" />
-            System Status Toggle
-          </button>
         </div>
       </div>
     </div>
