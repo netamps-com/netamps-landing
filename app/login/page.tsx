@@ -240,7 +240,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="appearance-none block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
-                  placeholder="john.doe@example.com"
+                  placeholder="admin@netamps.com"
                 />
               </div>
             </div>
@@ -317,7 +317,7 @@ export default function LoginPage() {
                 <div className="w-full border-t border-slate-200" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white/90 text-slate-500 backdrop-blur-xl">Employee Access</span>
+                <span className="px-2 bg-white/90 text-slate-500 backdrop-blur-xl">Webmail Access</span>
               </div>
             </div>
 

@@ -106,6 +106,24 @@ export default function ReturnsPage() {
       
       // Instead of submitting directly, show OTP
       const formData = new FormData(e.target as HTMLFormElement);
+      
+      const name = formData.get('name') as string;
+      const company = formData.get('company') as string;
+      const email = formData.get('email') as string;
+      const phone = formData.get('phone') as string;
+
+      if (!name.trim() || !company.trim() || !email.trim() || !phone.trim()) {
+        setCaptchaError('Please ensure all required fields contain valid text, not just spaces.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (products.some(p => !p.category || !p.details.trim())) {
+        setCaptchaError('Please ensure all product details are filled correctly.');
+        setIsSubmitting(false);
+        return;
+      }
+
       setFormDataCache(formData);
       
       const email = formData.get('email') as string;
@@ -416,7 +434,7 @@ export default function ReturnsPage() {
                   >
                     {isSubmitting ? (
                       <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    ) : "Verify & Generate Request"}
+                    ) : `Verify & Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`}
                   </button>
                   <button type="button" onClick={() => setShowOtp(false)} className="text-sm text-indigo-600 hover:underline">
                     Cancel and return to form
