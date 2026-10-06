@@ -126,8 +126,6 @@ export default function ReturnsPage() {
 
       setFormDataCache(formData);
       
-      const email = formData.get('email') as string;
-      
       // Call the live OTP microservice via Cloudflare Tunnel
       const res = await fetch('https://quiet-marble-otter.trycloudflare.com/api/otp/request', {
         method: 'POST',
@@ -352,14 +350,14 @@ export default function ReturnsPage() {
               <div className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
                 <button 
                   type="button"
-                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); }}
+                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   SELL Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); }}
+                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   BUY Equipment
@@ -441,7 +439,7 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
-                <form className="space-y-6" onSubmit={handleSubmit}>
+                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }])}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name</label>
@@ -560,17 +558,25 @@ export default function ReturnsPage() {
                   {captchaError && (
                     <p className="text-xs text-center text-red-400 mt-2">{captchaError}</p>
                   )}
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-xl shadow-lg text-base font-bold text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed ${intent === 'sell' ? 'bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500'}`}
-                  >
-                    {isSubmitting ? (
-                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    ) : (
-                      `Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`
-                    )}
-                  </button>
+                  <div className="flex gap-4">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className={`flex-1 flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-xl shadow-lg text-base font-bold text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed ${intent === 'sell' ? 'bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500'}`}
+                    >
+                      {isSubmitting ? (
+                        <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        `Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`
+                      )}
+                    </button>
+                    <button
+                      type="reset"
+                      className="px-6 py-4 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
                   <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
                     Protected by Cloudflare Turnstile. See the{' '}
                     <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Cloudflare Privacy Policy</a> and{' '}

@@ -144,6 +144,14 @@ export default function DashboardPage() {
     localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
   };
 
+  const handleDeleteRequest = (id: string) => {
+    if (window.confirm('Are you sure you want to permanently delete this request?')) {
+      const updatedReturns = returns.filter(req => req.id !== id);
+      setReturns(updatedReturns);
+      localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+    }
+  };
+
   if (!isAuthenticated) return null; // Prevent flash of content
 
   return (
@@ -383,6 +391,14 @@ export default function DashboardPage() {
                                   >
                                     Decline Request
                                   </button>
+                                  {userRole === 'admin' && (
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteRequest(req.id); }}
+                                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-sm font-medium rounded-lg transition-colors ml-auto border border-red-500/20"
+                                    >
+                                      Delete Request
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </td>
