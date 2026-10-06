@@ -11,8 +11,7 @@ import {
   AlertTriangle,
   Clock,
   Zap,
-  RefreshCw,
-  Shield
+  RefreshCw
 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
@@ -406,8 +405,7 @@ export default function StatusPage() {
               </Link>
             </div>
             <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4" />
-              <span>Powered by Cloudflare Pages + Workers</span>
+              <span>© {new Date().getFullYear()} Netamps Technologies</span>
             </div>
           </div>
         </div>
