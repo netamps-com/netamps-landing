@@ -89,7 +89,7 @@ export default function LoginPage() {
   const [showStatus, setShowStatus] = useState(false);
 
   useEffect(() => {
-    document.title = 'ITAD Login - Netamps Technologies';
+    document.title = 'Netamps Connect';
   }, []);
 
   useEffect(() => {
