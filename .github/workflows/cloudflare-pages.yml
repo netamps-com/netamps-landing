@@ -36,6 +36,19 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Verify deploy contract (static export)
+        run: |
+          grep -q "output: 'export'" next.config.mjs || (echo "ERROR: next.config.mjs must use output: 'export'. Dynamic Next routes are silently dropped by 'pages deploy out'. Put dynamic APIs in functions/ instead." && exit 1)
+          grep -q 'pages_build_output_dir = "out"' wrangler.toml || (echo "ERROR: wrangler.toml pages_build_output_dir must be \"out\"" && exit 1)
+          test ! -f app/api/status/route.ts || (echo "ERROR: app/api/status/route.ts must not exist (dynamic route breaks static export). Use functions/api/status.js instead." && exit 1)
+          echo "Deploy contract OK: static export + out/ + edge APIs in functions/"
+
+      - name: Check Cloudflare secrets present
+        run: |
+          test -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" || (echo "ERROR: CLOUDFLARE_API_TOKEN secret is missing. Add it in GitHub → Settings → Secrets → Actions." && exit 1)
+          test -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" || (echo "ERROR: CLOUDFLARE_ACCOUNT_ID secret is missing. Add it in GitHub → Settings → Secrets → Actions." && exit 1)
+          echo "Cloudflare secrets present"
+
       - name: Build
         run: npm run build
 
