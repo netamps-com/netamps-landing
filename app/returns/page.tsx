@@ -24,7 +24,7 @@ export default function ReturnsPage() {
   const [generatedId, setGeneratedId] = useState('');
 
   useEffect(() => {
-    document.title = 'Dual-Intent Enterprise Portal - Netamps Technologies';
+    document.title = 'Enterprise ITAD Exchange Portal - Netamps Technologies';
   }, []);
 
   const addProduct = () => {
@@ -139,10 +139,10 @@ export default function ReturnsPage() {
           </Link>
         </div>
         <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-white">
-          Dual-Intent Enterprise Portal
+          Enterprise ITAD Exchange Portal
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-400">
-          Securely submit hardware liquidation or procurement requests.
+        <p className="mt-3 text-center text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+          The secure interface for high-velocity hardware liquidation, certified data sanitization, and premium secondary market sourcing
         </p>
       </div>
 
@@ -193,7 +193,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <User className="h-5 w-5 text-slate-500" />
                       </div>
-                      <input type="text" name="name" id="name" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="John Doe" />
+                      <input type="text" name="name" id="name" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Rahul Verma" />
                     </div>
                   </div>
 
@@ -203,7 +203,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Building2 className="h-5 w-5 text-slate-500" />
                       </div>
-                      <input type="text" name="company" id="company" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="Acme Corp" />
+                      <input type="text" name="company" id="company" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Acme Technologies Pvt. Ltd." />
                     </div>
                   </div>
 
@@ -213,7 +213,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <span className="text-slate-500 font-bold text-lg">@</span>
                       </div>
-                      <input type="email" name="email" id="email" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="john@company.com" />
+                      <input type="email" name="email" id="email" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="procurement@yourcompany.com" />
                     </div>
                   </div>
 
@@ -223,7 +223,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Phone className="h-5 w-5 text-slate-500" />
                       </div>
-                      <input type="tel" name="phone" id="phone" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="+1 (555) 000-0000" />
+                      <input type="tel" name="phone" id="phone" required className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="+91 98765 43210" />
                     </div>
                   </div>
                 </div>
@@ -282,7 +282,7 @@ export default function ReturnsPage() {
                             value={product.details}
                             onChange={(e) => updateProduct(product.id, 'details', e.target.value)}
                             className="block w-full px-3 py-2 border border-slate-700 rounded-lg bg-slate-800 text-white focus:ring-2 focus:ring-indigo-500 sm:text-sm resize-none" 
-                            placeholder="Make, model, condition, or special notes..."
+                            placeholder="e.g. 25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition"
                           />
                         </div>
                       </div>
