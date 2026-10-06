@@ -66,12 +66,38 @@ export default function ReturnsPage() {
     }
   };
 
+  // Generate Masked Snowflake ID
+  const generateMaskedSnowflake = (intentType: 'buy' | 'sell'): string => {
+    const prefix = intentType === 'sell' ? 'S' : 'B';
+    
+    // Get timestamp in milliseconds (41 bits equivalent)
+    const timestamp = Date.now();
+    
+    // Generate random component for uniqueness (19 bits equivalent)
+    const random = Math.floor(Math.random() * 524288);
+    
+    // Generate sequence number (12 bits)
+    const sequence = Math.floor(Math.random() * 4096);
+    
+    // Combine into a single number (simulating Snowflake structure)
+    const snowflake = (timestamp * 1000000) + (random * 10000) + sequence;
+    
+    // Convert to base36 for shorter, masked representation
+    const masked = snowflake.toString(36).toUpperCase();
+    
+    // Add checksum digit for validation
+    const checksum = masked.split('').reduce((acc, char, idx) => {
+      return acc + char.charCodeAt(0) * (idx + 1);
+    }, 0) % 10;
+    
+    return `${prefix}-${masked}${checksum}`;
+  };
+
   const processReturnSubmit = (e: React.FormEvent) => {
     setTimeout(() => {
       try {
         const formData = new FormData(e.target as HTMLFormElement);
-        const prefix = intent === 'sell' ? 'SELL' : 'BUY';
-        const newId = `${prefix}-${Math.floor(Math.random() * 100000)}`;
+        const newId = generateMaskedSnowflake(intent);
         setGeneratedId(newId);
 
         const returnReq = {
