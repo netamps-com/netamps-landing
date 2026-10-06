@@ -146,7 +146,7 @@ export default function ReturnsPage() {
   };
 
   // Generate Masked Snowflake ID
-  const generateMaskedSnowflake = (intentType: 'buy' | 'sell'): string => {
+  const generateMaskedSnowflake = (intentType: 'buy' | 'sell' | 'track'): string => {
     const prefix = intentType === 'sell' ? 'S' : 'B';
     
     // Get timestamp in milliseconds (41 bits equivalent)
@@ -480,6 +480,7 @@ export default function ReturnsPage() {
                   </p>
                 </div>
               </form>
+              )}
             </div>
           )}
         </motion.div>
