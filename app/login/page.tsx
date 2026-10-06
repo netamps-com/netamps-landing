@@ -246,6 +246,11 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+            <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
+              This site is protected by reCAPTCHA and the Google{' '}
+              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Privacy Policy</a> and{' '}
+              <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Terms of Service</a> apply.
+            </p>
           </form>
 
           <div className="mt-6">
