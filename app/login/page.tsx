@@ -93,11 +93,13 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    // Independent Login Session ID in URL
+    // Independent Login Session ID in URL (CSPRNG)
     try {
       const url = new URL(window.location.href);
       if (!url.searchParams.has('sid')) {
-        const sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        const array = new Uint8Array(16);
+        crypto.getRandomValues(array);
+        const sid = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
         url.searchParams.set('sid', sid);
         window.history.replaceState({}, '', url.toString());
       }
