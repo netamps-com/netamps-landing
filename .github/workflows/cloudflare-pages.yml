@@ -6,6 +6,15 @@ on:
       - main
   workflow_dispatch:  # Allow manual trigger
 
+# Single deploy path: GitHub Actions direct-upload is canonical.
+# Disable automatic Git builds in Cloudflare Dashboard
+# (Pages → netamps-landing → Settings → Builds → Automatic deployments: Off)
+# to avoid double deployments racing each other.
+
+concurrency:
+  group: cloudflare-pages-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -24,12 +33,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type check
+        run: npx tsc --noEmit
+
       - name: Build
         run: npm run build
+
+      - name: Verify build output
+        run: |
+          test -d out || (echo "ERROR: out/ directory missing after build" && exit 1)
+          test -f out/index.html || (echo "ERROR: out/index.html missing after build" && exit 1)
+          echo "Build output OK:"
+          ls out | head -20
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name=netamps-landing
+          command: pages deploy out --project-name=netamps-landing --branch=main --commit-hash=${{ github.sha }}
