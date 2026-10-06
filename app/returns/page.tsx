@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Script from 'next/script';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
+import TurnstileWidget from '../TurnstileWidget';
+
+const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 interface ProductItem {
   id: string;
@@ -22,6 +24,9 @@ export default function ReturnsPage() {
     { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }
   ]);
   const [generatedId, setGeneratedId] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
+  const [captchaError, setCaptchaError] = useState('');
 
   useEffect(() => {
     document.title = 'Enterprise ITAD Exchange Portal - Netamps Technologies';
@@ -43,27 +48,16 @@ export default function ReturnsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    
-    // Execute reCAPTCHA v3 verification
-    if (typeof window !== 'undefined' && (window as any).grecaptcha) {
-      (window as any).grecaptcha.ready(async () => {
-        try {
-          const token = await (window as any).grecaptcha.execute('6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'submit_return' });
-          if (!token) {
-             console.error('reCAPTCHA failed');
-             setIsSubmitting(false);
-             return;
-          }
-          processReturnSubmit(e);
-        } catch (err) {
-          console.error(err);
-          setIsSubmitting(false);
-        }
-      });
-    } else {
-      processReturnSubmit(e);
+    setCaptchaError('');
+
+    // Cloudflare Turnstile verification (bypassed only when no site key is configured, e.g. local dev)
+    if (TURNSTILE_ENABLED && !turnstileToken) {
+      setCaptchaError('Please complete the security check below.');
+      return;
     }
+
+    setIsSubmitting(true);
+    processReturnSubmit(e);
   };
 
   // Generate Masked Snowflake ID
@@ -109,7 +103,8 @@ export default function ReturnsPage() {
           phone: formData.get('phone'),
           products: products,
           date: new Date().toISOString(),
-          status: 'Pending'
+          status: 'Pending',
+          turnstileToken: turnstileToken || undefined
         };
         
         const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
@@ -120,12 +115,13 @@ export default function ReturnsPage() {
       
       setIsSubmitting(false);
       setIsSuccess(true);
+      setTurnstileToken('');
+      setTurnstileReset((n) => n + 1);
     }, 1500);
   };
 
   return (
     <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      <Script src="https://www.google.com/recaptcha/api.js?render=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" />
       {/* Background Effects */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
@@ -292,6 +288,15 @@ export default function ReturnsPage() {
 
                 {/* Submit */}
                 <div className="pt-6">
+                  <TurnstileWidget
+                    onVerify={(token) => { setTurnstileToken(token); setCaptchaError(''); }}
+                    onExpire={() => setTurnstileToken('')}
+                    onError={() => setTurnstileToken('')}
+                    resetSignal={turnstileReset}
+                  />
+                  {captchaError && (
+                    <p className="text-xs text-center text-red-400 mt-2">{captchaError}</p>
+                  )}
                   <button
                     type="submit"
                     disabled={isSubmitting}
@@ -304,9 +309,9 @@ export default function ReturnsPage() {
                     )}
                   </button>
                   <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
-                    This site is protected by reCAPTCHA and the Google{' '}
-                    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Privacy Policy</a> and{' '}
-                    <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Terms of Service</a> apply.
+                    Protected by Cloudflare Turnstile. See the{' '}
+                    <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Cloudflare Privacy Policy</a> and{' '}
+                    <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Terms of Service</a> for details.
                   </p>
                 </div>
               </form>

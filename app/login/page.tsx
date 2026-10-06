@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Script from 'next/script';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
+import TurnstileWidget from '../TurnstileWidget';
+
+const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 const ServerStatusWidget = () => {
   const [status, setStatus] = useState<string>('checking');
@@ -54,6 +56,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
@@ -73,38 +77,31 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     setErrorMsg('');
 
+    // Cloudflare Turnstile verification (bypassed only when no site key is configured, e.g. local dev)
+    if (TURNSTILE_ENABLED && !turnstileToken) {
+      setErrorMsg('Please complete the security check below.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
-      // Execute reCAPTCHA v3 verification
-      if (typeof window !== 'undefined' && (window as any).grecaptcha) {
-        (window as any).grecaptcha.ready(async () => {
-          try {
-            const token = await (window as any).grecaptcha.execute('6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'login' });
-            if (!token) {
-               setErrorMsg('reCAPTCHA verification failed.');
-               setIsSubmitting(false);
-               return;
-            }
-            
-            // Proceed with secure login if captcha passes
-            await processLogin();
-          } catch (captchaErr) {
-            setErrorMsg('reCAPTCHA error occurred.');
-            setIsSubmitting(false);
-          }
-        });
-      } else {
-        await processLogin(); // Fallback if script didn't load
-      }
+      await processLogin(turnstileToken);
     } catch (err) {
       setErrorMsg('Encryption error occurred.');
+      resetTurnstile();
       setIsSubmitting(false);
     }
   };
 
-  const processLogin = async () => {
+  const resetTurnstile = () => {
+    setTurnstileToken('');
+    setTurnstileReset((n) => n + 1);
+  };
+
+  const processLogin = async (captchaToken: string) => {
     try {
       const hashedPassword = await hashPassword(password);
       
@@ -128,17 +125,18 @@ export default function LoginPage() {
         router.push('/dashboard');
       } else {
         setErrorMsg('Invalid credentials. Please try again.');
+        resetTurnstile();
         setIsSubmitting(false);
       }
     } catch (err) {
       setErrorMsg('Encryption error occurred.');
+      resetTurnstile();
       setIsSubmitting(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#020817] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      <Script src="https://www.google.com/recaptcha/api.js?render=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" />
       
       {/* Floating Status Widget */}
       <ServerStatusWidget />
@@ -232,6 +230,14 @@ export default function LoginPage() {
             </div>
 
             <div>
+              <TurnstileWidget
+                onVerify={(token) => setTurnstileToken(token)}
+                onExpire={() => setTurnstileToken('')}
+                onError={() => setTurnstileToken('')}
+                resetSignal={turnstileReset}
+              />
+            </div>
+            <div>
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -247,9 +253,9 @@ export default function LoginPage() {
               </button>
             </div>
             <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
-              This site is protected by reCAPTCHA and the Google{' '}
-              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Privacy Policy</a> and{' '}
-              <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Terms of Service</a> apply.
+              Protected by Cloudflare Turnstile. See the{' '}
+              <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Cloudflare Privacy Policy</a> and{' '}
+              <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Terms of Service</a> for details.
             </p>
           </form>
 
