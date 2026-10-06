@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # ==================================================
+  # Cloudflare Tunnel (Zero Trust Network Access)
+  # ==================================================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - internal_backend
+    depends_on:
+      - otp-service
+
+  # ==================================================
+  # Node.js Application Layer (Stateless Compute)
+  # ==================================================
+  otp-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Ports removed: Explicitly isolated. Only cloudflared can access this internally.
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://:secure_redis_password@cache:6379/0
+      - DATABASE_URL=postgresql://audit_user:secure_pg_password@audit_db:5432/audit_logs
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+    depends_on:
+      cache:
+        condition: service_healthy
+      audit_db:
+        condition: service_healthy
+    networks:
+      - internal_backend
+    security_opt:
+      - no-new-privileges:true
+    # Drop root capabilities (SOC 2 Principle of Least Privilege)
+    cap_drop:
+      - ALL
+
+  # ==================================================
+  # Redis Cache Layer (Ephemeral State & Rate Limiting)
+  # ==================================================
+  cache:
+    image: redis:7.2-alpine
+    restart: always
+    command: >
+      --requirepass secure_redis_password 
+      --maxmemory 256mb 
+      --maxmemory-policy volatile-lru 
+      --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "secure_redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal_backend
+    expose:
+      - "6379"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ==================================================
+  # PostgreSQL Database Layer (Immutable Audit Logging)
+  # ==================================================
+  audit_db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: audit_user
+      POSTGRES_PASSWORD: secure_pg_password
+      POSTGRES_DB: audit_logs
+    volumes:
+      - pg_audit_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U audit_user -d audit_logs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal_backend
+    expose:
+      - "5432"
+
+networks:
+  internal_backend:
+    driver: bridge
+
+volumes:
+  pg_audit_data:

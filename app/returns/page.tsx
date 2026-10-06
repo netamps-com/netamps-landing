@@ -44,6 +44,10 @@ export default function ReturnsPage() {
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileReset, setTurnstileReset] = useState(0);
   const [captchaError, setCaptchaError] = useState('');
+  
+  // Secure File Upload State
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     document.title = 'Enterprise ITAD Exchange Portal - Netamps Technologies';
@@ -232,37 +236,68 @@ export default function ReturnsPage() {
     return `${prefix}-${masked}${checksum}`;
   };
 
-  const processReturnSubmit = () => {
-    setTimeout(() => {
-      try {
-        if (!formDataCache) return;
-        const newId = generateMaskedSnowflake(intent);
-        setGeneratedId(newId);
-
-        const returnReq = {
-          id: newId,
-          intent,
-          name: formDataCache.get('name'),
-          company: formDataCache.get('company'),
-          email: formDataCache.get('email'),
-          phone: formDataCache.get('phone'),
-          products: products,
-          date: new Date().toISOString(),
-          status: 'Pending',
-          turnstileToken: turnstileToken || undefined
-        };
-        
-        const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
-        localStorage.setItem('netamps_returns', JSON.stringify([returnReq, ...existingReturns]));
-      } catch (err) {
-        console.error('Failed to save to database', err);
-      }
+  const processReturnSubmit = async () => {
+    try {
+      if (!formDataCache) return;
+      setIsUploading(true);
+      const newId = generateMaskedSnowflake(intent);
       
+      const uploadedFileUrls: string[] = [];
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://netamps.cloudflareaccess.com';
+
+      // 1. Upload each file securely via R2 Pre-Signed URL
+      for (const file of selectedFiles) {
+        try {
+          const presignRes = await fetch(`${API_URL}/api/upload-url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, mimeType: file.type, fileSize: file.size })
+          });
+          const presignData = await presignRes.json();
+          if (presignData.success) {
+            // Upload directly to Cloudflare R2
+            await fetch(presignData.url, {
+              method: 'PUT',
+              headers: { 'Content-Type': file.type },
+              body: file
+            });
+            uploadedFileUrls.push(presignData.objectKey);
+          }
+        } catch (e) {
+          console.error('File upload failed for', file.name, e);
+        }
+      }
+
+      setGeneratedId(newId);
+
+      const returnReq = {
+        id: newId,
+        intent,
+        name: formDataCache.get('name'),
+        company: formDataCache.get('company'),
+        email: formDataCache.get('email'),
+        phone: formDataCache.get('phone'),
+        products: products,
+        attachedFiles: uploadedFileUrls,
+        date: new Date().toISOString(),
+        status: 'Pending',
+        turnstileToken: turnstileToken || undefined
+      };
+
+      const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
+      localStorage.setItem('netamps_returns', JSON.stringify([returnReq, ...existingReturns]));
+      
+      setIsUploading(false);
       setIsSubmitting(false);
       setIsSuccess(true);
       setTurnstileToken('');
       setTurnstileReset((n) => n + 1);
-    }, 1500);
+    } catch (err) {
+      console.error('Failed to save to database', err);
+      setIsUploading(false);
+      setIsSubmitting(false);
+      setCaptchaError('An error occurred while saving the request.');
+    }
   };
 
   return (
@@ -401,6 +436,9 @@ export default function ReturnsPage() {
                         <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {trackingResult.company}</p>
                         <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(trackingResult.date).toLocaleDateString()}</p>
                         <p className="text-sm text-slate-600"><strong className="text-slate-800">Products:</strong> {trackingResult.products?.length || 0} items</p>
+                        {trackingResult.attachedFiles && trackingResult.attachedFiles.length > 0 && (
+                          <p className="text-sm text-slate-600"><strong className="text-slate-800">Evidence:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -428,11 +466,14 @@ export default function ReturnsPage() {
                   <button 
                     type="button"
                     onClick={handleOtpVerify}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isUploading}
                     className="w-full max-w-xs mx-auto flex justify-center items-center py-4 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md transition-colors disabled:opacity-70"
                   >
-                    {isSubmitting ? (
-                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    {isSubmitting || isUploading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        {isUploading ? 'Uploading securely to R2...' : 'Verifying...'}
+                      </div>
                     ) : `Verify & Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`}
                   </button>
                   <button type="button" onClick={() => setShowOtp(false)} className="text-sm text-indigo-600 hover:underline">
@@ -440,7 +481,7 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
-                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }])}>
+                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); setSelectedFiles([]); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name</label>
@@ -545,6 +586,45 @@ export default function ReturnsPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Secure File Upload (SOC 2) */}
+                <div className="border-t border-slate-200 pt-6 mt-6">
+                  <div className="mb-4">
+                    <h4 className="text-lg font-bold text-slate-900">Attach Evidence / Photos (Optional)</h4>
+                    <p className="text-xs text-slate-500">Max 100MB per file. Only images and short videos (MP4, WEBM) are permitted as per industry security standard.</p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg className="w-8 h-8 mb-3 text-slate-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                        </svg>
+                        <p className="mb-2 text-sm text-slate-500"><span className="font-bold">Click to upload</span> or drag and drop</p>
+                      </div>
+                      <input type="file" className="hidden" multiple accept="image/jpeg, image/png, image/webp, video/mp4, video/webm" onChange={(e) => {
+                        if (e.target.files) {
+                          const files = Array.from(e.target.files);
+                          const validFiles = files.filter(f => f.size <= 100 * 1024 * 1024);
+                          setSelectedFiles(prev => [...prev, ...validFiles]);
+                        }
+                      }} />
+                    </label>
+                    
+                    {selectedFiles.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        {selectedFiles.map((f, i) => (
+                          <div key={i} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm text-sm">
+                            <span className="truncate max-w-[200px] sm:max-w-[300px] text-slate-700 font-medium">{f.name}</span>
+                            <div className="flex items-center gap-4">
+                              <span className="text-slate-500 text-xs">{(f.size / 1024 / 1024).toFixed(2)} MB</span>
+                              <button type="button" onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-700 font-bold">✕</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

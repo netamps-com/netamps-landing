@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
 interface ProductItem {
@@ -21,6 +21,7 @@ interface ReturnRequest {
   email: string;
   phone: string;
   products: ProductItem[];
+  attachedFiles?: string[];
   date: string;
   status: string;
 }
@@ -378,6 +379,35 @@ export default function DashboardPage() {
                                     <div className="text-sm text-slate-500 italic">No products listed. (Legacy request)</div>
                                   )}
                                 </div>
+                                
+                                {/* Evidence Section */}
+                                {req.attachedFiles && req.attachedFiles.length > 0 && (
+                                  <div className="mt-6">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                      <FileImage className="w-4 h-4" /> Attached Evidence ({req.attachedFiles.length})
+                                    </h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                      {req.attachedFiles.map((fileKey, idx) => {
+                                        const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL || 'https://netamps.cloudflareaccess.com/cdn';
+                                        const fileUrl = `${cdnUrl}/${fileKey}`;
+                                        const isVideo = fileKey.endsWith('.mp4') || fileKey.endsWith('.webm');
+                                        return (
+                                          <a key={idx} href={fileUrl} target="_blank" rel="noopener noreferrer" className="relative group block aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-800/50 flex items-center justify-center hover:border-indigo-500 transition-colors">
+                                            {isVideo ? (
+                                              <div className="text-slate-400 group-hover:text-indigo-400 flex flex-col items-center gap-2">
+                                                <Video className="w-8 h-8" />
+                                                <span className="text-xs font-bold">Video</span>
+                                              </div>
+                                            ) : (
+                                              <img src={fileUrl} alt="Evidence" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center'); }} />
+                                            )}
+                                          </a>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
                                 <div className="mt-6 flex gap-3 border-t border-slate-800 pt-4">
                                   <button 
                                     onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Approved'); }}
