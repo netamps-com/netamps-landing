@@ -127,7 +127,7 @@ export default function ReturnsPage() {
       setFormDataCache(formData);
       
       // Call the live OTP microservice via Cloudflare Tunnel
-      const res = await fetch('https://quiet-marble-otter.trycloudflare.com/api/otp/request', {
+      const res = await fetch('https://gifts-anaheim-revolutionary-tower.trycloudflare.com/api/otp/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -167,7 +167,7 @@ export default function ReturnsPage() {
       if (!formDataCache) return;
       const email = formDataCache.get('email') as string;
       
-      const res = await fetch('https://quiet-marble-otter.trycloudflare.com/api/otp/verify', {
+      const res = await fetch('https://gifts-anaheim-revolutionary-tower.trycloudflare.com/api/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code: otpCode })
