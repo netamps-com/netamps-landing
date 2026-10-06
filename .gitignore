@@ -21,8 +21,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# local env files
+# local env files — NEVER commit secrets (.env, not just .env.local)
+.env
 .env*.local
+otp-service/.env
+otp-service/dist/
 
 # vercel
 .vercel
