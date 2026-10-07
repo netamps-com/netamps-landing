@@ -38,6 +38,21 @@ const sendKey = (email) => `otp_send:${email.toLowerCase()}`;
 
 /* ── Storage layer (KV preferred, D1 fallback) ─────────────────────────── */
 
+/** Returns 'kv' | 'd1' | null. A binding with the wrong shape (e.g. a D1
+ *  database bound as OTP_KV) is treated as absent and reported, never called. */
+function storeKind(env) {
+  if (env.OTP_KV && typeof env.OTP_KV.get === 'function' && typeof env.OTP_KV.put === 'function') return 'kv';
+  if (env.DB && typeof env.DB.prepare === 'function') return 'd1';
+  return null;
+}
+
+function storeMisconfigured(env) {
+  return Boolean(
+    (env.OTP_KV && typeof env.OTP_KV.get !== 'function') ||
+    (env.DB && typeof env.DB.prepare !== 'function')
+  );
+}
+
 async function ensureD1(env) {
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS otps (
@@ -50,10 +65,9 @@ async function ensureD1(env) {
   ).run();
 }
 
-async function readOtp(env, email) {
-  if (env.OTP_KV) {
-    const rec = await env.OTP_KV.get(otpKey(email), 'json');
-    return rec;
+async function readOtp(env, email, kind) {
+  if (kind === 'kv') {
+    return await env.OTP_KV.get(otpKey(email), 'json');
   }
   await ensureD1(env);
   const row = await env.DB.prepare(
@@ -62,8 +76,8 @@ async function readOtp(env, email) {
   return row || null;
 }
 
-async function writeOtp(env, email, record, ttlSeconds) {
-  if (env.OTP_KV) {
+async function writeOtp(env, email, record, ttlSeconds, kind) {
+  if (kind === 'kv') {
     await env.OTP_KV.put(otpKey(email), JSON.stringify(record), { expirationTtl: ttlSeconds });
     return;
   }
@@ -76,25 +90,23 @@ async function writeOtp(env, email, record, ttlSeconds) {
   ).bind(email.toLowerCase(), record.code, record.attempts, record.expiresAt, record.createdAt).run();
 }
 
-async function deleteOtp(env, email) {
-  if (env.OTP_KV) {
+async function deleteOtp(env, email, kind) {
+  if (kind === 'kv') {
     await env.OTP_KV.delete(otpKey(email));
     return;
   }
-  if (env.DB) {
-    await env.DB.prepare('DELETE FROM otps WHERE email = ?1').bind(email.toLowerCase()).run();
-  }
+  await env.DB.prepare('DELETE FROM otps WHERE email = ?1').bind(email.toLowerCase()).run();
 }
 
 async function readSendCounter(env, email) {
-  if (env.OTP_KV) {
+  if (env.OTP_KV && typeof env.OTP_KV.get === 'function') {
     return (await env.OTP_KV.get(sendKey(email), 'json')) || null;
   }
   return null; // D1 path: enforced via cooldown on the OTP record itself
 }
 
 async function writeSendCounter(env, email, counter) {
-  if (env.OTP_KV) {
+  if (env.OTP_KV && typeof env.OTP_KV.put === 'function') {
     await env.OTP_KV.put(sendKey(email), JSON.stringify(counter), { expirationTtl: 3600 });
   }
 }
@@ -131,6 +143,7 @@ async function sendOtpEmail(env, to, otp) {
 /* ── Handler ───────────────────────────────────────────────────────────── */
 
 export async function onRequestPost({ request, env }) {
+  let stage = 'parse';
   try {
     let body;
     try {
@@ -139,21 +152,28 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Invalid request body' }, 400);
     }
 
+    stage = 'validate';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
       return json({ success: false, message: 'A valid email address is required' }, 400);
     }
 
-    const hasStore = Boolean(env.OTP_KV || env.DB);
-    if (!hasStore) {
+    stage = 'store-check';
+    const kind = storeKind(env);
+    if (!kind) {
+      if (storeMisconfigured(env)) {
+        console.error('[otp] OTP store binding has the wrong type. OTP_KV must be a KV namespace, DB must be a D1 database.');
+        return json({ success: false, message: 'Verification store misconfigured. Please contact support.', stage: 'store-check' }, 503);
+      }
       console.error('[otp] No OTP store bound. Bind OTP_KV (KV) or DB (D1) in Pages → Settings → Functions.');
-      return json({ success: false, message: 'Verification service temporarily unavailable. Please try again shortly.' }, 503);
+      return json({ success: false, message: 'Verification service temporarily unavailable. Please try again shortly.', stage: 'store-check' }, 503);
     }
 
     const nowSec = Math.floor(Date.now() / 1000);
 
     // Hourly send cap (KV-backed; D1 path relies on cooldown + consume-on-success)
-    if (env.OTP_KV) {
+    stage = 'rate-check';
+    if (kind === 'kv') {
       const counter = await readSendCounter(env, email);
       if (counter && counter.count >= MAX_SENDS_PER_HOUR) {
         return json({ success: false, message: 'Too many codes requested. Please try again later.' }, 429);
@@ -161,33 +181,37 @@ export async function onRequestPost({ request, env }) {
     }
 
     // Resend cooldown — prevents double-click / retry storms
-    const existing = await readOtp(env, email);
+    stage = 'otp-read';
+    const existing = await readOtp(env, email, kind);
     if (existing && nowSec - existing.createdAt < RESEND_COOLDOWN_SECONDS) {
       const wait = RESEND_COOLDOWN_SECONDS - (nowSec - existing.createdAt);
       return json({ success: false, message: `Please wait ${wait}s before requesting a new code.` }, 429);
     }
 
+    stage = 'otp-write';
     const otp = newOtp();
     const record = { code: otp, attempts: 0, createdAt: nowSec, expiresAt: nowSec + OTP_TTL_SECONDS };
-    await writeOtp(env, email, record, OTP_TTL_SECONDS);
+    await writeOtp(env, email, record, OTP_TTL_SECONDS, kind);
 
+    stage = 'email-send';
     const sent = await sendOtpEmail(env, email, otp);
     if (!sent.ok) {
-      await deleteOtp(env, email); // don't leave an undeliverable code behind
+      await deleteOtp(env, email, kind); // don't leave an undeliverable code behind
       if (sent.misconfigured) {
-        return json({ success: false, message: 'Email service is not configured. Please contact support.' }, 503);
+        return json({ success: false, message: 'Email service is not configured. Please contact support.', stage: 'email-send' }, 503);
       }
-      return json({ success: false, message: 'Failed to deliver the OTP email. Please try again shortly.' }, 502);
+      return json({ success: false, message: 'Failed to deliver the OTP email. Please try again shortly.', stage: 'email-send' }, 502);
     }
 
-    if (env.OTP_KV) {
+    stage = 'counter-write';
+    if (kind === 'kv') {
       const counter = (await readSendCounter(env, email)) || { count: 0 };
       await writeSendCounter(env, email, { count: counter.count + 1 });
     }
 
     return json({ success: true, message: 'OTP sent successfully. It expires in 5 minutes.', expiresIn: OTP_TTL_SECONDS });
   } catch (err) {
-    console.error('[otp] Generate error:', err);
-    return json({ success: false, message: 'Failed to generate OTP. Please try again shortly.' }, 500);
+    console.error(`[otp] Generate error at stage=${stage}:`, err);
+    return json({ success: false, message: 'Failed to generate OTP. Please try again shortly.', stage }, 500);
   }
 }

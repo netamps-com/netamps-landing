@@ -30,8 +30,15 @@ function safeEqual(a, b) {
 
 const otpKey = (email) => `otp:${email.toLowerCase()}`;
 
-async function readOtp(env, email) {
-  if (env.OTP_KV) {
+/** Returns 'kv' | 'd1' | null. A binding with the wrong shape is treated as absent. */
+function storeKind(env) {
+  if (env.OTP_KV && typeof env.OTP_KV.get === 'function' && typeof env.OTP_KV.put === 'function') return 'kv';
+  if (env.DB && typeof env.DB.prepare === 'function') return 'd1';
+  return null;
+}
+
+async function readOtp(env, email, kind) {
+  if (kind === 'kv') {
     return await env.OTP_KV.get(otpKey(email), 'json');
   }
   const row = await env.DB.prepare(
@@ -40,8 +47,8 @@ async function readOtp(env, email) {
   return row || null;
 }
 
-async function writeOtp(env, email, record) {
-  if (env.OTP_KV) {
+async function writeOtp(env, email, record, kind) {
+  if (kind === 'kv') {
     const ttl = Math.max(1, record.expiresAt - Math.floor(Date.now() / 1000));
     await env.OTP_KV.put(otpKey(email), JSON.stringify(record), { expirationTtl: ttl });
     return;
@@ -54,8 +61,8 @@ async function writeOtp(env, email, record) {
   ).bind(email.toLowerCase(), record.code, record.attempts, record.expiresAt, record.createdAt).run();
 }
 
-async function deleteOtp(env, email) {
-  if (env.OTP_KV) {
+async function deleteOtp(env, email, kind) {
+  if (kind === 'kv') {
     await env.OTP_KV.delete(otpKey(email));
     return;
   }
@@ -63,6 +70,7 @@ async function deleteOtp(env, email) {
 }
 
 export async function onRequestPost({ request, env }) {
+  let stage = 'parse';
   try {
     let body;
     try {
@@ -71,47 +79,55 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Invalid request body' }, 400);
     }
 
+    stage = 'validate';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const code = typeof body.code === 'string' ? body.code.trim() : '';
     if (!email || email.length > 254 || !EMAIL_RE.test(email) || !CODE_RE.test(code)) {
       return json({ success: false, message: 'A valid email address and 6-digit code are required' }, 400);
     }
 
-    if (!env.OTP_KV && !env.DB) {
+    stage = 'store-check';
+    const kind = storeKind(env);
+    if (!kind) {
       console.error('[otp] No OTP store bound. Bind OTP_KV (KV) or DB (D1) in Pages → Settings → Functions.');
-      return json({ success: false, message: 'Verification service temporarily unavailable. Please try again shortly.' }, 503);
+      return json({ success: false, message: 'Verification service temporarily unavailable. Please try again shortly.', stage: 'store-check' }, 503);
     }
 
-    const record = await readOtp(env, email);
+    stage = 'otp-read';
+    const record = await readOtp(env, email, kind);
     if (!record) {
       return json({ success: false, message: 'Invalid or expired OTP. Please request a new code.' }, 400);
     }
 
     const nowSec = Math.floor(Date.now() / 1000);
     if (nowSec > record.expiresAt) {
-      await deleteOtp(env, email);
+      stage = 'otp-expire';
+      await deleteOtp(env, email, kind);
       return json({ success: false, message: 'This OTP has expired. Please request a new code.' }, 400);
     }
 
     if (record.attempts >= MAX_ATTEMPTS) {
-      await deleteOtp(env, email);
+      stage = 'otp-locked';
+      await deleteOtp(env, email, kind);
       return json({ success: false, message: 'Too many incorrect attempts. Please request a new code.' }, 429);
     }
 
+    stage = 'otp-compare';
     if (!safeEqual(record.code, code)) {
       record.attempts += 1;
       if (record.attempts >= MAX_ATTEMPTS) {
-        await deleteOtp(env, email);
+        await deleteOtp(env, email, kind);
         return json({ success: false, message: 'Too many incorrect attempts. Please request a new code.' }, 429);
       }
-      await writeOtp(env, email, record);
+      await writeOtp(env, email, record, kind);
       return json({ success: false, message: 'Invalid OTP Code.' }, 400);
     }
 
-    await deleteOtp(env, email); // single-use: consume on success
+    stage = 'otp-consume';
+    await deleteOtp(env, email, kind); // single-use: consume on success
     return json({ success: true, message: 'OTP verified successfully' });
   } catch (err) {
-    console.error('[otp] Verify error:', err);
-    return json({ success: false, message: 'Failed to verify OTP. Please try again shortly.' }, 500);
+    console.error(`[otp] Verify error at stage=${stage}:`, err);
+    return json({ success: false, message: 'Failed to verify OTP. Please try again shortly.', stage }, 500);
   }
 }
