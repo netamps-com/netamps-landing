@@ -18,34 +18,36 @@ export async function onRequestPost({ request, env }) {
     const extension = file.name.split('.').pop() || 'bin';
     const key = `evidence/${fileId}.${extension}`;
 
-    if (env.EVIDENCE_BUCKET) {
-      await env.EVIDENCE_BUCKET.put(key, buffer, {
-        httpMetadata: { contentType: file.type }
-      });
-      return new Response(JSON.stringify({ success: true, url: key }), { headers: { 'Content-Type': 'application/json' } });
-    } else if (env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY) {
+    const bucketApiUrl = 'https://012bf0c5d2fe5a7acc3d81e36cf5ea49.r2.cloudflarestorage.com';
+    const endpoint = new URL(`${bucketApiUrl}/${key}`);
+    
+    // Attempt direct PUT without auth if bucket is public, or with auth if R2_ACCESS_KEY_ID is available
+    if (env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY) {
       const aws = new AwsClient({
         accessKeyId: env.R2_ACCESS_KEY_ID,
         secretAccessKey: env.R2_SECRET_ACCESS_KEY,
         service: 's3',
         region: 'auto',
       });
-      const bucketName = env.R2_BUCKET_NAME || 'netamps-evidence';
-      const endpoint = new URL(`https://${bucketName}.${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`);
-      
       const upRes = await aws.fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: buffer
       });
-      if (!upRes.ok) {
-        throw new Error(`Upload failed: ${upRes.statusText}`);
-      }
-      return new Response(JSON.stringify({ success: true, url: key }), { headers: { 'Content-Type': 'application/json' } });
+      if (!upRes.ok) throw new Error(`Upload failed: ${upRes.statusText}`);
+    } else if (env.EVIDENCE_BUCKET) {
+      await env.EVIDENCE_BUCKET.put(key, buffer, { httpMetadata: { contentType: file.type } });
     } else {
-      console.warn('R2 credentials not provided. Simulating upload.');
-      return new Response(JSON.stringify({ success: true, url: `mock_upload_${Date.now()}_${file.name}` }), { headers: { 'Content-Type': 'application/json' } });
+      // Attempt unauthenticated PUT
+      const upRes = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: buffer
+      });
+      if (!upRes.ok) throw new Error(`R2 Upload failed. Bucket not bound or missing auth. Status: ${upRes.status}`);
     }
+    
+    return new Response(JSON.stringify({ success: true, url: key }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     console.error('Upload Error:', err);
     return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });

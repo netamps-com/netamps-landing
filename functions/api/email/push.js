@@ -17,16 +17,6 @@ export async function onRequestPost({ request, env }) {
       currency: 'INR'
     }).format(totalValue);
 
-    const transporter = nodemailer.createTransport({
-      host: 'us2.smtp.mailhostbox.com',
-      port: 587,
-      secure: false, // TLS
-      auth: {
-        user: 'no-reply@netamps.in',
-        pass: env.SMTP_PASSWORD || 'dummy_password',
-      },
-    });
-
     const htmlContent = `
       <h3>Netamps Request Notification</h3>
       <p>Hello,</p>
@@ -57,12 +47,38 @@ export async function onRequestPost({ request, env }) {
       </p>
     `;
 
-    await transporter.sendMail({
-      from: '"Netamps Portal" <no-reply@netamps.in>',
-      to: email,
-      subject: `Update on Request ${requestId}`,
-      html: htmlContent,
-    });
+    if (env.SMTP_PASSWORD) {
+      const transporter = nodemailer.createTransport({
+        host: 'us2.smtp.mailhostbox.com',
+        port: 587,
+        secure: false, // TLS
+        auth: {
+          user: 'no-reply@netamps.in',
+          pass: env.SMTP_PASSWORD,
+        },
+      });
+      await transporter.sendMail({
+        from: '"Netamps Portal" <no-reply@netamps.in>',
+        to: email,
+        subject: `Update on Request ${requestId}`,
+        html: htmlContent,
+      });
+    } else {
+      // Native Cloudflare MailChannels delivery
+      const mcRes = await fetch("https://api.mailchannels.net/tx/v1/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: email }] }],
+          from: { email: "no-reply@netamps.in", name: "Netamps Portal" },
+          subject: `Update on Request ${requestId}`,
+          content: [{ type: "text/html", value: htmlContent }]
+        })
+      });
+      if (!mcRes.ok) {
+        throw new Error('MailChannels failed to send: ' + mcRes.statusText);
+      }
+    }
 
     return new Response(JSON.stringify({ success: true, message: 'Push email sent successfully' }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {

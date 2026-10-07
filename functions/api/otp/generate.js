@@ -42,23 +42,41 @@ export async function onRequestPost({ request, env }) {
       console.warn('DATABASE_URL not set, skipping PG OTP storage.');
     }
 
-    const transporter = nodemailer.createTransport({
-      host: 'us2.smtp.mailhostbox.com',
-      port: 587,
-      secure: false, // TLS
-      auth: {
-        user: 'no-reply@netamps.in',
-        pass: env.SMTP_PASSWORD || 'dummy_password',
-      },
-    });
+    const subject = 'Your Netamps Verification Code';
+    const htmlContent = `<h3>Your Verification Code</h3><p>Your OTP is: <strong style="font-size:24px">${otp}</strong>.</p><p>It will expire in 5 minutes.</p>`;
 
-    await transporter.sendMail({
-      from: '"Netamps Portal" <no-reply@netamps.in>',
-      to: email,
-      subject: 'Your Netamps Verification Code',
-      text: `Your OTP is: ${otp}. It will expire in 5 minutes.`,
-      html: `<h3>Your Verification Code</h3><p>Your OTP is: <strong style="font-size:24px">${otp}</strong>.</p><p>It will expire in 5 minutes.</p>`,
-    });
+    if (env.SMTP_PASSWORD) {
+      const transporter = nodemailer.createTransport({
+        host: 'us2.smtp.mailhostbox.com',
+        port: 587,
+        secure: false, // TLS
+        auth: {
+          user: 'no-reply@netamps.in',
+          pass: env.SMTP_PASSWORD,
+        },
+      });
+
+      await transporter.sendMail({
+        from: '"Netamps Portal" <no-reply@netamps.in>',
+        to: email,
+        subject,
+        text: `Your OTP is: ${otp}. It will expire in 5 minutes.`,
+        html: htmlContent,
+      });
+    } else {
+      // Native Cloudflare MailChannels delivery
+      const mcRes = await fetch("https://api.mailchannels.net/tx/v1/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: email }] }],
+          from: { email: "no-reply@netamps.in", name: "Netamps Portal" },
+          subject,
+          content: [{ type: "text/html", value: htmlContent }]
+        })
+      });
+      if (!mcRes.ok) throw new Error('MailChannels failed to send: ' + mcRes.statusText);
+    }
 
     return new Response(JSON.stringify({ success: true, message: 'OTP sent successfully' }), {
       headers: { 'Content-Type': 'application/json' }

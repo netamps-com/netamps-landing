@@ -50,8 +50,7 @@ export async function onRequestPost({ request, env }) {
 
       return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully' }), { headers: { 'Content-Type': 'application/json' } });
     } else {
-      console.warn('DATABASE_URL not set, bypassing OTP check.');
-      return new Response(JSON.stringify({ success: true, message: 'OTP verified (bypass)' }), { headers: { 'Content-Type': 'application/json' } });
+      throw new Error('Database not configured. Cannot verify OTP.');
     }
   } catch (err) {
     console.error('OTP Verify Error:', err);

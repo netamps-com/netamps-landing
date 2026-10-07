@@ -30,8 +30,16 @@ export async function onRequestGet({ request, env, params }) {
       const headers = new Headers(res.headers);
       return new Response(res.body, { headers });
     } else {
-      // Mock mode
-      return new Response('Mock image content. Set up R2 to view actual images.', { status: 200, headers: { 'Content-Type': 'text/plain' } });
+      const bucketApiUrl = 'https://012bf0c5d2fe5a7acc3d81e36cf5ea49.r2.cloudflarestorage.com';
+      const endpoint = new URL(`${bucketApiUrl}/${key}`);
+      const res = await fetch(endpoint, { method: 'GET' });
+      if (!res.ok) {
+        if (key.includes('mock_upload')) {
+           return new Response('Mock image content. Real image was not uploaded because R2 was disconnected.', { status: 200, headers: { 'Content-Type': 'text/plain' } });
+        }
+        return new Response('Not found or Bucket is not public.', { status: 404 });
+      }
+      return new Response(res.body, { headers: res.headers });
     }
   } catch (err) {
     return new Response(err.message, { status: 500 });
