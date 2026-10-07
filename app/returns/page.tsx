@@ -252,6 +252,10 @@ export default function ReturnsPage() {
       const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
       localStorage.setItem('netamps_returns', JSON.stringify([returnReq, ...existingReturns]));
       
+      const { logEvent } = await import('../lib/logger');
+      logEvent('RETURN_SUBMITTED', 'Returns Page', `Return request ${newId} submitted`, actualFormData.get('email') as string);
+
+      
       setIsUploading(false);
       setIsSubmitting(false);
       setIsSuccess(true);

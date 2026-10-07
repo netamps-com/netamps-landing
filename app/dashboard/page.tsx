@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video, Mail } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video, Mail, Database } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
+import UserManagementModal from './UserManagementModal';
+import LogViewerModal from './LogViewerModal';
 
 interface ProductItem {
   id: string;
@@ -35,62 +37,9 @@ export default function DashboardPage() {
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
-  // Password Management State
+  // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [targetAccount, setTargetAccount] = useState('admin');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [pwdError, setPwdError] = useState('');
-  const [pwdSuccess, setPwdSuccess] = useState('');
-  const [isUpdatingPwd, setIsUpdatingPwd] = useState(false);
-
-  // Helper to hash password
-  const hashPassword = async (password: string) => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdatingPwd(true);
-    setPwdError('');
-    setPwdSuccess('');
-
-    try {
-      const DEFAULT_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec';
-      const currentAdminHash = localStorage.getItem('netamps_admin_hash') || DEFAULT_HASH;
-      const hashedInput = await hashPassword(currentPassword);
-
-      if (hashedInput !== currentAdminHash) {
-        setPwdError('Current admin password incorrect. Verification failed.');
-        setIsUpdatingPwd(false);
-        return;
-      }
-
-      if (newPassword.length < 12) {
-        setPwdError('New password must be at least 12 characters for high security.');
-        setIsUpdatingPwd(false);
-        return;
-      }
-
-      const newHashed = await hashPassword(newPassword);
-      if (targetAccount === 'admin') {
-        localStorage.setItem('netamps_admin_hash', newHashed);
-      } else {
-        localStorage.setItem('netamps_staff_hash', newHashed);
-      }
-
-      setPwdSuccess(`Successfully updated secure password for ${targetAccount}@netamps.com`);
-      setCurrentPassword('');
-      setNewPassword('');
-    } catch (err) {
-      setPwdError('Failed to process encryption.');
-    }
-    setIsUpdatingPwd(false);
-  };
+  const [showLogsModal, setShowLogsModal] = useState(false);
 
   useEffect(() => {
     // Check industry-standard session ID cookie
@@ -139,24 +88,32 @@ export default function DashboardPage() {
     setExpandedRows(newSet);
   };
 
-  const handleUpdateStatus = (id: string, newStatus: string) => {
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
     const updatedReturns = returns.map(req => 
       req.id === id ? { ...req, status: newStatus } : req
     );
     setReturns(updatedReturns);
     localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+    try {
+      const { logEvent } = await import('../lib/logger');
+      logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${id} status changed to ${newStatus}`, userRole);
+    } catch(err){}
   };
 
-  const handleDeleteRequest = (id: string) => {
+  const handleDeleteRequest = async (id: string) => {
     if (window.confirm('Are you sure you want to permanently delete this request?')) {
       const updatedReturns = returns.filter(req => req.id !== id);
       setReturns(updatedReturns);
       localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+      try {
+        const { logEvent } = await import('../lib/logger');
+        logEvent('REQUEST_DELETED', 'Dashboard Page', `Request ${id} permanently deleted`, userRole);
+      } catch(err){}
     }
   };
 
-  const handlePriceChange = (reqId: string, productId: string, newPrice: string) => {
-    if (userRole !== 'admin') return;
+  const handlePriceChange = async (reqId: string, productId: string, newPrice: string) => {
+    if (userRole !== 'admin@netamps.com') return;
     const price = parseFloat(newPrice);
     
     const updatedReturns = returns.map(req => {
@@ -170,6 +127,10 @@ export default function DashboardPage() {
     });
     setReturns(updatedReturns);
     localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+    try {
+      const { logEvent } = await import('../lib/logger');
+      logEvent('PRICE_UPDATED', 'Dashboard Page', `Updated price for product ${productId} in request ${reqId}`, userRole);
+    } catch(err){}
   };
 
   const handleEmailPush = async (req: ReturnRequest) => {
@@ -221,13 +182,21 @@ export default function DashboardPage() {
                 Logged in as <span className="text-white capitalize">{userRole}</span>
               </div>
               
-              {userRole === 'admin' && (
-                <button 
-                  onClick={() => setShowPasswordModal(true)}
-                  className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
-                >
-                  <Key className="w-4 h-4" /> Manage Passwords
-                </button>
+              {userRole === 'admin@netamps.com' && (
+                <>
+                  <button 
+                    onClick={() => setShowLogsModal(true)}
+                    className="flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/20"
+                  >
+                    <Database className="w-4 h-4" /> Website Event Logs
+                  </button>
+                  <button 
+                    onClick={() => setShowPasswordModal(true)}
+                    className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
+                  >
+                    <Key className="w-4 h-4" /> Manage Users
+                  </button>
+                </>
               )}
 
               <button 
@@ -241,78 +210,15 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      {/* Password Management Modal */}
-      {showPasswordModal && userRole === 'admin' && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
-            <div className="flex justify-between items-center p-6 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Key className="w-5 h-5 text-emerald-400" /> Security Settings
-              </h3>
-              <button onClick={() => setShowPasswordModal(false)} className="text-slate-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handlePasswordChange} className="p-6 space-y-5">
-              {pwdError && (
-                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-400 text-sm">
-                  <AlertCircle className="w-4 h-4 shrink-0" /> {pwdError}
-                </div>
-              )}
-              {pwdSuccess && (
-                <div className="bg-emerald-500/10 border border-emerald-500/50 rounded-lg p-3 flex items-center gap-2 text-emerald-400 text-sm">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" /> {pwdSuccess}
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Account to Update</label>
-                <select 
-                  value={targetAccount}
-                  onChange={(e) => setTargetAccount(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="admin">admin@netamps.com</option>
-                  <option value="staff">staff@netamps.com</option>
-                </select>
-              </div>
+      {showPasswordModal && (
+        <UserManagementModal 
+          onClose={() => setShowPasswordModal(false)} 
+          currentUserRole={userRole} 
+        />
+      )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Current Admin Password (Verification)</label>
-                <input 
-                  type="password" 
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-500"
-                  placeholder="Verify your identity..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">New Secure Password</label>
-                <input 
-                  type="password" 
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-500"
-                  placeholder="Min 12 characters"
-                />
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={isUpdatingPwd}
-                  className="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-sm transition-colors disabled:opacity-70"
-                >
-                  {isUpdatingPwd ? 'Encrypting...' : 'Update Password Securely'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {showLogsModal && userRole === 'admin@netamps.com' && (
+        <LogViewerModal onClose={() => setShowLogsModal(false)} />
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -426,10 +332,10 @@ export default function DashboardPage() {
                                               <input
                                                 type="number"
                                                 min="0"
-                                                disabled={userRole !== 'admin'}
+                                                disabled={userRole !== 'admin@netamps.com'}
                                                 value={product.price || ''}
                                                 onChange={(e) => handlePriceChange(req.id, product.id, e.target.value)}
-                                                placeholder={userRole === 'admin' ? "Enter price" : "Pending"}
+                                                placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
                                                 className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                                               />
                                             </div>
@@ -497,7 +403,7 @@ export default function DashboardPage() {
                                     >
                                       Decline Request
                                     </button>
-                                    {userRole === 'admin' && (
+                                    {userRole === 'admin@netamps.com' && (
                                       <button 
                                         onClick={(e) => { e.stopPropagation(); handleDeleteRequest(req.id); }}
                                         className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-sm font-medium rounded-lg transition-colors border border-red-500/20"
