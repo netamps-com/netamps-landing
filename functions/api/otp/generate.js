@@ -98,11 +98,11 @@ async function writeOtp(env, email, record, ttlSeconds, kind) {
     return;
   }
   await ensureD1(env);
+  // INSERT OR REPLACE (not ON CONFLICT): works whether or not the legacy
+  // table carries a PRIMARY KEY / UNIQUE constraint on email.
   await env.DB.prepare(
-    `INSERT INTO otps (email, code, attempts, expires_at, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5)
-     ON CONFLICT(email) DO UPDATE SET code = excluded.code, attempts = excluded.attempts,
-       expires_at = excluded.expires_at, created_at = excluded.created_at`
+    `INSERT OR REPLACE INTO otps (email, code, attempts, expires_at, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5)`
   ).bind(email.toLowerCase(), record.code, record.attempts, record.expiresAt, record.createdAt).run();
 }
 
