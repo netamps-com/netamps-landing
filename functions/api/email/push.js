@@ -76,11 +76,12 @@ export async function onRequestPost({ request, env }) {
         })
       });
       if (!mcRes.ok) {
-        throw new Error('MailChannels failed to send: ' + mcRes.statusText);
+        console.error('MailChannels failed:', await mcRes.text());
+        return new Response(JSON.stringify({ success: true, message: 'Push saved, but Email failed (Unauthorized Zone/DNS). Please map a custom domain to Pages.', emailDeliveryStatus: 'Failed' }), { headers: { 'Content-Type': 'application/json' } });
       }
     }
 
-    return new Response(JSON.stringify({ success: true, message: 'Push email sent successfully' }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: true, message: 'Push email sent successfully', emailDeliveryStatus: 'Sent' }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     console.error('Email Push Error:', err);
     return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });

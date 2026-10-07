@@ -187,9 +187,15 @@ export default function DashboardPage() {
       const data = await res.json();
       
       if (!data.success) throw new Error(data.message);
+      
+      if (data.message && data.message.includes('failed')) {
+        alert(data.message);
+      }
+
+      const finalStatus = data.emailDeliveryStatus || 'sent';
 
       const finalReturns = updatedReturns.map(r => 
-        r.id === req.id ? { ...r, emailDeliveryStatus: 'sent' as const } : r
+        r.id === req.id ? { ...r, emailDeliveryStatus: finalStatus } : r
       );
       setReturns(finalReturns);
       localStorage.setItem('netamps_returns', JSON.stringify(finalReturns));
@@ -197,7 +203,7 @@ export default function DashboardPage() {
       await fetch(`${API_URL}/api/returns`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: req.id, action: 'emailDelivery', emailDeliveryStatus: 'sent' })
+        body: JSON.stringify({ id: req.id, action: 'emailDelivery', emailDeliveryStatus: finalStatus })
       }).catch(() => {});
       
       const { logEvent } = await import('../lib/logger');

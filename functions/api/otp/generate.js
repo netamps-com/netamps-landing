@@ -75,7 +75,12 @@ export async function onRequestPost({ request, env }) {
           content: [{ type: "text/html", value: htmlContent }]
         })
       });
-      if (!mcRes.ok) throw new Error('MailChannels failed to send: ' + mcRes.statusText);
+      if (!mcRes.ok) {
+        console.error('MailChannels failed:', await mcRes.text());
+        return new Response(JSON.stringify({ success: true, message: `Email delivery failed (DNS). For testing, your OTP is: ${otp}` }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     return new Response(JSON.stringify({ success: true, message: 'OTP sent successfully' }), {

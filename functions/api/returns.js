@@ -34,6 +34,34 @@ export async function onRequestPost({ request, env }) {
         returnReq.date, 
         returnReq.status
       ).run();
+    } else if (env.DATABASE_URL) {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS returns (
+          id VARCHAR(255) PRIMARY KEY,
+          intent VARCHAR(50),
+          name VARCHAR(255),
+          company VARCHAR(255),
+          email VARCHAR(255),
+          phone VARCHAR(50),
+          products TEXT,
+          attachedFiles TEXT,
+          emailDeliveryStatus VARCHAR(50),
+          date VARCHAR(100),
+          status VARCHAR(50)
+        )
+      `);
+      await client.query(
+        'INSERT INTO returns (id, intent, name, company, email, phone, products, attachedFiles, emailDeliveryStatus, date, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+        [
+          returnReq.id, returnReq.intent, returnReq.name, returnReq.company, returnReq.email, returnReq.phone,
+          JSON.stringify(returnReq.products || []), JSON.stringify(returnReq.attachedFiles || []),
+          returnReq.emailDeliveryStatus || '', returnReq.date, returnReq.status
+        ]
+      );
+      await client.end();
     }
 
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
@@ -77,7 +105,41 @@ export async function onRequestGet({ env }) {
         date: row.date,
         status: row.status
       }));
-      
+      return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json' } });
+    } else if (env.DATABASE_URL) {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS returns (
+          id VARCHAR(255) PRIMARY KEY,
+          intent VARCHAR(50),
+          name VARCHAR(255),
+          company VARCHAR(255),
+          email VARCHAR(255),
+          phone VARCHAR(50),
+          products TEXT,
+          attachedFiles TEXT,
+          emailDeliveryStatus VARCHAR(50),
+          date VARCHAR(100),
+          status VARCHAR(50)
+        )
+      `);
+      const { rows } = await client.query('SELECT * FROM returns ORDER BY date DESC');
+      await client.end();
+      const returns = rows.map(row => ({
+        id: row.id,
+        intent: row.intent,
+        name: row.name,
+        company: row.company,
+        email: row.email,
+        phone: row.phone,
+        products: JSON.parse(row.products || '[]'),
+        attachedFiles: JSON.parse(row.attachedFiles || '[]'),
+        emailDeliveryStatus: row.emaildeliverystatus || row.emailDeliveryStatus || undefined,
+        date: row.date,
+        status: row.status
+      }));
       return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(JSON.stringify({ success: true, returns: [] }), { headers: { 'Content-Type': 'application/json' } });
@@ -105,6 +167,23 @@ export async function onRequestPut({ request, env }) {
           await env.DB.prepare('UPDATE returns SET products = ? WHERE id = ?').bind(JSON.stringify(updatedProducts), update.id).run();
         }
       }
+    } else if (env.DATABASE_URL) {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+      if (update.action === 'status') {
+        await client.query('UPDATE returns SET status = $1 WHERE id = $2', [update.status, update.id]);
+      } else if (update.action === 'emailDelivery') {
+        await client.query('UPDATE returns SET emailDeliveryStatus = $1 WHERE id = $2', [update.emailDeliveryStatus, update.id]);
+      } else if (update.action === 'price') {
+        const { rows } = await client.query('SELECT products FROM returns WHERE id = $1', [update.id]);
+        if (rows.length > 0) {
+          const products = JSON.parse(rows[0].products || '[]');
+          const updatedProducts = products.map(p => p.id === update.productId ? { ...p, price: update.price } : p);
+          await client.query('UPDATE returns SET products = $1 WHERE id = $2', [JSON.stringify(updatedProducts), update.id]);
+        }
+      }
+      await client.end();
     }
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
@@ -120,6 +199,12 @@ export async function onRequestDelete({ request, env }) {
 
     if (env.DB) {
       await env.DB.prepare('DELETE FROM returns WHERE id = ?').bind(id).run();
+    } else if (env.DATABASE_URL) {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+      await client.query('DELETE FROM returns WHERE id = $1', [id]);
+      await client.end();
     }
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {

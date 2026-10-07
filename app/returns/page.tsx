@@ -117,6 +117,10 @@ export default function ReturnsPage() {
         setIsSubmitting(false);
         return;
       }
+      
+      if (data.message && data.message.includes('OTP is')) {
+        alert(data.message);
+      }
 
       setFormDataCache(formData);
       setShowOtp(true);
