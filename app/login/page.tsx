@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
-import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
+
+const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
 const ServerStatusWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -78,7 +80,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { executeRecaptcha } = useGoogleReCaptcha();
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
+
+  const resetTurnstile = () => {
+    setTurnstileToken('');
+    setTurnstileReset((n) => n + 1);
+  };
 
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
@@ -118,24 +126,30 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!executeRecaptcha) {
-      setErrorMsg('Security check not ready. Please refresh.');
+    // Cloudflare Turnstile verification (bypassed only when no site key is configured, e.g. local dev)
+    if (TURNSTILE_ENABLED && !turnstileToken) {
+      setErrorMsg('Please complete the security check below.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const captchaToken = await executeRecaptcha('login');
-      if (!captchaToken) {
-        setErrorMsg('Security check failed. Please try again.');
-        setIsSubmitting(false);
-        return;
+      // Server-side Turnstile verification — never trust the client token alone
+      if (TURNSTILE_ENABLED) {
+        const verified = await verifyTurnstileToken(turnstileToken, 'login');
+        if (!verified) {
+          setErrorMsg('Security verification failed. Please try again.');
+          resetTurnstile();
+          setIsSubmitting(false);
+          return;
+        }
       }
 
-      await processLogin(captchaToken);
+      await processLogin(turnstileToken);
     } catch (err) {
       setErrorMsg('Encryption error occurred.');
+      resetTurnstile();
       setIsSubmitting(false);
     }
   };
@@ -173,12 +187,14 @@ export default function LoginPage() {
         const { logEvent } = await import('../lib/logger');
         logEvent('AUTH_FAILED_INVALID', 'Login Page', 'Invalid credentials provided', email);
         setErrorMsg('Invalid credentials. Please try again.');
+        resetTurnstile();
         setIsSubmitting(false);
       }
     } catch (err) {
       const { logEvent } = await import('../lib/logger');
       logEvent('AUTH_ERROR', 'Login Page', 'Encryption error during login', email);
       setErrorMsg('Encryption error occurred.');
+      resetTurnstile();
       setIsSubmitting(false);
     }
   };
@@ -276,6 +292,14 @@ export default function LoginPage() {
             </div>
 
             <div>
+              <TurnstileWidget
+                onVerify={(token) => setTurnstileToken(token)}
+                onExpire={() => setTurnstileToken('')}
+                onError={() => setTurnstileToken('')}
+                resetSignal={turnstileReset}
+              />
+            </div>
+            <div>
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -291,9 +315,9 @@ export default function LoginPage() {
               </button>
             </div>
             <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
-              Protected by Google reCAPTCHA v3. See the{' '}
-              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Privacy Policy</a> and{' '}
-              <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Terms of Service</a> for details.
+              Protected by Cloudflare Turnstile. See the{' '}
+              <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Cloudflare Privacy Policy</a> and{' '}
+              <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Terms of Service</a> for details.
             </p>
           </form>
 

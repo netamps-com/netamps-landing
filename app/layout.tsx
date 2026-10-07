@@ -85,7 +85,6 @@ export const metadata: Metadata = {
 
 import SecurityWrapper from "./SecurityWrapper";
 import TrustSeal from "./TrustSeal";
-import RecaptchaProvider from "./RecaptchaProvider";
 
 export default function RootLayout({
   children,
@@ -114,12 +113,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${outfit.variable} font-sans select-none antialiased`}
       >
-        <RecaptchaProvider>
-          <SecurityWrapper>
-            {children}
-            <TrustSeal />
-          </SecurityWrapper>
-        </RecaptchaProvider>
+        <SecurityWrapper>
+          {children}
+          <TrustSeal />
+        </SecurityWrapper>
         {/* Google AdSense — loaded after interactive to not block render */}
         <Script
           async

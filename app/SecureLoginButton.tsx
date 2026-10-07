@@ -81,7 +81,7 @@ export default function SecureLoginButton() {
               
               <h3 className="text-xl font-black text-slate-900 mb-2">Security Verification</h3>
               <p className="text-sm text-slate-500 font-medium mb-8">
-                Protecting your login session. Please wait while we verify your browser via Google reCAPTCHA standards.
+                Protecting your login session. Please wait while we verify your browser via Cloudflare Turnstile standards.
               </p>
               
               <div className="flex items-center gap-3 bg-slate-50 px-6 py-3 rounded-xl border border-slate-100 w-full justify-center">
