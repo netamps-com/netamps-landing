@@ -140,7 +140,9 @@ async function sendOtpEmail(env, to, otp) {
     `<p>Your OTP is: <strong style="font-size:24px">${otp}</strong>.</p>` +
     `<p>It will expire in 5 minutes. Never share this code with anyone.</p>`;
     
-  const res = await fetch('https://api.resend.com/emails', {
+  let res;
+  try {
+    res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json', 
@@ -154,9 +156,15 @@ async function sendOtpEmail(env, to, otp) {
     })
   });
   
+  } catch (err) {
+    // Network-level fetch failure (DNS/TLS/egress). Serialize it — never let it escape as a 502.
+    console.error('[otp] Resend fetch threw:', String((err && err.message) || err));
+    return { ok: false, thrown: String((err && err.message) || err) };
+  }
+
   if (!res.ok) {
     console.error('[otp] Resend API failed:', res.status, await res.text().catch(() => ''));
-    return { ok: false };
+    return { ok: false, status: res.status };
   }
   return { ok: true };
 }
@@ -221,7 +229,7 @@ export async function onRequestPost({ request, env }) {
       if (sent.misconfigured) {
         return json({ success: false, message: 'Email service is not configured. Please contact support.', stage: 'email-send' }, 503);
       }
-      return json({ success: false, message: 'Failed to deliver the OTP email. Please try again shortly.', stage: 'email-send' }, 502);
+      return json({ success: false, message: 'Failed to deliver the OTP email. Please try again shortly.', stage: 'email-send', detail: sent.thrown || sent.status || 'unknown' }, 502);
     }
 
     stage = 'counter-write';
