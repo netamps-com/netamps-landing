@@ -1,18 +1,10 @@
-# Cloudflare Pages configuration — static export (output: out/)
+# Cloudflare Pages configuration - static export (output: out/)
+# NOTE: Bindings (D1/KV/R2) and secrets are managed in the Cloudflare
+# Dashboard (Pages -> netamps-landing -> Settings -> Functions / Environment
+# variables), NOT here. Do not add [[d1_databases]] / [[kv_namespaces]] /
+# [[r2_buckets]] sections with placeholder IDs - wrangler validates them on
+# `pages deploy` and fails the deployment (e.g. database_id = "default-db-id").
 name = "netamps-landing"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "out"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "netamps-db"
-database_id = "default-db-id"
-
-[[r2_buckets]]
-binding = "EVIDENCE_BUCKET"
-bucket_name = "netamps-evidence"
-
-[[r2_buckets]]
-binding = "LOGS_BUCKET"
-bucket_name = "netamps-logs"
