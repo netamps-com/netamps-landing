@@ -1,100 +1,193 @@
-import nodemailer from 'nodemailer';
-import { Client } from 'pg';
+/**
+ * POST /api/otp/generate
+ *
+ * Production OTP issuance. Workers-compatible by design:
+ *  - Storage: Cloudflare KV (OTP_KV binding, native TTL) with D1 (DB binding) fallback.
+ *    Postgres-over-TCP and SMTP are IMPOSSIBLE from Workers — do not re-add them here.
+ *  - Delivery: MailChannels with API key (Domain Lockdown mode). Unauthenticated
+ *    MailChannels sends always fail for non-Cloudflare zones — never attempt them.
+ *  - Crypto: CSPRNG via crypto.getRandomValues. The code is NEVER returned to the
+ *    client and is single-use with a 5-minute expiry.
+ *
+ * Required bindings/secrets (Pages → Settings → Functions):
+ *   OTP_KV               KV namespace binding (preferred store)
+ *   DB                   D1 database binding (fallback store; at least one required)
+ *   MAILCHANNELS_API_KEY Secret for api.mailchannels.net (Domain Lockdown mode)
+ */
+
+const OTP_TTL_SECONDS = 300;
+const RESEND_COOLDOWN_SECONDS = 30;
+const MAX_SENDS_PER_HOUR = 5;
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+function newOtp() {
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return String(100000 + (buf[0] % 900000));
+}
+
+const otpKey = (email) => `otp:${email.toLowerCase()}`;
+const sendKey = (email) => `otp_send:${email.toLowerCase()}`;
+
+/* ── Storage layer (KV preferred, D1 fallback) ─────────────────────────── */
+
+async function ensureD1(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS otps (
+       email TEXT PRIMARY KEY,
+       code TEXT NOT NULL,
+       attempts INTEGER NOT NULL DEFAULT 0,
+       expires_at INTEGER NOT NULL,
+       created_at INTEGER NOT NULL
+     )`
+  ).run();
+}
+
+async function readOtp(env, email) {
+  if (env.OTP_KV) {
+    const rec = await env.OTP_KV.get(otpKey(email), 'json');
+    return rec;
+  }
+  await ensureD1(env);
+  const row = await env.DB.prepare(
+    'SELECT code, attempts, expires_at AS expiresAt, created_at AS createdAt FROM otps WHERE email = ?1'
+  ).bind(email.toLowerCase()).first();
+  return row || null;
+}
+
+async function writeOtp(env, email, record, ttlSeconds) {
+  if (env.OTP_KV) {
+    await env.OTP_KV.put(otpKey(email), JSON.stringify(record), { expirationTtl: ttlSeconds });
+    return;
+  }
+  await ensureD1(env);
+  await env.DB.prepare(
+    `INSERT INTO otps (email, code, attempts, expires_at, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT(email) DO UPDATE SET code = excluded.code, attempts = excluded.attempts,
+       expires_at = excluded.expires_at, created_at = excluded.created_at`
+  ).bind(email.toLowerCase(), record.code, record.attempts, record.expiresAt, record.createdAt).run();
+}
+
+async function deleteOtp(env, email) {
+  if (env.OTP_KV) {
+    await env.OTP_KV.delete(otpKey(email));
+    return;
+  }
+  if (env.DB) {
+    await env.DB.prepare('DELETE FROM otps WHERE email = ?1').bind(email.toLowerCase()).run();
+  }
+}
+
+async function readSendCounter(env, email) {
+  if (env.OTP_KV) {
+    return (await env.OTP_KV.get(sendKey(email), 'json')) || null;
+  }
+  return null; // D1 path: enforced via cooldown on the OTP record itself
+}
+
+async function writeSendCounter(env, email, counter) {
+  if (env.OTP_KV) {
+    await env.OTP_KV.put(sendKey(email), JSON.stringify(counter), { expirationTtl: 3600 });
+  }
+}
+
+/* ── Email delivery (MailChannels, authenticated only) ─────────────────── */
+
+async function sendOtpEmail(env, to, otp) {
+  const apiKey = env.MAILCHANNELS_API_KEY;
+  if (!apiKey) {
+    console.error('[otp] MAILCHANNELS_API_KEY is not configured');
+    return { ok: false, misconfigured: true };
+  }
+  const html =
+    `<h3>Your Netamps Verification Code</h3>` +
+    `<p>Your OTP is: <strong style="font-size:24px">${otp}</strong>.</p>` +
+    `<p>It will expire in 5 minutes. Never share this code with anyone.</p>`;
+  const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'X-Api-Key': apiKey },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: 'no-reply@netamps.in', name: 'Netamps Portal' },
+      subject: 'Your Netamps Verification Code',
+      content: [{ type: 'text/html', value: html }]
+    })
+  });
+  if (!res.ok) {
+    console.error('[otp] MailChannels send failed:', res.status, await res.text().catch(() => ''));
+    return { ok: false };
+  }
+  return { ok: true };
+}
+
+/* ── Handler ───────────────────────────────────────────────────────────── */
 
 export async function onRequestPost({ request, env }) {
   try {
-    const { email } = await request.json();
-    if (!email) return new Response(JSON.stringify({ success: false, message: 'Email required' }), { status: 400 });
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // PostgreSQL connection
-    if (env.DB) {
-      await env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS otps (
-          email TEXT PRIMARY KEY,
-          code TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run();
-      
-      await env.DB.prepare(
-        'INSERT INTO otps (email, code) VALUES (?, ?) ON CONFLICT (email) DO UPDATE SET code = excluded.code, created_at = CURRENT_TIMESTAMP'
-      ).bind(email, otp).run();
-    } else if (env.DATABASE_URL) {
-      const client = new Client({ connectionString: env.DATABASE_URL });
-      await client.connect();
-      
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS otps (
-          email VARCHAR(255) PRIMARY KEY,
-          code VARCHAR(10),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      
-      await client.query(
-        'INSERT INTO otps (email, code) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET code = $2, created_at = CURRENT_TIMESTAMP',
-        [email, otp]
-      );
-      await client.end();
-    } else {
-      console.warn('DATABASE_URL not set, skipping PG OTP storage.');
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ success: false, message: 'Invalid request body' }, 400);
     }
 
-    const subject = 'Your Netamps Verification Code';
-    const htmlContent = `<h3>Your Verification Code</h3><p>Your OTP is: <strong style="font-size:24px">${otp}</strong>.</p><p>It will expire in 5 minutes.</p>`;
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
+      return json({ success: false, message: 'A valid email address is required' }, 400);
+    }
 
-    // Dynamically find the password in case it was named differently (e.g. SMTP_PASS, EMAIL_PASSWORD)
-    const smtpPassword = env.SMTP_PASSWORD || env.SMTP_PASS || env.EMAIL_PASSWORD || env.MAIL_PASSWORD || env.PASSWORD || (Object.keys(env).find(k => k.toLowerCase().includes('pass')) ? env[Object.keys(env).find(k => k.toLowerCase().includes('pass'))] : null);
+    const hasStore = Boolean(env.OTP_KV || env.DB);
+    if (!hasStore) {
+      console.error('[otp] No OTP store bound. Bind OTP_KV (KV) or DB (D1) in Pages → Settings → Functions.');
+      return json({ success: false, message: 'Verification service temporarily unavailable. Please try again shortly.' }, 503);
+    }
 
-    if (smtpPassword) {
-      const transporter = nodemailer.createTransport({
-        host: 'us2.smtp.mailhostbox.com',
-        port: 587,
-        secure: false, // TLS
-        auth: {
-          user: 'no-reply@netamps.in',
-          pass: smtpPassword,
-        },
-      });
+    const nowSec = Math.floor(Date.now() / 1000);
 
-      await transporter.sendMail({
-        from: '"Netamps Portal" <no-reply@netamps.in>',
-        to: email,
-        subject,
-        text: `Your OTP is: ${otp}. It will expire in 5 minutes.`,
-        html: htmlContent,
-      });
-    } else {
-      // Native Cloudflare MailChannels delivery
-      const mcRes = await fetch("https://api.mailchannels.net/tx/v1/send", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: email }] }],
-          from: { email: "no-reply@netamps.in", name: "Netamps Portal" },
-          subject,
-          content: [{ type: "text/html", value: htmlContent }]
-        })
-      });
-      if (!mcRes.ok) {
-        console.error('MailChannels failed:', await mcRes.text());
-        return new Response(JSON.stringify({ success: false, message: `Email delivery failed via MailChannels (DNS/Zone Unauthorized). Please configure Domain Lockdown or SMTP.` }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+    // Hourly send cap (KV-backed; D1 path relies on cooldown + consume-on-success)
+    if (env.OTP_KV) {
+      const counter = await readSendCounter(env, email);
+      if (counter && counter.count >= MAX_SENDS_PER_HOUR) {
+        return json({ success: false, message: 'Too many codes requested. Please try again later.' }, 429);
       }
     }
 
-    return new Response(JSON.stringify({ success: true, message: 'OTP sent successfully' }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // Resend cooldown — prevents double-click / retry storms
+    const existing = await readOtp(env, email);
+    if (existing && nowSec - existing.createdAt < RESEND_COOLDOWN_SECONDS) {
+      const wait = RESEND_COOLDOWN_SECONDS - (nowSec - existing.createdAt);
+      return json({ success: false, message: `Please wait ${wait}s before requesting a new code.` }, 429);
+    }
+
+    const otp = newOtp();
+    const record = { code: otp, attempts: 0, createdAt: nowSec, expiresAt: nowSec + OTP_TTL_SECONDS };
+    await writeOtp(env, email, record, OTP_TTL_SECONDS);
+
+    const sent = await sendOtpEmail(env, email, otp);
+    if (!sent.ok) {
+      await deleteOtp(env, email); // don't leave an undeliverable code behind
+      if (sent.misconfigured) {
+        return json({ success: false, message: 'Email service is not configured. Please contact support.' }, 503);
+      }
+      return json({ success: false, message: 'Failed to deliver the OTP email. Please try again shortly.' }, 502);
+    }
+
+    if (env.OTP_KV) {
+      const counter = (await readSendCounter(env, email)) || { count: 0 };
+      await writeSendCounter(env, email, { count: counter.count + 1 });
+    }
+
+    return json({ success: true, message: 'OTP sent successfully. It expires in 5 minutes.', expiresIn: OTP_TTL_SECONDS });
   } catch (err) {
-    console.error('OTP Generate Error:', err);
-    return new Response(JSON.stringify({ success: false, message: err.message }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    console.error('[otp] Generate error:', err);
+    return json({ success: false, message: 'Failed to generate OTP. Please try again shortly.' }, 500);
   }
 }

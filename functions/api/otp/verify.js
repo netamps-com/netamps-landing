@@ -1,30 +1,117 @@
-import { Client } from 'pg';
+/**
+ * POST /api/otp/verify
+ *
+ * Production OTP validation. Pairs with generate.js:
+ *  - Same store contract (KV OTP_KV preferred, D1 DB fallback).
+ *  - Enforces the 5-minute expiry the email promises.
+ *  - Single-use: a verified code is deleted immediately.
+ *  - Brute-force protection: 5 wrong attempts invalidate the code.
+ *  - Constant-time comparison (no early-exit timing signal).
+ */
+
+const MAX_ATTEMPTS = 5;
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
+const CODE_RE = /^[0-9]{6}$/;
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+const otpKey = (email) => `otp:${email.toLowerCase()}`;
+
+async function readOtp(env, email) {
+  if (env.OTP_KV) {
+    return await env.OTP_KV.get(otpKey(email), 'json');
+  }
+  const row = await env.DB.prepare(
+    'SELECT code, attempts, expires_at AS expiresAt, created_at AS createdAt FROM otps WHERE email = ?1'
+  ).bind(email.toLowerCase()).first();
+  return row || null;
+}
+
+async function writeOtp(env, email, record) {
+  if (env.OTP_KV) {
+    const ttl = Math.max(1, record.expiresAt - Math.floor(Date.now() / 1000));
+    await env.OTP_KV.put(otpKey(email), JSON.stringify(record), { expirationTtl: ttl });
+    return;
+  }
+  await env.DB.prepare(
+    `INSERT INTO otps (email, code, attempts, expires_at, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT(email) DO UPDATE SET code = excluded.code, attempts = excluded.attempts,
+       expires_at = excluded.expires_at, created_at = excluded.created_at`
+  ).bind(email.toLowerCase(), record.code, record.attempts, record.expiresAt, record.createdAt).run();
+}
+
+async function deleteOtp(env, email) {
+  if (env.OTP_KV) {
+    await env.OTP_KV.delete(otpKey(email));
+    return;
+  }
+  await env.DB.prepare('DELETE FROM otps WHERE email = ?1').bind(email.toLowerCase()).run();
+}
 
 export async function onRequestPost({ request, env }) {
   try {
-    const { email, code } = await request.json();
-    if (!email || !code) return new Response(JSON.stringify({ success: false, message: 'Email and code required' }), { status: 400 });
-
-    if (env.DB) {
-      const { results } = await env.DB.prepare('SELECT code FROM otps WHERE email = ? ORDER BY created_at DESC LIMIT 1').bind(email).all();
-      if (!results || results.length === 0 || results[0].code !== code) {
-        return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully' }), { headers: { 'Content-Type': 'application/json' } });
-    } else if (env.DATABASE_URL) {
-      const client = new Client({ connectionString: env.DATABASE_URL });
-      await client.connect();
-      const res = await client.query('SELECT code FROM otps WHERE email = $1 ORDER BY created_at DESC LIMIT 1', [email]);
-      await client.end();
-      if (res.rows.length === 0 || res.rows[0].code !== code) {
-        return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully' }), { headers: { 'Content-Type': 'application/json' } });
-    } else {
-      throw new Error('Database connection completely unavailable. Cannot verify OTP. Ensure D1 or Postgres is bound in Cloudflare Pages dashboard.');
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ success: false, message: 'Invalid request body' }, 400);
     }
+
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    if (!email || email.length > 254 || !EMAIL_RE.test(email) || !CODE_RE.test(code)) {
+      return json({ success: false, message: 'A valid email address and 6-digit code are required' }, 400);
+    }
+
+    if (!env.OTP_KV && !env.DB) {
+      console.error('[otp] No OTP store bound. Bind OTP_KV (KV) or DB (D1) in Pages → Settings → Functions.');
+      return json({ success: false, message: 'Verification service temporarily unavailable. Please try again shortly.' }, 503);
+    }
+
+    const record = await readOtp(env, email);
+    if (!record) {
+      return json({ success: false, message: 'Invalid or expired OTP. Please request a new code.' }, 400);
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (nowSec > record.expiresAt) {
+      await deleteOtp(env, email);
+      return json({ success: false, message: 'This OTP has expired. Please request a new code.' }, 400);
+    }
+
+    if (record.attempts >= MAX_ATTEMPTS) {
+      await deleteOtp(env, email);
+      return json({ success: false, message: 'Too many incorrect attempts. Please request a new code.' }, 429);
+    }
+
+    if (!safeEqual(record.code, code)) {
+      record.attempts += 1;
+      if (record.attempts >= MAX_ATTEMPTS) {
+        await deleteOtp(env, email);
+        return json({ success: false, message: 'Too many incorrect attempts. Please request a new code.' }, 429);
+      }
+      await writeOtp(env, email, record);
+      return json({ success: false, message: 'Invalid OTP Code.' }, 400);
+    }
+
+    await deleteOtp(env, email); // single-use: consume on success
+    return json({ success: true, message: 'OTP verified successfully' });
   } catch (err) {
-    console.error('OTP Verify Error:', err);
-    return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    console.error('[otp] Verify error:', err);
+    return json({ success: false, message: 'Failed to verify OTP. Please try again shortly.' }, 500);
   }
 }
