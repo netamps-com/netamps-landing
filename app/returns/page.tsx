@@ -430,7 +430,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Search className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="text" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" placeholder="e.g. S-1ABCD2E3" />
+                      <input type="text" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
                     </div>
                   </div>
                   <button type="button" onClick={handleTrackSubmit} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors">
@@ -539,7 +539,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <User className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="text" name="name" id="name" required pattern="^[a-zA-Z\s.,'-]+$" maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Rahul Verma" />
+                      <input type="text" name="name" id="name" required pattern="^[a-zA-Z\s.,'-]+$" maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
 
@@ -549,7 +549,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Building2 className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="text" name="company" id="company" required pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="e.g. Acme Technologies Pvt. Ltd." />
+                      <input type="text" name="company" id="company" required pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
 
@@ -559,7 +559,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <span className="text-slate-400 font-bold text-lg">@</span>
                       </div>
-                      <input type="email" name="email" id="email" required maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="procurement@yourcompany.com" />
+                      <input type="email" name="email" id="email" required maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
 
@@ -569,7 +569,7 @@ export default function ReturnsPage() {
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Phone className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="tel" name="phone" id="phone" required pattern="^\+?[0-9\s\-()]+$" maxLength={20} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" placeholder="+91 98765 43210" />
+                      <input type="tel" name="phone" id="phone" required pattern="^\+?[0-9\s\-()]+$" maxLength={20} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
                 </div>
