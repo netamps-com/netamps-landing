@@ -321,8 +321,8 @@ export default function LoginPage() {
 
             <div className="mt-6">
               <a
-                href="https://webmail.netamps.in/"
-                target="_blank"
+                href="https://webmail.netamps.in"
+                target="webmail.netamps.in"
                 rel="noopener noreferrer"
                 className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
               >
