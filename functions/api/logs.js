@@ -1,131 +1,104 @@
-import { Client } from 'pg';
-import { AwsClient } from 'aws4fetch';
+/**
+ * /api/logs — website audit-log store and reader.
+ *
+ * Workers-compatible by design: ZERO npm imports. D1 (DB binding) is the
+ * queryable store the dashboard reads; the native R2 binding (LOGS_BUCKET)
+ * is an optional cold archive. Postgres-over-TCP and SigV4 helper libraries
+ * are IMPOSSIBLE here (no TCP, and unlisted deps break `npm ci` bundling) —
+ * do not re-add them.
+ *
+ * Required binding (Pages → Settings → Functions):
+ *   DB  D1 database binding (same database the OTP module uses is fine)
+ */
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+async function ensureTable(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS audit_logs (
+       id TEXT PRIMARY KEY,
+       timestamp TEXT,
+       event_type TEXT,
+       page TEXT,
+       details TEXT,
+       username TEXT,
+       ip_address TEXT
+     )`
+  ).run();
+}
 
 export async function onRequestPost({ request, env }) {
   try {
-    const log = await request.json();
+    let log;
+    try {
+      log = await request.json();
+    } catch {
+      return json({ success: false, message: 'Invalid request body' }, 400);
+    }
 
-    // Store in Cloudflare D1
+    if (!log || typeof log !== 'object' || !log.id || !log.timestamp || !log.eventType) {
+      return json({ success: false, message: 'id, timestamp and eventType are required' }, 400);
+    }
+
     if (env.DB) {
-      await env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS audit_logs (
-          id TEXT PRIMARY KEY,
-          timestamp TEXT,
-          event_type TEXT,
-          page TEXT,
-          details TEXT,
-          username TEXT,
-          ip_address TEXT
-        )
-      `).run();
-      
+      await ensureTable(env);
       await env.DB.prepare(
-        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).bind(log.id, log.timestamp, log.eventType, log.page, log.details, log.user, log.ipAddress).run();
-    } else if (env.DATABASE_URL) {
-      const client = new Client({ connectionString: env.DATABASE_URL });
-      await client.connect();
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS audit_logs (
-          id VARCHAR(255) PRIMARY KEY,
-          timestamp TIMESTAMP,
-          event_type VARCHAR(255),
-          page VARCHAR(255),
-          details TEXT,
-          username VARCHAR(255),
-          ip_address VARCHAR(255)
-        )
-      `);
-      await client.query(
-        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [log.id, log.timestamp, log.eventType, log.page, log.details, log.user, log.ipAddress]
-      );
-      await client.end();
+        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+      ).bind(
+        String(log.id).slice(0, 64),
+        String(log.timestamp).slice(0, 64),
+        String(log.eventType).slice(0, 64),
+        String(log.page || '').slice(0, 200),
+        String(log.details || '').slice(0, 4000),
+        String(log.user || '').slice(0, 254),
+        String(log.ipAddress || '').slice(0, 64)
+      ).run();
+    } else {
+      console.warn('[logs] No DB binding; audit event accepted to local fallback only.');
     }
 
-    // Try Cloudflare R2 Binding first
-    if (env.LOGS_BUCKET) {
-      await env.LOGS_BUCKET.put(`logs/${log.id}.json`, JSON.stringify(log));
-    } else if (env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY) {
-      const aws = new AwsClient({
-        accessKeyId: env.R2_ACCESS_KEY_ID,
-        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-        service: 's3',
-        region: 'auto',
-      });
-      const bucketName = env.R2_BUCKET_NAME || 'netamps-logs';
-      const endpoint = new URL(`https://${bucketName}.${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/logs/${log.id}.json`);
-      await aws.fetch(endpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(log)
-      });
+    // Optional cold archive via native R2 binding (no credentials needed in code)
+    if (env.LOGS_BUCKET && typeof env.LOGS_BUCKET.put === 'function') {
+      try {
+        await env.LOGS_BUCKET.put(`logs/${String(log.id).slice(0, 64)}.json`, JSON.stringify(log));
+      } catch (err) {
+        console.error('[logs] R2 archive failed (non-fatal):', err);
+      }
     }
 
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    return json({ success: true });
   } catch (err) {
-    console.error('Log API Error:', err);
-    return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    console.error('[logs] POST error:', err);
+    return json({ success: false, message: 'Failed to store audit log.' }, 500);
   }
 }
 
 export async function onRequestGet({ env }) {
   try {
-    if (env.DB) {
-      await env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS audit_logs (
-          id TEXT PRIMARY KEY,
-          timestamp TEXT,
-          event_type TEXT,
-          page TEXT,
-          details TEXT,
-          username TEXT,
-          ip_address TEXT
-        )
-      `).run();
-      const { results } = await env.DB.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 5000').all();
-      const formattedLogs = results.map((row) => ({
-        id: row.id,
-        timestamp: row.timestamp,
-        eventType: row.event_type,
-        page: row.page,
-        details: row.details,
-        user: row.username,
-        ipAddress: row.ip_address
-      }));
-      return new Response(JSON.stringify({ success: true, logs: formattedLogs }), { headers: { 'Content-Type': 'application/json' } });
-    } else if (env.DATABASE_URL) {
-      const client = new Client({ connectionString: env.DATABASE_URL });
-      await client.connect();
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS audit_logs (
-          id VARCHAR(255) PRIMARY KEY,
-          timestamp TIMESTAMP,
-          event_type VARCHAR(255),
-          page VARCHAR(255),
-          details TEXT,
-          username VARCHAR(255),
-          ip_address VARCHAR(255)
-        )
-      `);
-      const res = await client.query('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 5000');
-      await client.end();
-      
-      const formattedLogs = res.rows.map(row => ({
-        id: row.id,
-        timestamp: row.timestamp,
-        eventType: row.event_type,
-        page: row.page,
-        details: row.details,
-        user: row.username,
-        ipAddress: row.ip_address
-      }));
-      return new Response(JSON.stringify({ success: true, logs: formattedLogs }), { headers: { 'Content-Type': 'application/json' } });
-    } else {
-      return new Response(JSON.stringify({ success: true, logs: [] }), { headers: { 'Content-Type': 'application/json' } });
+    if (!env.DB || typeof env.DB.prepare !== 'function') {
+      return json({ success: true, logs: [] });
     }
+    await ensureTable(env);
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 5000'
+    ).all();
+    const formattedLogs = (results || []).map((row) => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      eventType: row.event_type,
+      page: row.page,
+      details: row.details,
+      user: row.username,
+      ipAddress: row.ip_address
+    }));
+    return json({ success: true, logs: formattedLogs });
   } catch (err) {
-    console.error('Log API GET Error:', err);
-    return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    console.error('[logs] GET error:', err);
+    return json({ success: false, message: 'Failed to read audit logs.' }, 500);
   }
 }

@@ -84,7 +84,7 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
               Website Event Logs (Industry Standard View)
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Data is securely retrieved from PostgreSQL / Cloudflare R2 proxy. Stores logs up to 1 year or 500MB.
+              Retrieved from the central audit store (D1) when available, with on-device fallback. Stores up to 5000 recent events.
             </p>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors">
