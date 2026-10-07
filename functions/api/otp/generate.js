@@ -63,6 +63,23 @@ async function ensureD1(env) {
        created_at INTEGER NOT NULL
      )`
   ).run();
+  // Self-heal tables created by older versions (email, code, created_at only).
+  // CREATE TABLE IF NOT EXISTS never upgrades an existing table, so a legacy
+  // table would otherwise crash every SELECT with "no such column".
+  const cols = await env.DB.prepare(`PRAGMA table_info(otps)`).all();
+  const names = new Set((cols.results || []).map((c) => c.name));
+  if (!names.has('code')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN code TEXT NOT NULL DEFAULT ''`).run();
+  }
+  if (!names.has('attempts')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0`).run();
+  }
+  if (!names.has('expires_at')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`).run();
+  }
+  if (!names.has('created_at')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`).run();
+  }
 }
 
 async function readOtp(env, email, kind) {

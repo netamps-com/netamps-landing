@@ -37,10 +37,38 @@ function storeKind(env) {
   return null;
 }
 
+async function ensureD1Schema(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS otps (
+       email TEXT PRIMARY KEY,
+       code TEXT NOT NULL,
+       attempts INTEGER NOT NULL DEFAULT 0,
+       expires_at INTEGER NOT NULL,
+       created_at INTEGER NOT NULL
+     )`
+  ).run();
+  // Self-heal tables created by older versions (email, code, created_at only).
+  const cols = await env.DB.prepare(`PRAGMA table_info(otps)`).all();
+  const names = new Set((cols.results || []).map((c) => c.name));
+  if (!names.has('code')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN code TEXT NOT NULL DEFAULT ''`).run();
+  }
+  if (!names.has('attempts')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0`).run();
+  }
+  if (!names.has('expires_at')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`).run();
+  }
+  if (!names.has('created_at')) {
+    await env.DB.prepare(`ALTER TABLE otps ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`).run();
+  }
+}
+
 async function readOtp(env, email, kind) {
   if (kind === 'kv') {
     return await env.OTP_KV.get(otpKey(email), 'json');
   }
+  await ensureD1Schema(env);
   const row = await env.DB.prepare(
     'SELECT code, attempts, expires_at AS expiresAt, created_at AS createdAt FROM otps WHERE email = ?1'
   ).bind(email.toLowerCase()).first();
