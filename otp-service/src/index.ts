@@ -1,8 +1,10 @@
 import express from 'express';
+import cors from 'cors';
 import { requestOTP, verifyOTP, sendOrderEmail } from './otpService';
 import { generateUploadUrl } from './r2Service';
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // Restrict trust proxy to ensure accurate IP resolution behind ingress
