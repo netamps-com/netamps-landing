@@ -40,7 +40,7 @@ export default function ReturnsPage() {
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
-  const { executeReCaptcha } = useGoogleReCaptcha();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   
   // Secure File Upload State
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -84,7 +84,7 @@ export default function ReturnsPage() {
     e.preventDefault();
     setCaptchaError('');
 
-    if (!executeReCaptcha) {
+    if (!executeRecaptcha) {
       setCaptchaError('Security check not ready. Please refresh.');
       return;
     }
@@ -92,7 +92,7 @@ export default function ReturnsPage() {
     setIsSubmitting(true);
 
     try {
-      const captchaToken = await executeReCaptcha('submit_return');
+      const captchaToken = await executeRecaptcha('submit_return');
       if (!captchaToken) {
         setCaptchaError('Security verification failed. Please try again.');
         setIsSubmitting(false);

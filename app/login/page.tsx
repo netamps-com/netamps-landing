@@ -78,7 +78,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { executeReCaptcha } = useGoogleReCaptcha();
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
@@ -118,7 +118,7 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!executeReCaptcha) {
+    if (!executeRecaptcha) {
       setErrorMsg('Security check not ready. Please refresh.');
       return;
     }
@@ -126,7 +126,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const captchaToken = await executeReCaptcha('login');
+      const captchaToken = await executeRecaptcha('login');
       if (!captchaToken) {
         setErrorMsg('Security check failed. Please try again.');
         setIsSubmitting(false);
