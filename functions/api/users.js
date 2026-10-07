@@ -40,6 +40,61 @@ export async function onRequestPost({ request, env }) {
         await env.DB.prepare('UPDATE users SET hash = ? WHERE email = ?').bind(passwordHash, email).run();
         return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
       }
+    } else if (env.DATABASE_URL) {
+      // ... pg logic ... (omitted for brevity, keep existing pg logic if possible, or just replace the end)
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          email VARCHAR(255) PRIMARY KEY,
+          hash TEXT,
+          role VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      const checkAdmin = await client.query('SELECT email FROM users WHERE email = $1', ['admin@netamps.com']);
+      if (checkAdmin.rows.length === 0) {
+        const DEFAULT_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec';
+        await client.query(
+          'INSERT INTO users (email, hash, role) VALUES ($1, $2, $3), ($4, $5, $6)',
+          ['admin@netamps.com', DEFAULT_HASH, 'admin', 'staff@netamps.com', DEFAULT_HASH, 'staff']
+        );
+      }
+
+      if (action === 'login') {
+        const res = await client.query('SELECT hash, role FROM users WHERE email = $1', [email]);
+        if (res.rows.length > 0 && res.rows[0].hash === passwordHash) {
+          const sessionId = crypto.randomUUID();
+          await client.end();
+          return new Response(JSON.stringify({ success: true, role: res.rows[0].role, sessionId }), { headers: { 'Content-Type': 'application/json' } });
+        }
+        await client.end();
+        return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (action === 'add') {
+        await client.query('INSERT INTO users (email, hash, role) VALUES ($1, $2, $3)', [email, passwordHash, role || 'staff']);
+        await client.end();
+        return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (action === 'update_password') {
+        await client.query('UPDATE users SET hash = $1 WHERE email = $2', [passwordHash, email]);
+        await client.end();
+        return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      await client.end();
+    }
+    
+    // Fallback if no DB is connected
+    if (action === 'login') {
+      const DEFAULT_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec'; // netamps2026
+      if ((email === 'admin@netamps.com' || email === 'staff@netamps.com') && passwordHash === DEFAULT_HASH) {
+        return new Response(JSON.stringify({ success: true, role: email.split('@')[0], sessionId: crypto.randomUUID() }), { headers: { 'Content-Type': 'application/json' } });
+      }
     }
     
     return new Response(JSON.stringify({ success: false, message: 'DB not connected' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
@@ -62,6 +117,21 @@ export async function onRequestGet({ env }) {
       
       const { results } = await env.DB.prepare('SELECT email, role, created_at FROM users ORDER BY created_at DESC').all();
       return new Response(JSON.stringify({ success: true, users: results }), { headers: { 'Content-Type': 'application/json' } });
+    } else if (env.DATABASE_URL) {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          email VARCHAR(255) PRIMARY KEY,
+          hash TEXT,
+          role VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      const res = await client.query('SELECT email, role, created_at FROM users ORDER BY created_at DESC');
+      await client.end();
+      return new Response(JSON.stringify({ success: true, users: res.rows }), { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(JSON.stringify({ success: false, message: 'DB not connected' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
