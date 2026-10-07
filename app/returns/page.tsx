@@ -6,9 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import { v4 as uuidv4 } from 'uuid';
-import TurnstileWidget, { verifyTurnstileToken } from '../TurnstileWidget';
-
-const TURNSTILE_ENABLED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '6Ld_L7saAAAAAA2L0lU-8XmP_Nn-2x34tV52b0H';
 
 interface ProductItem {
   id: string;
@@ -42,9 +40,6 @@ export default function ReturnsPage() {
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
-  const [turnstileToken, setTurnstileToken] = useState('');
-  const [turnstileReset, setTurnstileReset] = useState(0);
-  
   // Secure File Upload State
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -87,28 +82,23 @@ export default function ReturnsPage() {
     e.preventDefault();
     setCaptchaError('');
 
-    // Cloudflare Turnstile verification (bypassed only when no site key is configured, e.g. local dev)
-    if (TURNSTILE_ENABLED && !turnstileToken) {
-      setCaptchaError('Please complete the security check below.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      // Server-side Turnstile verification — never trust the client token alone
-      if (TURNSTILE_ENABLED) {
-        const verified = await verifyTurnstileToken(turnstileToken, 'submit_return');
-        if (!verified) {
-          setCaptchaError('Security verification failed. Please try again.');
-          setTurnstileToken('');
-          setTurnstileReset((n) => n + 1);
-          setIsSubmitting(false);
-          return;
-        }
+      if (!window.grecaptcha) {
+        setCaptchaError('Security check not ready. Please refresh.');
+        setIsSubmitting(false);
+        return;
       }
 
-      
+      window.grecaptcha.ready(async () => {
+        try {
+          const token = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'submit_return' });
+          if (!token) {
+            setCaptchaError('Security verification failed. Please try again.');
+            setIsSubmitting(false);
+            return;
+          }
       // Instead of submitting directly, show OTP
       const formData = new FormData(e.target as HTMLFormElement);
       
@@ -132,9 +122,13 @@ export default function ReturnsPage() {
       setFormDataCache(formData);
       
       // Bypass the external OTP microservice entirely to prevent network/CORS errors.
-      // We rely on Cloudflare Turnstile (server-verified) for industry-standard bot protection.
       await processReturnSubmit(formData);
       
+        } catch (err) {
+          setCaptchaError('Security check failed. Please refresh.');
+          setIsSubmitting(false);
+        }
+      });
     } catch (err) {
       console.error(err);
       setCaptchaError('An error occurred during submission.');
@@ -633,12 +627,7 @@ export default function ReturnsPage() {
 
                 {/* Submit */}
                 <div className="pt-6">
-                  <TurnstileWidget
-                    onVerify={(token) => { setTurnstileToken(token); setCaptchaError(''); }}
-                    onExpire={() => setTurnstileToken('')}
-                    onError={() => setTurnstileToken('')}
-                    resetSignal={turnstileReset}
-                  />
+
                   {captchaError && (
                     <p className="text-xs text-center text-red-400 mt-2 mb-4">{captchaError}</p>
                   )}
@@ -662,9 +651,9 @@ export default function ReturnsPage() {
                     </button>
                   </div>
                   <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
-                    Protected by Cloudflare Turnstile. See the{' '}
-                    <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Cloudflare Privacy Policy</a> and{' '}
-                    <a href="https://www.cloudflare.com/website-terms/" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Terms of Service</a> for details.
+                    Protected by Google reCAPTCHA v3. See the{' '}
+                    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Privacy Policy</a> and{' '}
+                    <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Terms of Service</a> for details.
                   </p>
                 </div>
               </form>
