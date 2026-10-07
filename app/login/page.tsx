@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
-const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '6Ld_L7saAAAAAA2L0lU-8XmP_Nn-2x34tV52b0H';
 
 const ServerStatusWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -121,26 +120,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      if (!window.grecaptcha) {
-        setErrorMsg('Security check not ready. Please refresh.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      window.grecaptcha.ready(async () => {
-        try {
-          const token = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'login' });
-          if (!token) {
-            setErrorMsg('Security verification failed. Please try again.');
-            setIsSubmitting(false);
-            return;
-          }
-          await processLogin(token);
-        } catch (err) {
-          setErrorMsg('Security check failed. Please refresh.');
-          setIsSubmitting(false);
-        }
-      });
+      await processLogin('no_captcha');
     } catch (err) {
       setErrorMsg('Encryption error occurred.');
       setIsSubmitting(false);
@@ -298,11 +278,6 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
-            <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
-              Protected by Google reCAPTCHA v3. See the{' '}
-              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Privacy Policy</a> and{' '}
-              <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Terms of Service</a> for details.
-            </p>
           </form>
 
           <div className="mt-6">

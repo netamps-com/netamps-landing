@@ -117,11 +117,6 @@ export default function RootLayout({
           {children}
           <TrustSeal />
         </SecurityWrapper>
-        {/* Google reCAPTCHA v3 script */}
-        <Script
-          strategy="beforeInteractive"
-          src={`https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '6Ld_L7saAAAAAA2L0lU-8XmP_Nn-2x34tV52b0H'}`}
-        />
         {/* Google AdSense — loaded after interactive to not block render */}
         <Script
           async

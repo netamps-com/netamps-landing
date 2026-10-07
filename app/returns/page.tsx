@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import { v4 as uuidv4 } from 'uuid';
-const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '6Ld_L7saAAAAAA2L0lU-8XmP_Nn-2x34tV52b0H';
 
 interface ProductItem {
   id: string;
@@ -85,20 +84,6 @@ export default function ReturnsPage() {
     setIsSubmitting(true);
 
     try {
-      if (!window.grecaptcha) {
-        setCaptchaError('Security check not ready. Please refresh.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      window.grecaptcha.ready(async () => {
-        try {
-          const token = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'submit_return' });
-          if (!token) {
-            setCaptchaError('Security verification failed. Please try again.');
-            setIsSubmitting(false);
-            return;
-          }
       // Instead of submitting directly, show OTP
       const formData = new FormData(e.target as HTMLFormElement);
       
@@ -124,11 +109,6 @@ export default function ReturnsPage() {
       // Bypass the external OTP microservice entirely to prevent network/CORS errors.
       await processReturnSubmit(formData);
       
-        } catch (err) {
-          setCaptchaError('Security check failed. Please refresh.');
-          setIsSubmitting(false);
-        }
-      });
     } catch (err) {
       console.error(err);
       setCaptchaError('An error occurred during submission.');
@@ -650,11 +630,6 @@ export default function ReturnsPage() {
                       Clear
                     </button>
                   </div>
-                  <p className="text-[10px] text-center text-slate-500 mt-4 leading-relaxed">
-                    Protected by Google reCAPTCHA v3. See the{' '}
-                    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Privacy Policy</a> and{' '}
-                    <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Terms of Service</a> for details.
-                  </p>
                 </div>
               </form>
               )}
