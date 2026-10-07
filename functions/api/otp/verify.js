@@ -54,8 +54,18 @@ export async function onRequestPost({ request, env }) {
       console.warn('Postgres OTP verify bypassed.');
       return new Response(JSON.stringify({ success: true, message: 'OTP verified (PG bypass)' }), { headers: { 'Content-Type': 'application/json' } });
     } else {
-      console.warn('No DB configured. Bypassing OTP check for demo purposes.');
-      return new Response(JSON.stringify({ success: true, message: 'OTP verified (Demo Fallback)' }), { headers: { 'Content-Type': 'application/json' } });
+      globalThis.otpStore = globalThis.otpStore || new Map();
+      const storedOtp = globalThis.otpStore.get(email);
+      if (storedOtp) {
+        if (storedOtp === code) {
+          globalThis.otpStore.delete(email);
+          return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully (Memory DB)' }), { headers: { 'Content-Type': 'application/json' } });
+        } else {
+          return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+      }
+      console.warn('No DB configured and OTP not in Memory DB. Rejecting OTP.');
+      return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code or OTP expired.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
   } catch (err) {
     console.error('OTP Verify Error:', err);

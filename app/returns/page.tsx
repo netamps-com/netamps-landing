@@ -244,10 +244,16 @@ export default function ReturnsPage() {
           if (upData.success) {
             uploadedFileUrls.push(upData.url);
           } else {
-            uploadedFileUrls.push(`error_upload_${file.name}`);
+            throw new Error('Fallback to Base64');
           }
         } catch (e) {
-          uploadedFileUrls.push(`error_upload_${file.name}`);
+          // Fallback to base64 data URI if R2 is unconfigured
+          const base64Str = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+          uploadedFileUrls.push(base64Str);
         }
       }
 

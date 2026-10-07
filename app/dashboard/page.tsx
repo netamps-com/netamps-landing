@@ -416,8 +416,9 @@ export default function DashboardPage() {
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                       {req.attachedFiles.map((fileKey, idx) => {
                                         const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn';
-                                        const fileUrl = `${cdnUrl}/${fileKey}`;
-                                        const isVideo = fileKey.endsWith('.mp4') || fileKey.endsWith('.webm');
+                                        const isDataUri = fileKey.startsWith('data:');
+                                        const fileUrl = isDataUri ? fileKey : `${cdnUrl}/${fileKey}`;
+                                        const isVideo = isDataUri ? fileKey.startsWith('data:video') : (fileKey.endsWith('.mp4') || fileKey.endsWith('.webm'));
                                         return (
                                           <a key={idx} href={fileUrl} target="_blank" rel="noopener noreferrer" className="relative group block aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-800/50 flex items-center justify-center hover:border-indigo-500 transition-colors">
                                             {isVideo ? (

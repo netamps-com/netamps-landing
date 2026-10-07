@@ -75,6 +75,9 @@ export async function onRequestPost({ request, env }) {
           content: [{ type: "text/html", value: htmlContent }]
         })
       });
+      globalThis.otpStore = globalThis.otpStore || new Map();
+      globalThis.otpStore.set(email, otp);
+
       if (!mcRes.ok) {
         console.error('MailChannels failed:', await mcRes.text());
         return new Response(JSON.stringify({ success: true, message: `Email delivery failed (DNS). For testing, your OTP is: ${otp}` }), {
