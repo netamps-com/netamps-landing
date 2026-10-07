@@ -65,12 +65,15 @@ export async function onRequestPost({ request, env }) {
       });
     } else {
       // Native Cloudflare MailChannels delivery
+      const hostname = new URL(request.url).hostname;
+      const senderEmail = `no-reply@${hostname}`;
+
       const mcRes = await fetch("https://api.mailchannels.net/tx/v1/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: email }] }],
-          from: { email: "no-reply@netamps.in", name: "Netamps Portal" },
+          from: { email: senderEmail, name: "Netamps Portal" },
           subject,
           content: [{ type: "text/html", value: htmlContent }]
         })
