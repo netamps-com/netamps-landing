@@ -15,8 +15,21 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
 
   useEffect(() => {
     const fetchLogs = async () => {
-      const { getLogs } = await import('../lib/logger');
-      setLogs(getLogs());
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/logs`);
+        const data = await res.json();
+        if (data.success && data.logs) {
+          setLogs(data.logs);
+        } else {
+          // Fallback to local storage if API fails
+          const { getLogs } = await import('../lib/logger');
+          setLogs(getLogs());
+        }
+      } catch (err) {
+        const { getLogs } = await import('../lib/logger');
+        setLogs(getLogs());
+      }
     };
     fetchLogs();
   }, []);

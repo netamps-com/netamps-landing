@@ -59,15 +59,31 @@ export default function DashboardPage() {
       } else {
         setIsAuthenticated(true);
         setUserRole(role);
-        // Load data from mock database (localStorage)
-        const stored = localStorage.getItem('netamps_returns');
-        if (stored) {
+        const fetchReturns = async () => {
           try {
-            setReturns(JSON.parse(stored));
-          } catch (e) {
-            console.error(e);
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+            const res = await fetch(`${API_URL}/api/returns`);
+            const data = await res.json();
+            if (data.success && data.returns.length > 0) {
+              setReturns(data.returns);
+              localStorage.setItem('netamps_returns', JSON.stringify(data.returns));
+            } else {
+              loadFallback();
+            }
+          } catch(e) {
+            loadFallback();
           }
-        }
+        };
+
+        const loadFallback = () => {
+          const stored = localStorage.getItem('netamps_returns');
+          if (stored) {
+            try {
+              setReturns(JSON.parse(stored));
+            } catch (e) {}
+          }
+        };
+        fetchReturns();
       }
     };
 
@@ -95,6 +111,12 @@ export default function DashboardPage() {
     setReturns(updatedReturns);
     localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      await fetch(`${API_URL}/api/returns`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'status', status: newStatus })
+      });
       const { logEvent } = await import('../lib/logger');
       logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${id} status changed to ${newStatus}`, userRole);
     } catch(err){}
@@ -106,6 +128,8 @@ export default function DashboardPage() {
       setReturns(updatedReturns);
       localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
       try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        await fetch(`${API_URL}/api/returns?id=${id}`, { method: 'DELETE' });
         const { logEvent } = await import('../lib/logger');
         logEvent('REQUEST_DELETED', 'Dashboard Page', `Request ${id} permanently deleted`, userRole);
       } catch(err){}
@@ -128,6 +152,12 @@ export default function DashboardPage() {
     setReturns(updatedReturns);
     localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      await fetch(`${API_URL}/api/returns`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: reqId, action: 'price', productId, price: isNaN(price) ? null : price })
+      });
       const { logEvent } = await import('../lib/logger');
       logEvent('PRICE_UPDATED', 'Dashboard Page', `Updated price for product ${productId} in request ${reqId}`, userRole);
     } catch(err){}
@@ -143,15 +173,35 @@ export default function DashboardPage() {
     localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
     
     try {
-      // Bypass the external microservice to prevent network errors in the dashboard.
-      // Simulate network delay and always resolve to success for error-free module compliance.
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/email/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: req.email,
+          requestId: req.id,
+          products: req.products,
+          intent: req.intent
+        })
+      });
+      const data = await res.json();
       
+      if (!data.success) throw new Error(data.message);
+
       const finalReturns = updatedReturns.map(r => 
         r.id === req.id ? { ...r, emailDeliveryStatus: 'sent' as const } : r
       );
       setReturns(finalReturns);
       localStorage.setItem('netamps_returns', JSON.stringify(finalReturns));
+      
+      await fetch(`${API_URL}/api/returns`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: req.id, action: 'emailDelivery', emailDeliveryStatus: 'sent' })
+      }).catch(() => {});
+      
+      const { logEvent } = await import('../lib/logger');
+      logEvent('EMAIL_PUSH_SENT', 'Dashboard Page', `Sent email push for request ${req.id}`, userRole);
     } catch (e) {
       console.error(e);
       const failedReturns = updatedReturns.map(r => 
@@ -359,18 +409,15 @@ export default function DashboardPage() {
                                     </h4>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                       {req.attachedFiles.map((fileKey, idx) => {
-                                        const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL || 'https://netamps.cloudflareaccess.com/cdn';
+                                        const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn';
                                         const fileUrl = `${cdnUrl}/${fileKey}`;
                                         const isVideo = fileKey.endsWith('.mp4') || fileKey.endsWith('.webm');
                                         return (
                                           <a key={idx} href={fileUrl} target="_blank" rel="noopener noreferrer" className="relative group block aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-800/50 flex items-center justify-center hover:border-indigo-500 transition-colors">
                                             {isVideo ? (
-                                              <div className="text-slate-400 group-hover:text-indigo-400 flex flex-col items-center gap-2">
-                                                <Video className="w-8 h-8" />
-                                                <span className="text-xs font-bold">Video</span>
-                                              </div>
+                                              <video src={fileUrl} controls className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             ) : (
-                                              <img src={fileUrl} alt="Evidence" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center'); }} />
+                                              <img src={fileUrl} alt="Evidence" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             )}
                                           </a>
                                         );

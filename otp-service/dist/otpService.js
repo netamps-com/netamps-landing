@@ -47,16 +47,18 @@ pgPool.query(`
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON security_audit_logs(created_at DESC);
 `).catch(err => console.error('Failed to initialize PostgreSQL schema:', err));
 // SMTP Nodemailer Transport (TLS Encrypted)
+// Configured for Mailhostbox (SMTP: us2.smtp.mailhostbox.com / IMAP: us2.imap.mailhostbox.com)
 const transporter = nodemailer_1.default.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.example.com',
+    host: process.env.SMTP_HOST || 'us2.smtp.mailhostbox.com',
     port: Number(process.env.SMTP_PORT) || 465,
-    secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports (use STARTTLS)
+    secure: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) === 465 : true, // true for 465, false for other ports (use STARTTLS)
     auth: {
-        user: process.env.SMTP_USER || 'smtp_user',
-        pass: process.env.SMTP_PASS || 'smtp_pass',
+        user: process.env.SMTP_USER || 'no-reply@netamps.in',
+        pass: process.env.SMTP_PASS || '',
     },
     tls: {
-        minVersion: 'TLSv1.2'
+        minVersion: 'TLSv1.2',
+        rejectUnauthorized: true
     }
 });
 // Configure otplib for SOC 2 standard strictness
@@ -94,7 +96,7 @@ async function logSecurityAudit(eventType, emailHash, ipAddress, details = {}) {
  */
 async function sendEmailWithRetry(to, otpCode, retries = 3, backoff = 1000) {
     const mailOptions = {
-        from: `"Security Team" <${process.env.SMTP_FROM || 'no-reply@example.com'}>`,
+        from: `"Security Team" <${process.env.SMTP_FROM || 'no-reply@netamps.in'}>`,
         to,
         subject: 'Your Secure Verification Code',
         text: `Your verification code is ${otpCode}. It will expire in 5 minutes. Do not share this code.`,
@@ -117,7 +119,7 @@ async function sendOrderEmail(to, orderDetails) {
     let productsHtml = orderDetails.products.map((p) => `<li><strong>${p.category.replace('_', ' ')}</strong> (x${p.quantity}): ${p.details} <br/> 
     <em>Price Evaluated: ${p.price !== undefined ? '₹' + p.price : 'Pending'}</em></li>`).join('');
     const mailOptions = {
-        from: `"Netamps ITAD" <${process.env.SMTP_FROM || 'no-reply@example.com'}>`,
+        from: `"Netamps ITAD" <${process.env.SMTP_FROM || 'no-reply@netamps.in'}>`,
         to,
         subject: `Order Update: ${orderDetails.id} - ${orderDetails.status}`,
         html: `<h2>Hello ${orderDetails.name},</h2>

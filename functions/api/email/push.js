@@ -1,0 +1,72 @@
+import nodemailer from 'nodemailer';
+
+export async function onRequestPost({ request, env }) {
+  try {
+    const { email, requestId, products, intent } = await request.json();
+    if (!email || !requestId) return new Response(JSON.stringify({ success: false, message: 'Email and requestId required' }), { status: 400 });
+
+    let totalValue = 0;
+    if (products && Array.isArray(products)) {
+      products.forEach((p) => {
+        totalValue += (p.price || 0) * (p.quantity || 1);
+      });
+    }
+
+    const formattedTotal = new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR'
+    }).format(totalValue);
+
+    const transporter = nodemailer.createTransport({
+      host: 'us2.smtp.mailhostbox.com',
+      port: 587,
+      secure: false, // TLS
+      auth: {
+        user: 'no-reply@netamps.in',
+        pass: env.SMTP_PASSWORD || 'dummy_password',
+      },
+    });
+
+    const htmlContent = `
+      <h3>Netamps Request Notification</h3>
+      <p>Hello,</p>
+      <p>Your ${intent === 'sell' ? 'SELL' : 'BUY'} request <strong>${requestId}</strong> has been updated.</p>
+      <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 600px;">
+        <thead>
+          <tr style="background-color: #f8fafc;">
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${products?.map((p) => `
+            <tr>
+              <td>${p.category} - ${p.details}</td>
+              <td align="center">${p.quantity}</td>
+              <td align="right">${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(p.price || 0)}</td>
+            </tr>
+          `).join('') || '<tr><td colspan="3">No products listed.</td></tr>'}
+        </tbody>
+      </table>
+      <p style="font-size: 16px; margin-top: 15px;">
+        <strong>Total Value: ${formattedTotal}</strong>
+      </p>
+      <p style="font-size: 12px; color: #64748b;">
+        <em>* All prices and total values mentioned are exclusive of applicable GST rates.</em>
+      </p>
+    `;
+
+    await transporter.sendMail({
+      from: '"Netamps Portal" <no-reply@netamps.in>',
+      to: email,
+      subject: `Update on Request ${requestId}`,
+      html: htmlContent,
+    });
+
+    return new Response(JSON.stringify({ success: true, message: 'Push email sent successfully' }), { headers: { 'Content-Type': 'application/json' } });
+  } catch (err) {
+    console.error('Email Push Error:', err);
+    return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}

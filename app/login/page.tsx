@@ -131,41 +131,37 @@ export default function LoginPage() {
     try {
       const hashedPassword = await hashPassword(password);
       
-      const DEFAULT_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec'; // Netamps2026!
-      
-      // Get all registered users from database
-      const users = JSON.parse(localStorage.getItem('netamps_users') || '[]');
-      if (users.length === 0) {
-        // Initialize default admin and staff if missing
-        users.push({ email: 'admin@netamps.com', hash: localStorage.getItem('netamps_admin_hash') || DEFAULT_HASH });
-        users.push({ email: 'staff@netamps.com', hash: localStorage.getItem('netamps_staff_hash') || DEFAULT_HASH });
-        localStorage.setItem('netamps_users', JSON.stringify(users));
-      }
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', email, passwordHash: hashedPassword })
+      });
+      const data = await res.json();
 
-      const user = users.find((u: any) => u.email === email);
-
-      if (user && hashedPassword === user.hash) {
-        // Create secure session ID
-        const sessionId = crypto.randomUUID();
-        document.cookie = `session_id=${sessionId}; path=/; max-age=3600; SameSite=Strict; Secure`;
+      if (data.success) {
+        document.cookie = `session_id=${data.sessionId}; path=/; max-age=3600; SameSite=Strict; Secure`;
         document.cookie = `user_role=${email}; path=/; max-age=3600; SameSite=Strict; Secure`;
         
-        // Log successful login
-        const { logEvent } = await import('../lib/logger');
-        logEvent('AUTH_SUCCESS', 'Login Page', 'User logged in successfully', email);
-
-        // Redirect to dashboard
+        try {
+          const { logEvent } = await import('../lib/logger');
+          logEvent('AUTH_SUCCESS', 'Login Page', 'User logged in successfully', email);
+        } catch(e) {}
+        
         router.push('/dashboard');
-      } else {
+        return;
+      }
+
+      setErrorMsg(data.message || 'Invalid credentials');
+      setIsSubmitting(false);
+      try {
         const { logEvent } = await import('../lib/logger');
         logEvent('AUTH_FAILED_INVALID', 'Login Page', 'Invalid credentials provided', email);
-        setErrorMsg('Invalid credentials. Please try again.');
-        setIsSubmitting(false);
-      }
+      } catch(e) {}
     } catch (err) {
       const { logEvent } = await import('../lib/logger');
       logEvent('AUTH_ERROR', 'Login Page', 'Encryption error during login', email);
-      setErrorMsg('Encryption error occurred.');
+      setErrorMsg('Network error. Check connection.');
       setIsSubmitting(false);
     }
   };

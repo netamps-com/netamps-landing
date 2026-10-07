@@ -32,6 +32,14 @@ export function logEvent(eventType: string, page: string, details: string, user:
     }
 
     localStorage.setItem('netamps_audit_logs', JSON.stringify(existing));
+    
+    // Async push to backend
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    fetch(`${API_URL}/api/logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(log)
+    }).catch(() => {});
   } catch (err) {
     console.error('Failed to write to audit log', err);
   }

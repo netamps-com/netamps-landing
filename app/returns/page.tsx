@@ -104,10 +104,23 @@ export default function ReturnsPage() {
         return;
       }
 
+      // Generate OTP
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/otp/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setCaptchaError(data.message || 'Failed to send OTP.');
+        setIsSubmitting(false);
+        return;
+      }
+
       setFormDataCache(formData);
-      
-      // Bypass the external OTP microservice entirely to prevent network/CORS errors.
-      await processReturnSubmit(formData);
+      setShowOtp(true);
+      setIsSubmitting(false);
       
     } catch (err) {
       console.error(err);
@@ -128,7 +141,7 @@ export default function ReturnsPage() {
     try {
       if (!formDataCache) return;
       const email = formDataCache.get('email') as string;
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://netamps.cloudflareaccess.com';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${API_URL}/api/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,19 +163,30 @@ export default function ReturnsPage() {
     }
   };
 
-  const handleTrackSubmit = () => {
+  const handleTrackSubmit = async () => {
     setTrackingError('');
     setTrackingResult(null);
     if (!trackingId.trim()) {
       setTrackingError('Please enter a Tracking ID');
       return;
     }
-    const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
-    const found = existingReturns.find((r: any) => r.id === trackingId.trim());
-    if (found) {
-      setTrackingResult(found);
-    } else {
-      setTrackingError('Request not found. Please check your Tracking ID.');
+    
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/returns`);
+      const data = await res.json();
+      const returns = data.success && data.returns.length > 0 ? data.returns : JSON.parse(localStorage.getItem('netamps_returns') || '[]');
+      const found = returns.find((r: any) => r.id === trackingId.trim());
+      if (found) {
+        setTrackingResult(found);
+      } else {
+        setTrackingError('Request not found. Please check your Tracking ID.');
+      }
+    } catch (e) {
+      const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
+      const found = existingReturns.find((r: any) => r.id === trackingId.trim());
+      if (found) setTrackingResult(found);
+      else setTrackingError('Request not found.');
     }
   };
 
@@ -202,10 +226,25 @@ export default function ReturnsPage() {
       
       const uploadedFileUrls: string[] = [];
       
-      // Bypass the external OTP/R2 microservice entirely.
-      // In a purely client-side static mock, we'll just store the local filenames
+      // Real upload to R2 via API
       for (const file of selectedFiles) {
-        uploadedFileUrls.push(`mock_upload_${Date.now()}_${file.name}`);
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', file);
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+          const upRes = await fetch(`${API_URL}/api/upload`, {
+            method: 'POST',
+            body: uploadFormData
+          });
+          const upData = await upRes.json();
+          if (upData.success) {
+            uploadedFileUrls.push(upData.url);
+          } else {
+            uploadedFileUrls.push(`error_upload_${file.name}`);
+          }
+        } catch (e) {
+          uploadedFileUrls.push(`error_upload_${file.name}`);
+        }
       }
 
       setGeneratedId(newId);
@@ -223,6 +262,14 @@ export default function ReturnsPage() {
         status: 'Pending'
       };
 
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      await fetch(`${API_URL}/api/returns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(returnReq)
+      });
+      
+      // Keep local copy for immediate fallback viewing
       const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
       localStorage.setItem('netamps_returns', JSON.stringify([returnReq, ...existingReturns]));
       
