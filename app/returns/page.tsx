@@ -115,6 +115,10 @@ export default function ReturnsPage() {
       if (!data.success) {
         setCaptchaError(data.message || 'Failed to send OTP.');
         setIsSubmitting(false);
+        try {
+          const { logEvent } = await import('../lib/logger');
+          logEvent('OTP_FAILED', 'Returns Page', `Failed to generate OTP: ${data.message || 'Unknown error'}`, email);
+        } catch(e) {}
         return;
       }
       
@@ -157,6 +161,10 @@ export default function ReturnsPage() {
       if (!data.success) {
         setOtpError(data.message || 'Invalid OTP Code.');
         setIsSubmitting(false);
+        try {
+          const { logEvent } = await import('../lib/logger');
+          logEvent('OTP_INVALID', 'Returns Page', 'User provided an invalid OTP code', email);
+        } catch(e) {}
         return;
       }
       
@@ -164,6 +172,13 @@ export default function ReturnsPage() {
     } catch(err) {
       setOtpError('Network error verifying OTP.');
       setIsSubmitting(false);
+      try {
+        if (formDataCache) {
+          const email = formDataCache.get('email') as string;
+          const { logEvent } = await import('../lib/logger');
+          logEvent('OTP_ERROR', 'Returns Page', 'Network error verifying OTP', email);
+        }
+      } catch(e) {}
     }
   };
 

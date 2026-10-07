@@ -213,13 +213,18 @@ export default function DashboardPage() {
       
       const { logEvent } = await import('../lib/logger');
       logEvent('EMAIL_PUSH_SENT', 'Dashboard Page', `Sent email push for request ${req.id}`, userRole);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || 'Network error.');
       const failedReturns = updatedReturns.map(r => 
         r.id === req.id ? { ...r, emailDeliveryStatus: 'failed' as const } : r
       );
       setReturns(failedReturns);
       localStorage.setItem('netamps_returns', JSON.stringify(failedReturns));
+      try {
+        const { logEvent } = await import('../lib/logger');
+        logEvent('EMAIL_PUSH_FAILED', 'Dashboard Page', `Failed to send email push for request ${req.id}: ${e.message}`, userRole);
+      } catch (err) {}
     }
   };
 

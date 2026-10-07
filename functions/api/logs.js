@@ -72,6 +72,17 @@ export async function onRequestPost({ request, env }) {
 export async function onRequestGet({ env }) {
   try {
     if (env.DB) {
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id TEXT PRIMARY KEY,
+          timestamp TEXT,
+          event_type TEXT,
+          page TEXT,
+          details TEXT,
+          username TEXT,
+          ip_address TEXT
+        )
+      `).run();
       const { results } = await env.DB.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 5000').all();
       const formattedLogs = results.map((row) => ({
         id: row.id,
@@ -86,6 +97,17 @@ export async function onRequestGet({ env }) {
     } else if (env.DATABASE_URL) {
       const client = new Client({ connectionString: env.DATABASE_URL });
       await client.connect();
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id VARCHAR(255) PRIMARY KEY,
+          timestamp TIMESTAMP,
+          event_type VARCHAR(255),
+          page VARCHAR(255),
+          details TEXT,
+          username VARCHAR(255),
+          ip_address VARCHAR(255)
+        )
+      `);
       const res = await client.query('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 5000');
       await client.end();
       
