@@ -4,15 +4,14 @@
  * Production OTP issuance. Workers-compatible by design:
  *  - Storage: Cloudflare KV (OTP_KV binding, native TTL) with D1 (DB binding) fallback.
  *    Postgres-over-TCP and SMTP are IMPOSSIBLE from Workers — do not re-add them here.
- *  - Delivery: MailChannels with API key (Domain Lockdown mode). Unauthenticated
- *    MailChannels sends always fail for non-Cloudflare zones — never attempt them.
+ *  - Delivery: Resend REST API using RESEND_API_KEY.
  *  - Crypto: CSPRNG via crypto.getRandomValues. The code is NEVER returned to the
  *    client and is single-use with a 5-minute expiry.
  *
  * Required bindings/secrets (Pages → Settings → Functions):
  *   OTP_KV               KV namespace binding (preferred store)
  *   DB                   D1 database binding (fallback store; at least one required)
- *   MAILCHANNELS_API_KEY Secret for api.mailchannels.net (Domain Lockdown mode)
+ *   RESEND_API_KEY       Secret for api.resend.com
  */
 
 const OTP_TTL_SECONDS = 300;
@@ -128,30 +127,35 @@ async function writeSendCounter(env, email, counter) {
   }
 }
 
-/* ── Email delivery (MailChannels, authenticated only) ─────────────────── */
+/* ── Email delivery (Resend) ───────────────────────────────────────────── */
 
 async function sendOtpEmail(env, to, otp) {
-  const apiKey = env.MAILCHANNELS_API_KEY;
+  const apiKey = env.RESEND_API_KEY;
   if (!apiKey) {
-    console.error('[otp] MAILCHANNELS_API_KEY is not configured');
+    console.error('[otp] RESEND_API_KEY is not configured');
     return { ok: false, misconfigured: true };
   }
   const html =
     `<h3>Your Netamps Verification Code</h3>` +
     `<p>Your OTP is: <strong style="font-size:24px">${otp}</strong>.</p>` +
     `<p>It will expire in 5 minutes. Never share this code with anyone.</p>`;
-  const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
+    
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'X-Api-Key': apiKey },
+    headers: { 
+      'Content-Type': 'application/json', 
+      'Authorization': `Bearer ${apiKey}` 
+    },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: 'no-reply@netamps.in', name: 'Netamps Portal' },
+      from: 'onboarding@resend.dev',
+      to: to,
       subject: 'Your Netamps Verification Code',
-      content: [{ type: 'text/html', value: html }]
+      html: html
     })
   });
+  
   if (!res.ok) {
-    console.error('[otp] MailChannels send failed:', res.status, await res.text().catch(() => ''));
+    console.error('[otp] Resend API failed:', res.status, await res.text().catch(() => ''));
     return { ok: false };
   }
   return { ok: true };
