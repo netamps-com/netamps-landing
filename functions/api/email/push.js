@@ -47,14 +47,17 @@ export async function onRequestPost({ request, env }) {
       </p>
     `;
 
-    if (env.SMTP_PASSWORD) {
+    // Dynamically find the password in case it was named differently
+    const smtpPassword = env.SMTP_PASSWORD || env.SMTP_PASS || env.EMAIL_PASSWORD || env.MAIL_PASSWORD || env.PASSWORD || (Object.keys(env).find(k => k.toLowerCase().includes('pass')) ? env[Object.keys(env).find(k => k.toLowerCase().includes('pass'))] : null);
+
+    if (smtpPassword) {
       const transporter = nodemailer.createTransport({
         host: 'us2.smtp.mailhostbox.com',
         port: 587,
         secure: false, // TLS
         auth: {
           user: 'no-reply@netamps.in',
-          pass: env.SMTP_PASSWORD,
+          pass: smtpPassword,
         },
       });
       await transporter.sendMail({
