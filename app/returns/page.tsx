@@ -250,8 +250,6 @@ export default function ReturnsPage() {
       setIsUploading(false);
       setIsSubmitting(false);
       setIsSuccess(true);
-      setTurnstileToken('');
-      setTurnstileReset((n) => n + 1);
     } catch (err) {
       console.error('Failed to save to database', err);
       setIsUploading(false);
