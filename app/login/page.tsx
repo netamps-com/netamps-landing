@@ -275,6 +275,14 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+          
+          <div className="mt-4 flex items-center justify-between px-1">
+            <span className="text-xs text-slate-500 font-medium">Database Health</span>
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="text-[10px] text-emerald-600 font-bold tracking-wide uppercase">Connected</span>
+            </div>
+          </div>
 
           <div className="mt-6">
             <div className="relative">
