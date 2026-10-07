@@ -65,8 +65,7 @@ export async function onRequestPost({ request, env }) {
       });
     } else {
       // Native Cloudflare MailChannels delivery
-      // MailChannels pre-authorizes .pages.dev domains. By sending from the project's default pages.dev domain, we bypass the need for a TXT record.
-      const senderEmail = `no-reply@netamps-landing.pages.dev`;
+      const senderEmail = `no-reply@netamps.in`;
 
       const mcRes = await fetch("https://api.mailchannels.net/tx/v1/send", {
         method: "POST",
@@ -74,7 +73,6 @@ export async function onRequestPost({ request, env }) {
         body: JSON.stringify({
           personalizations: [{ to: [{ email: email }] }],
           from: { email: senderEmail, name: "Netamps Portal" },
-          reply_to: { email: "no-reply@netamps.in", name: "Netamps Portal" },
           subject: `Update on Request ${requestId}`,
           content: [{ type: "text/html", value: htmlContent }]
         })
