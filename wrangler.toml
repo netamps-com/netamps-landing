@@ -8,3 +8,7 @@ name = "netamps-landing"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "out"
+[[d1_databases]]
+binding = "DB"
+database_name = "netamps-db"
+database_id = "544297c4-e412-4b42-86d0-3c4383d92efa"
