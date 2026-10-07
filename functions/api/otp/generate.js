@@ -147,7 +147,7 @@ async function sendOtpEmail(env, to, otp) {
       'Authorization': `Bearer ${apiKey}` 
     },
     body: JSON.stringify({
-      from: 'onboarding@resend.dev',
+      from: 'Netamps Portal <no-reply@netamps.in>',
       to: to,
       subject: 'Your Netamps Verification Code',
       html: html

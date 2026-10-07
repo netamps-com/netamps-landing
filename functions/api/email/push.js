@@ -8,9 +8,9 @@
  *    and the env-password scavenger risked grabbing the wrong secret — both removed.
  *  - All interpolated values are HTML-escaped (request/product data is user input).
  *
- * NOTE: Resend's test sender (onboarding@resend.dev) only delivers to the
- * Resend account owner's inbox. For customer delivery, verify your domain in
- * Resend and change FROM_EMAIL below to e.g. 'no-reply@netamps.in'.
+ * NOTE: Sender domain netamps.in is verified in Resend. FROM uses
+ * 'Netamps Portal <no-reply@netamps.in>' — do not revert to the
+ * onboarding@resend.dev test sender (it only delivers to the account owner).
  */
 
 function json(body, status = 200) {
@@ -103,7 +103,7 @@ export async function onRequestPost({ request, env }) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        from: 'onboarding@resend.dev',
+        from: 'Netamps Portal <no-reply@netamps.in>',
         to: email,
         subject: `Update on Request ${safeRequestId}`,
         html: htmlContent
