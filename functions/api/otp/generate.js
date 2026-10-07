@@ -65,25 +65,20 @@ export async function onRequestPost({ request, env }) {
       });
     } else {
       // Native Cloudflare MailChannels delivery
-      const hostname = new URL(request.url).hostname;
-      const senderEmail = `no-reply@${hostname}`;
-
       const mcRes = await fetch("https://api.mailchannels.net/tx/v1/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: email }] }],
-          from: { email: senderEmail, name: "Netamps Portal" },
+          from: { email: "no-reply@netamps.in", name: "Netamps Portal" },
           subject,
           content: [{ type: "text/html", value: htmlContent }]
         })
       });
-      globalThis.otpStore = globalThis.otpStore || new Map();
-      globalThis.otpStore.set(email, otp);
-
       if (!mcRes.ok) {
         console.error('MailChannels failed:', await mcRes.text());
-        return new Response(JSON.stringify({ success: true, message: `Email delivery failed (DNS). For testing, your OTP is: ${otp}` }), {
+        return new Response(JSON.stringify({ success: false, message: `Email delivery failed via MailChannels (DNS/Zone Unauthorized). Please configure Domain Lockdown or SMTP.` }), {
+          status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
       }

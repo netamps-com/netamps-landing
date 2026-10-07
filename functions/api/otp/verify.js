@@ -29,43 +29,23 @@ export async function onRequestPost({ request, env }) {
       const client = new Client({ connectionString: env.DATABASE_URL });
       await client.connect();
       
-      const res = await client.query('SELECT code, created_at FROM otps WHERE email = $1', [email]);
-      await client.end();
-
-      if (res.rows.length === 0) {
-        return new Response(JSON.stringify({ success: false, message: 'No OTP generated for this email' }), { status: 400 });
+    if (env.DB) {
+      const { results } = await env.DB.prepare('SELECT code FROM otps WHERE email = ? ORDER BY expires_at DESC LIMIT 1').bind(email).all();
+      if (!results || results.length === 0 || results[0].code !== code) {
+        return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
-
-      const dbCode = res.rows[0].code;
-      const createdAt = new Date(res.rows[0].created_at).getTime();
-      const now = Date.now();
-
-      if (now - createdAt > 5 * 60 * 1000) {
-        return new Response(JSON.stringify({ success: false, message: 'OTP expired' }), { status: 400 });
-      }
-
-      if (code !== dbCode) {
-        return new Response(JSON.stringify({ success: false, message: 'Invalid OTP' }), { status: 400 });
-      }
-
       return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully' }), { headers: { 'Content-Type': 'application/json' } });
     } else if (env.DATABASE_URL) {
-      // Postgres logic is not implemented for OTPs yet in the fallback, so just bypass for demo
-      console.warn('Postgres OTP verify bypassed.');
-      return new Response(JSON.stringify({ success: true, message: 'OTP verified (PG bypass)' }), { headers: { 'Content-Type': 'application/json' } });
-    } else {
-      globalThis.otpStore = globalThis.otpStore || new Map();
-      const storedOtp = globalThis.otpStore.get(email);
-      if (storedOtp) {
-        if (storedOtp === code) {
-          globalThis.otpStore.delete(email);
-          return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully (Memory DB)' }), { headers: { 'Content-Type': 'application/json' } });
-        } else {
-          return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        }
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+      const res = await client.query('SELECT code FROM otps WHERE email = $1 ORDER BY created_at DESC LIMIT 1', [email]);
+      await client.end();
+      if (res.rows.length === 0 || res.rows[0].code !== code) {
+        return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
-      console.warn('No DB configured and OTP not in Memory DB. Rejecting OTP.');
-      return new Response(JSON.stringify({ success: false, message: 'Invalid OTP Code or OTP expired.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully' }), { headers: { 'Content-Type': 'application/json' } });
+    } else {
+      throw new Error('Database connection completely unavailable. Cannot verify OTP. Ensure D1 or Postgres is bound in Cloudflare Pages dashboard.');
     }
   } catch (err) {
     console.error('OTP Verify Error:', err);
