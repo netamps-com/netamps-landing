@@ -6,7 +6,7 @@ on: pull_request
 permissions:
   checks: write
   contents: read
-  pull_requests: write
+  pull-requests: write
   deployments: write
 jobs:
   build_and_preview:
