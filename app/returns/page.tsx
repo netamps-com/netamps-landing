@@ -113,11 +113,12 @@ export default function ReturnsPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        setCaptchaError(data.message || 'Failed to send OTP.');
+        const ref = data.stage ? ` (ref: ${data.stage})` : '';
+        setCaptchaError(`${data.message || 'Failed to send OTP.'}${ref}`);
         setIsSubmitting(false);
         try {
           const { logEvent } = await import('../lib/logger');
-          logEvent('OTP_FAILED', 'Returns Page', `Failed to generate OTP: ${data.message || 'Unknown error'}`, email);
+          logEvent('OTP_FAILED', 'Returns Page', `Failed to generate OTP: ${data.message || 'Unknown error'}${ref}`, email);
         } catch(e) {}
         return;
       }
@@ -159,7 +160,8 @@ export default function ReturnsPage() {
       const data = await res.json();
       
       if (!data.success) {
-        setOtpError(data.message || 'Invalid OTP Code.');
+        const ref = data.stage ? ` (ref: ${data.stage})` : '';
+        setOtpError(`${data.message || 'Invalid OTP Code.'}${ref}`);
         setIsSubmitting(false);
         try {
           const { logEvent } = await import('../lib/logger');
