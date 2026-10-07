@@ -2,10 +2,15 @@
  * POST /api/email/push
  *
  * Order-status notification email. Workers-compatible:
- *  - Delivery via MailChannels with API key (Domain Lockdown mode) only.
+ *  - Delivery via Resend REST API (https://api.resend.com/emails) using the
+ *    RESEND_API_KEY secret. Plain fetch only — no SDK dependency.
  *    The old nodemailer/SMTP branch could never work from Workers (no TCP)
  *    and the env-password scavenger risked grabbing the wrong secret — both removed.
  *  - All interpolated values are HTML-escaped (request/product data is user input).
+ *
+ * NOTE: Resend's test sender (onboarding@resend.dev) only delivers to the
+ * Resend account owner's inbox. For customer delivery, verify your domain in
+ * Resend and change FROM_EMAIL below to e.g. 'no-reply@netamps.in'.
  */
 
 function json(body, status = 200) {
@@ -85,25 +90,28 @@ export async function onRequestPost({ request, env }) {
       </p>
     `;
 
-    const apiKey = env.MAILCHANNELS_API_KEY;
+    const apiKey = env.RESEND_API_KEY;
     if (!apiKey) {
-      console.error('[email] MAILCHANNELS_API_KEY is not configured');
+      console.error('[email] RESEND_API_KEY is not configured');
       return json({ success: false, message: 'Email service is not configured. Please contact support.' }, 503);
     }
 
-    const mcRes = await fetch('https://api.mailchannels.net/tx/v1/send', {
+    const rsRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'X-Api-Key': apiKey },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email }] }],
-        from: { email: 'no-reply@netamps.in', name: 'Netamps Portal' },
+        from: 'onboarding@resend.dev',
+        to: email,
         subject: `Update on Request ${safeRequestId}`,
-        content: [{ type: 'text/html', value: htmlContent }]
+        html: htmlContent
       })
     });
 
-    if (!mcRes.ok) {
-      console.error('[email] MailChannels send failed:', mcRes.status, await mcRes.text().catch(() => ''));
+    if (!rsRes.ok) {
+      console.error('[email] Resend send failed:', rsRes.status, await rsRes.text().catch(() => ''));
       return json({ success: false, message: 'Failed to deliver notification email. Please try again shortly.' }, 502);
     }
 
