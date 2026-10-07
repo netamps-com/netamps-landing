@@ -19,11 +19,22 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
   const [mode, setMode] = useState<'modify' | 'create'>('modify');
 
   useEffect(() => {
-    const loadedUsers = JSON.parse(localStorage.getItem('netamps_users') || '[]');
-    setUsers(loadedUsers);
-    if (loadedUsers.length > 0) {
-      setTargetAccount(loadedUsers[0].email);
-    }
+    const fetchUsers = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/users`);
+        const data = await res.json();
+        if (data.success && data.users) {
+          setUsers(data.users);
+          if (data.users.length > 0) {
+            setTargetAccount(data.users[0].email);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch users', err);
+      }
+    };
+    fetchUsers();
   }, []);
 
   const hashPassword = async (password: string) => {
@@ -48,17 +59,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
     setPwdSuccess('');
 
     try {
-      // Find current user's hash to verify authority
-      const me = users.find(u => u.email === currentUserRole);
-      if (!me) throw new Error('User not found');
-
       const hashedInput = await hashPassword(currentPassword);
-      if (hashedInput !== me.hash) {
-        setPwdError('Your current password is incorrect. Verification failed.');
-        logEvent('PASSWORD_CHANGE_FAILED', `Failed to change password for ${targetAccount} - invalid auth`);
-        setIsUpdatingPwd(false);
-        return;
-      }
 
       if (newPassword.length < 8) {
         setPwdError('New password must be at least 8 characters.');
@@ -67,11 +68,22 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       }
 
       const newHashed = await hashPassword(newPassword);
+      
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_password', email: targetAccount, passwordHash: newHashed, currentPasswordHash: hashedInput })
+      });
+      const data = await res.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to update password');
+      }
+
       const updatedUsers = users.map(u => 
         u.email === targetAccount ? { ...u, hash: newHashed } : u
       );
-      
-      localStorage.setItem('netamps_users', JSON.stringify(updatedUsers));
       setUsers(updatedUsers);
 
       setPwdSuccess(`Successfully updated secure password for ${targetAccount}`);
@@ -104,9 +116,20 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       }
 
       const newHashed = await hashPassword(newUserPassword);
-      const updatedUsers = [...users, { email: newUserEmail, hash: newHashed }];
       
-      localStorage.setItem('netamps_users', JSON.stringify(updatedUsers));
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', email: newUserEmail, passwordHash: newHashed, role: 'staff' })
+      });
+      const data = await res.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to create user');
+      }
+
+      const updatedUsers = [...users, { email: newUserEmail, hash: newHashed }];
       setUsers(updatedUsers);
 
       setPwdSuccess(`Successfully created user ${newUserEmail}`);

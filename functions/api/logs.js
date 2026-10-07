@@ -102,3 +102,17 @@ export async function onRequestGet({ env }) {
     return json({ success: false, message: 'Failed to read audit logs.' }, 500);
   }
 }
+
+export async function onRequestDelete({ env }) {
+  try {
+    if (!env.DB || typeof env.DB.prepare !== 'function') {
+      return json({ success: false, message: 'DB not connected' }, 500);
+    }
+    await ensureTable(env);
+    await env.DB.prepare('DELETE FROM audit_logs').run();
+    return json({ success: true, message: 'Logs cleared successfully' });
+  } catch (err) {
+    console.error('[logs] DELETE error:', err);
+    return json({ success: false, message: 'Failed to clear audit logs.' }, 500);
+  }
+}

@@ -68,10 +68,23 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", encodeURI(csvContent));
     downloadAnchorNode.setAttribute("download", "security_audit_logs.csv");
-    document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
   };
+
+  const clearLogs = async () => {
+    if (window.confirm('Are you sure you want to permanently clear all audit logs? This cannot be undone.')) {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        await fetch(`${API_URL}/api/logs`, { method: 'DELETE' });
+        localStorage.setItem('netamps_audit_logs', '[]');
+        setLogs([]);
+      } catch (err) {
+        console.error('Failed to clear logs', err);
+      }
+    }
+  };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
@@ -134,6 +147,9 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
             </button>
             <button onClick={exportJSON} className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-sm font-semibold hover:bg-slate-100 transition-colors">
               <FileText className="w-4 h-4" /> Export JSON
+            </button>
+            <button onClick={clearLogs} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors">
+              <X className="w-4 h-4" /> Clear Logs
             </button>
           </div>
         </div>

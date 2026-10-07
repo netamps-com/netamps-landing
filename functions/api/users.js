@@ -1,6 +1,7 @@
 export async function onRequestPost({ request, env }) {
   try {
-    const { action, email, passwordHash, role } = await request.json();
+    const body = await request.json();
+    const { action, email, passwordHash, role, currentPasswordHash } = body;
 
     if (env.DB) {
       await env.DB.prepare(`
@@ -37,9 +38,18 @@ export async function onRequestPost({ request, env }) {
       }
       
       if (action === 'update_password') {
+        const { currentPasswordHash } = await request.clone().json().catch(() => ({}));
+        
+        // Verify current password first
+        const { results } = await env.DB.prepare('SELECT hash FROM users WHERE email = ?').bind(email).all();
+        if (results.length === 0 || results[0].hash !== currentPasswordHash) {
+          return new Response(JSON.stringify({ success: false, message: 'Your current password is incorrect. Verification failed.' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        }
+        
         await env.DB.prepare('UPDATE users SET hash = ? WHERE email = ?').bind(passwordHash, email).run();
         return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
       }
+
     } else if (env.DATABASE_URL) {
       // ... pg logic ... (omitted for brevity, keep existing pg logic if possible, or just replace the end)
       const { Client } = await import('pg');
