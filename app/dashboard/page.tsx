@@ -184,7 +184,12 @@ export default function DashboardPage() {
           intent: req.intent
         })
       });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        throw new Error('Server returned an invalid response (500 Internal Server Error)');
+      }
       
       if (!data.success) throw new Error(data.message);
       
