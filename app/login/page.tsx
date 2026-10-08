@@ -149,7 +149,7 @@ export default function LoginPage() {
           logEvent('AUTH_SUCCESS', 'Login Page', 'User logged in successfully', email);
         } catch(e) {}
         
-        router.push('/dashboard');
+        router.push('/intake');
         return;
       }
 
@@ -313,7 +313,7 @@ export default function LoginPage() {
                 Webmail
               </a>
               <Link
-                href="/dashboard"
+                href="/intake"
                 className="w-full flex justify-center items-center gap-2 py-3 px-2 border border-slate-200 rounded-xl shadow-sm text-xs sm:text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
               >
                 <Laptop className="w-4 h-4" />
