@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import { v4 as uuidv4 } from 'uuid';
+import SecureMediaUploader from './SecureMediaUploader';
 
 interface ProductItem {
   id: string;
@@ -39,8 +40,9 @@ export default function ReturnsPage() {
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
+  
   // Secure File Upload State
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedSecureFiles, setUploadedSecureFiles] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
@@ -239,41 +241,12 @@ export default function ReturnsPage() {
   };
 
   const processReturnSubmit = async (formData?: FormData) => {
-    try {
       const actualFormData = formData || formDataCache;
       if (!actualFormData) return;
       setIsUploading(true);
       const newId = generateMaskedSnowflake(intent);
       
-      const uploadedFileUrls: string[] = [];
-      
-      // Real upload to R2 via API
-      for (const file of selectedFiles) {
-        const uploadFormData = new FormData();
-        uploadFormData.append('file', file);
-        try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-          const upRes = await fetch(`${API_URL}/api/upload`, {
-            method: 'POST',
-            body: uploadFormData
-          });
-          const upData = await upRes.json();
-          if (upData.success) {
-            uploadedFileUrls.push(upData.url);
-          } else {
-            throw new Error('Fallback to Base64');
-          }
-        } catch (e) {
-          // Fallback to base64 data URI if R2 is unconfigured
-          const base64Str = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          });
-          uploadedFileUrls.push(base64Str);
-        }
-      }
-
+      const uploadedFileUrls = [...uploadedSecureFiles];
       setGeneratedId(newId);
 
       const returnReq = {
@@ -408,14 +381,14 @@ export default function ReturnsPage() {
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setSelectedFiles([]); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
+                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   BUY Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setSelectedFiles([]); }}
+                  onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   TRACK Request
@@ -531,7 +504,7 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
-                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); setSelectedFiles([]); }}>
+                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); setUploadedSecureFiles([]); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name</label>
@@ -641,42 +614,12 @@ export default function ReturnsPage() {
 
                 {/* Secure File Upload (SOC 2) — SELL only */}
                 {intent === 'sell' && (
-                <div className="border-t border-slate-200 pt-6 mt-6">
-                  <div className="mb-4">
-                    <h4 className="text-lg font-bold text-slate-900">Upload Photos/ Videos, Max 100MB Files only (MP4, WEBM)</h4>
+                  <div className="border-t border-slate-200 pt-6 mt-6">
+                    <SecureMediaUploader 
+                      sessionId={generatedId || 'session-' + Date.now()} 
+                      onUploadSuccess={(keys) => setUploadedSecureFiles(prev => [...prev, ...keys])} 
+                    />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <svg className="w-8 h-8 mb-3 text-slate-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
-                        </svg>
-                        <p className="mb-2 text-sm text-slate-500"><span className="font-bold">Click to upload</span> or drag and drop</p>
-                      </div>
-                      <input type="file" className="hidden" multiple accept="image/jpeg, image/png, image/webp, video/mp4, video/webm" onChange={(e) => {
-                        if (e.target.files) {
-                          const files = Array.from(e.target.files);
-                          const validFiles = files.filter(f => f.size <= 100 * 1024 * 1024);
-                          setSelectedFiles(prev => [...prev, ...validFiles]);
-                        }
-                      }} />
-                    </label>
-                    
-                    {selectedFiles.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        {selectedFiles.map((f, i) => (
-                          <div key={i} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm text-sm">
-                            <span className="truncate max-w-[200px] sm:max-w-[300px] text-slate-700 font-medium">{f.name}</span>
-                            <div className="flex items-center gap-4">
-                              <span className="text-slate-500 text-xs">{(f.size / 1024 / 1024).toFixed(2)} MB</span>
-                              <button type="button" onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-700 font-bold">✕</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
                 )}
 
                 {/* Submit */}
