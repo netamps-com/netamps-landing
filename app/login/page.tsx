@@ -298,20 +298,27 @@ export default function LoginPage() {
                 <div className="w-full border-t border-slate-200" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white/90 text-slate-500 backdrop-blur-xl">Webmail Access</span>
+                <span className="px-2 bg-white/90 text-slate-500 backdrop-blur-xl">Quick Links</span>
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 grid grid-cols-2 gap-3">
               <a
                 href="https://webmail.netamps.in"
                 target="webmail.netamps.in"
                 rel="noopener noreferrer"
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                className="w-full flex justify-center items-center gap-2 py-3 px-2 border border-slate-200 rounded-xl shadow-sm text-xs sm:text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
               >
                 <Mail className="w-4 h-4" />
-                Webmail Login
+                Webmail
               </a>
+              <Link
+                href="/dashboard"
+                className="w-full flex justify-center items-center gap-2 py-3 px-2 border border-slate-200 rounded-xl shadow-sm text-xs sm:text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+              >
+                <Laptop className="w-4 h-4" />
+                CRM Module
+              </Link>
             </div>
           </div>
         </motion.div>
