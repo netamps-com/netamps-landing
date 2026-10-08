@@ -229,7 +229,9 @@ export async function onRequestPost({ request, env }) {
       if (sent.misconfigured) {
         return json({ success: false, message: 'Email service is not configured. Please contact support.', stage: 'email-send' }, 503);
       }
-      return json({ success: false, message: 'Failed to deliver the OTP email. Please try again shortly.', stage: 'email-send', detail: sent.thrown || sent.status || 'unknown' }, 502);
+      // NOTE: never use HTTP 502 here — Cloudflare Pages rewrites function 502s into
+      // a generic text error page, hiding this JSON. 503 passes through intact.
+      return json({ success: false, message: 'Failed to deliver the OTP email. Please try again shortly.', stage: 'email-send', detail: sent.thrown || sent.status || 'unknown' }, 503);
     }
 
     stage = 'counter-write';

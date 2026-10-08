@@ -112,7 +112,8 @@ export async function onRequestPost({ request, env }) {
 
     if (!rsRes.ok) {
       console.error('[email] Resend send failed:', rsRes.status, await rsRes.text().catch(() => ''));
-      return json({ success: false, message: 'Failed to deliver notification email. Please try again shortly.' }, 502);
+      // NOTE: never HTTP 502 — Pages rewrites function 502s into a generic text page.
+      return json({ success: false, message: 'Failed to deliver notification email. Please try again shortly.' }, 503);
     }
 
     return json({ success: true, message: 'Push email sent successfully', emailDeliveryStatus: 'Sent' });
