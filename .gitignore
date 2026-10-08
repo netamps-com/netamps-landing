@@ -30,6 +30,9 @@ otp-service/dist/
 # vercel
 .vercel
 
+# wrangler (local dev state, bundles, local D1/R2/KV sqlite — never commit)
+.wrangler/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
