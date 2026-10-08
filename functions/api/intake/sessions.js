@@ -165,7 +165,6 @@ export async function onRequestPost({ request, env }) {
           }
         }
       }
-      }
     }
 
     // A5 Guardrails: Log event (real audit_logs schema:
