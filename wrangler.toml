@@ -12,6 +12,14 @@ bucket_name = "netamps-quarantine"
 [[r2_buckets]]
 binding = "PRODUCTION_BUCKET"
 bucket_name = "netamps-evidence"
+
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "cache-kv-id"
+
+[[queues.producers]]
+queue = "intake-processing-queue"
+binding = "INTAKE_QUEUE"
 name = "netamps-landing"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]

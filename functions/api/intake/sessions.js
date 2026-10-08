@@ -26,6 +26,16 @@ export async function onRequestGet({ request, env }) {
         params = [id, ownerEmail];
       }
       
+      if (env.CACHE_KV) {
+        const cachedStr = await env.CACHE_KV.get(`session:${id}`);
+        if (cachedStr) {
+          const cachedSession = JSON.parse(cachedStr);
+          if (isAdmin || cachedSession.owner_email === ownerEmail) {
+            return new Response(JSON.stringify({ success: true, session: cachedSession }), { headers: { 'Content-Type': 'application/json' } });
+          }
+        }
+      }
+      
       const { results } = await env.DB.prepare(query).bind(...params).all();
       
       if (results.length === 0) {
@@ -43,7 +53,13 @@ export async function onRequestGet({ request, env }) {
         rows: rows
       };
       
-      return new Response(JSON.stringify({ success: true, session: { ...sessionRow, data: payload } }), { headers: { 'Content-Type': 'application/json' } });
+      const fullSession = { ...sessionRow, data: payload };
+      
+      if (env.CACHE_KV) {
+        await env.CACHE_KV.put(`session:${id}`, JSON.stringify(fullSession), { expirationTtl: 3600 });
+      }
+      
+      return new Response(JSON.stringify({ success: true, session: fullSession }), { headers: { 'Content-Type': 'application/json' } });
     } else {
       if (isAdmin) {
         query = 'SELECT id, owner_email, status, created_at FROM intake_sessions ORDER BY created_at DESC';
@@ -116,10 +132,19 @@ export async function onRequestPost({ request, env }) {
       'INSERT INTO intake_sessions (id, owner_email, status, mapping) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET mapping=excluded.mapping, status=excluded.status, updated_at=CURRENT_TIMESTAMP'
     ).bind(id, ownerEmail, status || 'DRAFT', mappingStr).run();
 
+    // Invalidate cache since we are updating
+    if (env.CACHE_KV) {
+      await env.CACHE_KV.delete(`session:${id}`);
+    }
+
     // Insert assets
     if (data.rows && Array.isArray(data.rows)) {
-      // D1 batches for performance
-      const stmt = env.DB.prepare('INSERT INTO intake_assets (session_id, row_no, data) VALUES (?, ?, ?) ON CONFLICT(session_id, row_no) DO UPDATE SET data=excluded.data');
+      if (data.rows.length > 500 && env.INTAKE_QUEUE) {
+        // Send large payloads to background queue to prevent HTTP timeout
+        await env.INTAKE_QUEUE.send({ sessionId: id, ownerEmail, rows: data.rows });
+      } else {
+        // D1 batches for performance
+        const stmt = env.DB.prepare('INSERT INTO intake_assets (session_id, row_no, data) VALUES (?, ?, ?) ON CONFLICT(session_id, row_no) DO UPDATE SET data=excluded.data');
       const batch = data.rows.map((row, idx) => stmt.bind(id, idx, JSON.stringify(row)));
       if (batch.length > 0) {
         // max batch size for D1 is 100, chunk it if large
