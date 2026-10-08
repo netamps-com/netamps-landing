@@ -417,11 +417,11 @@ export default function DashboardPage() {
                                   )}
                                 </div>
                                 
-                                {/* Evidence Section */}
+                                {/* Asset Photos Section */}
                                 {req.attachedFiles && req.attachedFiles.length > 0 && (
                                   <div className="mt-6">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                      <FileImage className="w-4 h-4" /> Attached Evidence ({req.attachedFiles.length})
+                                      <FileImage className="w-4 h-4" /> Attached Asset Photos ({req.attachedFiles.length})
                                     </h4>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                       {req.attachedFiles.map((fileKey, idx) => {
@@ -434,7 +434,7 @@ export default function DashboardPage() {
                                             {isVideo ? (
                                               <video src={fileUrl} controls className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             ) : (
-                                              <img src={fileUrl} alt="Evidence" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                              <img src={fileUrl} alt="Asset photo" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             )}
                                           </a>
                                         );

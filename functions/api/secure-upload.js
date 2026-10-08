@@ -184,7 +184,7 @@ export async function onRequestPost({ request, env }) {
       return json({
         success: false,
         error: 'SIZE_VIOLATION',
-        message: 'Upload blocked: payload exceeds the 300 MB per-request limit. Split the evidence across multiple requests.'
+        message: 'Upload blocked: payload exceeds the 300 MB per-request limit. Split the asset photos across multiple requests.'
       }, 413);
     }
 
