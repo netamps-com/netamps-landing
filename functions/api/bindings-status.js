@@ -7,7 +7,11 @@ export async function onRequest({ env }) {
       hasDB: Boolean(env.DB),
       dbHasPrepare: Boolean(env.DB && typeof env.DB.prepare === 'function'),
       hasOTP_KV: Boolean(env.OTP_KV),
-      hasRESEND_API_KEY: Boolean(env.RESEND_API_KEY)
+      hasRESEND_API_KEY: Boolean(env.RESEND_API_KEY),
+      hasQUARANTINE_BUCKET: Boolean(env.QUARANTINE_BUCKET),
+      quarantineHasPut: Boolean(env.QUARANTINE_BUCKET && typeof env.QUARANTINE_BUCKET.put === 'function'),
+      hasPRODUCTION_BUCKET: Boolean(env.PRODUCTION_BUCKET),
+      hasEVIDENCE_BUCKET: Boolean(env.EVIDENCE_BUCKET)
     }),
     { headers: { 'Content-Type': 'application/json' } }
   );
