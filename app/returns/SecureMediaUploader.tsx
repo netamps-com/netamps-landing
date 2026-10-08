@@ -1,15 +1,16 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { UploadCloud, Shield, CheckCircle, AlertTriangle, XCircle, Trash2, Film, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { UploadCloud, CheckCircle, AlertTriangle, Trash2, Film, Image as ImageIcon, RotateCcw, OctagonX } from 'lucide-react';
 
 const MAX_SESSION_BYTES = 300 * 1024 * 1024; // 300MB
 
-type FileState = 'PENDING' | 'TUNNELING' | 'INSPECTING' | 'SUCCESS' | 'ERROR';
+type FileState = 'QUEUED' | 'UPLOADING' | 'SUCCESS' | 'ERROR';
 
 interface QueuedFile {
   id: string;
   file: File;
+  previewUrl?: string;
   state: FileState;
-  progress: number;
+  progress: number; // 0-100, real bytes when UPLOADING
   errorMessage?: string;
   r2Key?: string;
   hash?: string;
@@ -22,122 +23,143 @@ interface SecureMediaUploaderProps {
 
 export default function SecureMediaUploader({ onUploadSuccess, sessionId }: SecureMediaUploaderProps) {
   const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
-  const dropzoneRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const xhrRefs = useRef<Map<string, XMLHttpRequest>>(new Map());
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
 
-  const calculateTotalBytes = (files: QueuedFile[]) => files.reduce((acc, f) => acc + f.file.size, 0);
+  // Revoke object URLs on unmount to avoid leaking memory
+  useEffect(() => {
+    const snapshot = queuedFiles;
+    return () => {
+      snapshot.forEach((f) => { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const totalBytes = calculateTotalBytes(queuedFiles);
-  const isApproachingLimit = totalBytes > MAX_SESSION_BYTES * 0.7;
-  const isOverLimit = totalBytes > MAX_SESSION_BYTES;
-  const progressPercent = Math.min((totalBytes / MAX_SESSION_BYTES) * 100, 100);
+  const isImage = (f: File) => f.type.startsWith('image/');
+  const isVideo = (f: File) => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi|flv)$/i.test(f.name);
 
-  const getMeterColor = () => {
-    if (isOverLimit) return 'bg-red-500';
-    if (isApproachingLimit) return 'bg-amber-500';
-    return 'bg-emerald-500';
-  };
+  const uploadFile = useCallback((qFile: QueuedFile) => {
+    const xhr = new XMLHttpRequest();
+    xhrRefs.current.set(qFile.id, xhr);
 
-  const handleFiles = useCallback((newFiles: File[]) => {
-    const validNewFiles: QueuedFile[] = [];
-    let currentSessionSize = totalBytes;
+    setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, state: 'UPLOADING', progress: 0, errorMessage: undefined } : f)));
 
-    for (const f of newFiles) {
-      if (currentSessionSize + f.size > MAX_SESSION_BYTES) {
-        validNewFiles.push({
-          id: crypto.randomUUID(),
-          file: f,
-          state: 'ERROR',
-          progress: 0,
-          errorMessage: 'Session limit breached: Adding this file exceeds the allocation limit of 300MB per upload session.'
-        });
-      } else {
-        validNewFiles.push({
-          id: crypto.randomUUID(),
-          file: f,
-          state: 'PENDING',
-          progress: 0
-        });
-        currentSessionSize += f.size;
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
+      setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, progress: pct } : f)));
+    };
+
+    xhr.onload = () => {
+      xhrRefs.current.delete(qFile.id);
+      let data: { success?: boolean; key?: string; hash?: string; message?: string; error?: string } = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        data = {};
       }
-    }
+      if (xhr.status >= 200 && xhr.status < 300 && data.success && data.key) {
+        setQueuedFiles((prev) =>
+          prev.map((f) => (f.id === qFile.id ? { ...f, state: 'SUCCESS', progress: 100, r2Key: data.key, hash: data.hash } : f))
+        );
+        onUploadSuccess([data.key as string]);
+      } else {
+        setQueuedFiles((prev) =>
+          prev.map((f) =>
+            f.id === qFile.id
+              ? { ...f, state: 'ERROR', progress: 0, errorMessage: data.message || data.error || `Upload rejected (HTTP ${xhr.status}). Check the file format and try again.` }
+              : f
+          )
+        );
+      }
+    };
 
-    setQueuedFiles(prev => [...prev, ...validNewFiles]);
-    
-    // Automatically start processing the ones that are valid
-    validNewFiles.filter(f => f.state === 'PENDING').forEach(processUpload);
+    xhr.onerror = () => {
+      xhrRefs.current.delete(qFile.id);
+      setQueuedFiles((prev) =>
+        prev.map((f) => (f.id === qFile.id ? { ...f, state: 'ERROR', progress: 0, errorMessage: 'Network error during upload. Check your connection and retry.' } : f))
+      );
+    };
 
-  }, [totalBytes]);
+    xhr.onabort = () => {
+      xhrRefs.current.delete(qFile.id);
+    };
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    const formData = new FormData();
+    formData.append('file', qFile.file);
+    formData.append('sessionId', sessionIdRef.current);
+    xhr.open('POST', `${API_URL}/api/secure-upload`);
+    xhr.send(formData);
+  }, [onUploadSuccess]);
+
+  const handleFiles = useCallback(
+    (incoming: File[]) => {
+      if (incoming.length === 0) return;
+      const currentBytes = queuedFiles.reduce((acc, f) => acc + f.file.size, 0);
+      let running = currentBytes;
+      const next: QueuedFile[] = [];
+      for (const file of incoming) {
+        if (running + file.size > MAX_SESSION_BYTES) {
+          next.push({
+            id: crypto.randomUUID(),
+            file,
+            state: 'ERROR',
+            progress: 0,
+            errorMessage: 'Session cap exceeded: this file would push past the 300 MB session limit. Remove a file or submit a second request.'
+          });
+        } else {
+          running += file.size;
+          next.push({
+            id: crypto.randomUUID(),
+            file,
+            previewUrl: isImage(file) ? URL.createObjectURL(file) : undefined,
+            state: 'QUEUED',
+            progress: 0
+          });
+        }
+      }
+      setQueuedFiles((prev) => [...prev, ...next]);
+      // Start real uploads for accepted files
+      next.filter((f) => f.state === 'QUEUED').forEach(uploadFile);
+    },
+    [queuedFiles, uploadFile]
+  );
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (e.dataTransfer.files) {
-      handleFiles(Array.from(e.dataTransfer.files));
-    }
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files?.length) handleFiles(Array.from(e.dataTransfer.files));
   };
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      handleFiles(Array.from(e.target.files));
-    }
+    if (e.target.files?.length) handleFiles(Array.from(e.target.files));
+    e.target.value = ''; // allow re-selecting the same file
   };
 
-  const processUpload = async (qFile: QueuedFile) => {
-    // 1. TUNNELING STATE
-    setQueuedFiles(prev => prev.map(f => f.id === qFile.id ? { ...f, state: 'TUNNELING', progress: 10 } : f));
-    
-    // Simulate progress bar jump
-    setTimeout(() => {
-      setQueuedFiles(prev => prev.map(f => f.id === qFile.id && f.state === 'TUNNELING' ? { ...f, progress: 50 } : f));
-    }, 400);
-
-    // 2. ACTIVE INSPECTION STATE (Simulated transition before fetching)
-    setTimeout(() => {
-      setQueuedFiles(prev => prev.map(f => f.id === qFile.id && f.state === 'TUNNELING' ? { ...f, state: 'INSPECTING', progress: 80 } : f));
-    }, 1200);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', qFile.file);
-      formData.append('sessionId', sessionId);
-
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      
-      const res = await fetch(`${API_URL}/api/secure-upload`, {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || data.error || 'Network edge rejection');
-      }
-
-      // 3. SUCCESS STATE
-      setQueuedFiles(prev => prev.map(f => f.id === qFile.id ? { 
-        ...f, 
-        state: 'SUCCESS', 
-        progress: 100,
-        r2Key: data.key,
-        hash: data.hash
-      } : f));
-
-      // Bubble up success key
-      onUploadSuccess([data.key]);
-
-    } catch (err: any) {
-      // 4. ERROR STATE
-      setQueuedFiles(prev => prev.map(f => f.id === qFile.id ? { 
-        ...f, 
-        state: 'ERROR', 
-        progress: 0,
-        errorMessage: err.message || '415 Payload Architecture Violation'
-      } : f));
-    }
+  const cancelUpload = (id: string) => {
+    xhrRefs.current.get(id)?.abort();
+    setQueuedFiles((prev) => {
+      const target = prev.find((f) => f.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((f) => f.id !== id);
+    });
   };
 
   const removeFile = (id: string) => {
-    setQueuedFiles(prev => prev.filter(f => f.id !== id));
+    setQueuedFiles((prev) => {
+      const target = prev.find((f) => f.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((f) => f.id !== id);
+    });
+  };
+
+  const retryUpload = (qFile: QueuedFile) => {
+    uploadFile(qFile);
   };
 
   const formatBytes = (bytes: number) => {
@@ -148,136 +170,129 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const totalBytes = queuedFiles.reduce((acc, f) => acc + f.file.size, 0);
+  const uploadedBytes = queuedFiles.reduce((acc, f) => acc + (f.state === 'SUCCESS' ? f.file.size : Math.round((f.file.size * f.progress) / 100)), 0);
+  const sessionPercent = totalBytes === 0 ? 0 : Math.min(100, Math.round((uploadedBytes / MAX_SESSION_BYTES) * 100));
+  const uploadingCount = queuedFiles.filter((f) => f.state === 'UPLOADING').length;
+
   return (
     <div className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl font-sans text-slate-200">
-      
-      <div className="mb-6">
-        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-2">
-          <Shield className="w-6 h-6 text-indigo-400" />
-          SOC 2 Ingestion Firewall
-        </h3>
-        <p className="text-sm text-slate-400">Strict payload validation & zero-public-access R2 streaming</p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-bold text-white">Evidence files</h3>
+          <p className="text-xs text-slate-400 mt-1">Photos or video of the equipment · MP4, MOV, WEBM, MKV, PNG, JPEG, WEBP, GIF, TIFF, HEIC · up to 300 MB per request</p>
+        </div>
+        {queuedFiles.length > 0 && (
+          <span className="shrink-0 text-xs font-mono text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
+            {queuedFiles.filter((f) => f.state === 'SUCCESS').length}/{queuedFiles.length} stored
+          </span>
+        )}
       </div>
 
-      {/* Progress Meter */}
-      <div className="mb-8">
-        <div className="flex justify-between text-xs font-bold uppercase tracking-wider mb-2">
-          <span className="text-slate-400">Session Allocation</span>
-          <span className={isOverLimit ? 'text-red-400' : isApproachingLimit ? 'text-amber-400' : 'text-emerald-400'}>
-            {formatBytes(totalBytes)} / {formatBytes(MAX_SESSION_BYTES)}
-          </span>
+      {/* Session meter (real bytes) */}
+      <div className="mb-5">
+        <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider mb-1.5">
+          <span className="text-slate-400">{uploadingCount > 0 ? `Uploading ${uploadingCount} file${uploadingCount > 1 ? 's' : ''}…` : 'Session usage'}</span>
+          <span className="text-emerald-400 font-mono">{formatBytes(uploadedBytes)} / {formatBytes(MAX_SESSION_BYTES)}</span>
         </div>
-        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
-          <div 
-            className={`h-full transition-all duration-500 ease-out ${getMeterColor()}`} 
-            style={{ width: `${progressPercent}%` }}
-          />
+        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-full bg-emerald-500 transition-all duration-300 ease-out" style={{ width: `${sessionPercent}%` }} />
         </div>
       </div>
 
       {/* Dropzone */}
-      <div 
-        ref={dropzoneRef}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); dropzoneRef.current?.classList.add('border-indigo-500', 'bg-slate-800'); }}
-        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); dropzoneRef.current?.classList.remove('border-indigo-500', 'bg-slate-800'); }}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="Upload evidence files"
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
         onDrop={onDrop}
-        className="relative flex flex-col items-center justify-center w-full h-40 border-2 border-slate-600 border-dashed rounded-xl cursor-pointer hover:bg-slate-800 hover:border-indigo-400 transition-all mb-6 group"
+        className={`relative flex flex-col items-center justify-center w-full py-8 border-2 border-dashed rounded-xl cursor-pointer transition-all mb-5 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+          isDragging ? 'border-indigo-400 bg-indigo-500/10 scale-[1.01]' : 'border-slate-600 hover:border-indigo-400 hover:bg-slate-800/60'
+        }`}
       >
-        <div className="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
-          <UploadCloud className="w-10 h-10 mb-3 text-slate-400 group-hover:text-indigo-400 transition-colors" />
-          <p className="mb-2 text-sm text-slate-300"><span className="font-bold text-white">Click to upload</span> or drag and drop</p>
-          <p className="text-xs text-slate-500">MP4, MOV, WEBM, MKV, PNG, JPEG, WEBP, GIF, TIFF, HEIC</p>
-        </div>
-        <input 
-          type="file" 
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-          multiple 
-          accept="image/*,video/*" 
-          onChange={onFileInput} 
+        <UploadCloud className={`w-9 h-9 mb-2 transition-colors ${isDragging ? 'text-indigo-300' : 'text-slate-400'}`} />
+        <p className="mb-1 text-sm text-slate-300">
+          <span className="font-bold text-white">{isDragging ? 'Drop to start uploading' : 'Click to upload'}</span> or drag and drop
+        </p>
+        <p className="text-xs text-slate-500">Files start uploading immediately · magic-byte verified server-side</p>
+        <input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          multiple
+          accept="image/*,video/*"
+          onChange={onFileInput}
         />
       </div>
 
-      {/* Queue List */}
-      <div className="space-y-3">
-        {queuedFiles.map((qFile) => {
-          const isVideo = qFile.file.type.startsWith('video') || qFile.file.name.match(/\.(mp4|mov|webm|mkv|avi|flv)$/i);
-          const Icon = isVideo ? Film : ImageIcon;
-
-          return (
-            <div key={qFile.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 transition-all">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3 w-full">
-                  <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
-                    <Icon className="w-5 h-5 text-slate-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-1">
-                      <p className="text-sm font-bold text-white truncate max-w-[200px] sm:max-w-xs">{qFile.file.name}</p>
-                      <span className="text-xs font-mono text-slate-500">{formatBytes(qFile.file.size)}</span>
-                    </div>
-
-                    {/* STATUS 1: TUNNELING */}
-                    {qFile.state === 'TUNNELING' && (
-                      <div className="w-full">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs font-semibold text-indigo-400">Tunneling to R2 edge via TLS 1.3...</span>
-                          <span className="text-xs text-indigo-400 font-mono">{qFile.progress}%</span>
-                        </div>
-                        <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
-                          <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${qFile.progress}%` }} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* STATUS 2: INSPECTING */}
-                    {qFile.state === 'INSPECTING' && (
-                      <div className="flex items-center gap-2 mt-1 text-amber-400">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span className="text-xs font-semibold">Cloudflare Worker evaluating payload byte composition magic-hashes...</span>
-                      </div>
-                    )}
-
-                    {/* STATUS 3: SUCCESS */}
-                    {qFile.state === 'SUCCESS' && (
-                      <div className="flex flex-col mt-1">
-                        <div className="flex items-center gap-2 text-emerald-400">
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          <span className="text-xs font-bold tracking-wide uppercase">Stored & Confirmed (Object Isolation Enforced)</span>
-                        </div>
-                        {qFile.hash && (
-                          <span className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">SHA-256: {qFile.hash}</span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* STATUS 4: ERROR */}
-                    {qFile.state === 'ERROR' && (
-                      <div className="flex items-start gap-2 mt-2 bg-red-950/30 border border-red-900/50 rounded-md p-2">
-                        <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                        <span className="text-xs font-semibold text-rose-400 leading-relaxed">
-                          {qFile.errorMessage}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+      {/* Queue */}
+      {queuedFiles.length > 0 && (
+        <ul className="space-y-2.5">
+          {queuedFiles.map((qFile) => (
+            <li key={qFile.id} className="bg-slate-800/80 border border-slate-700 rounded-lg p-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
+                  {qFile.previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={qFile.previewUrl} alt={qFile.file.name} className="w-full h-full object-cover" />
+                  ) : isVideo(qFile.file) ? (
+                    <Film className="w-5 h-5 text-slate-400" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5 text-slate-400" />
+                  )}
                 </div>
-
-                {/* Trash Hook */}
-                {(qFile.state === 'SUCCESS' || qFile.state === 'ERROR') && (
-                  <button 
-                    type="button"
-                    onClick={() => removeFile(qFile.id)}
-                    className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors shrink-0"
-                    title="Purge Object"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline gap-2 mb-1">
+                    <p className="text-sm font-semibold text-white truncate">{qFile.file.name}</p>
+                    <span className="text-xs font-mono text-slate-500 shrink-0">
+                      {qFile.state === 'UPLOADING' ? `${qFile.progress}% · ` : ''}{formatBytes(qFile.file.size)}
+                    </span>
+                  </div>
+                  {qFile.state === 'UPLOADING' && (
+                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden" role="progressbar" aria-valuenow={qFile.progress} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="h-full bg-indigo-500 transition-all duration-200" style={{ width: `${qFile.progress}%` }} />
+                    </div>
+                  )}
+                  {qFile.state === 'SUCCESS' && (
+                    <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5" /> Stored{qFile.hash ? <span className="font-mono font-normal text-slate-500 truncate"> · {qFile.hash.slice(0, 12)}…</span> : null}
+                    </p>
+                  )}
+                  {qFile.state === 'ERROR' && (
+                    <p className="text-xs font-semibold text-rose-400 flex items-start gap-1.5 leading-relaxed">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> <span>{qFile.errorMessage || 'Upload failed.'}</span>
+                    </p>
+                  )}
+                  {qFile.state === 'QUEUED' && (
+                    <p className="text-xs text-slate-500">Queued…</p>
+                  )}
+                </div>
+                <div className="shrink-0 flex items-center gap-1">
+                  {qFile.state === 'UPLOADING' && (
+                    <button type="button" onClick={() => cancelUpload(qFile.id)} title="Cancel upload" aria-label={`Cancel upload of ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-amber-400 hover:bg-slate-900 rounded-lg transition-colors">
+                      <OctagonX className="w-4 h-4" />
+                    </button>
+                  )}
+                  {qFile.state === 'ERROR' && (
+                    <button type="button" onClick={() => retryUpload(qFile)} title="Retry upload" aria-label={`Retry upload of ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-indigo-300 hover:bg-slate-900 rounded-lg transition-colors">
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  )}
+                  {qFile.state !== 'UPLOADING' && (
+                    <button type="button" onClick={() => removeFile(qFile.id)} title="Remove file" aria-label={`Remove ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

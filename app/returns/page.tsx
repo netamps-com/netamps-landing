@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import { v4 as uuidv4 } from 'uuid';
 import SecureMediaUploader from './SecureMediaUploader';
@@ -654,6 +654,26 @@ export default function ReturnsPage() {
             </div>
           )}
         </motion.div>
+
+        {/* Compliance & handling trust strip */}
+        <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
+          {[
+            { icon: ShieldCheck, title: 'SOC 2 controls', text: 'Audited handling for every request' },
+            { icon: Lock, title: 'Encrypted in transit & at rest', text: 'TLS 1.3 upload · AES-256 storage' },
+            { icon: FileCheck, title: 'Verified media only', text: 'Magic-byte inspection rejects spoofed files' },
+            { icon: Archive, title: 'Quarantine vault', text: 'Evidence lands in zero-public-access R2' }
+          ].map(({ icon: Icon, title, text }) => (
+            <div key={title} className="bg-white/80 backdrop-blur border border-slate-200/70 rounded-2xl px-4 py-3.5 flex items-start gap-3 shadow-sm">
+              <span className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                <Icon className="w-4 h-4 text-indigo-600" />
+              </span>
+              <span>
+                <span className="block text-xs font-bold text-slate-900">{title}</span>
+                <span className="block text-[11px] leading-snug text-slate-500 mt-0.5">{text}</span>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
