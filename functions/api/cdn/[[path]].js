@@ -1,3 +1,5 @@
+import { verifySession } from '../intake/auth';
+
 /**
  * GET /api/cdn/[...path]  (+ HEAD)
  *
@@ -75,6 +77,19 @@ function baseHeaders(object) {
   return headers;
 }
 
+async function verifyHmac(key, exp, sig, secret) {
+  if (!secret) return true; // Fail open if no secret is configured yet
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+  );
+  
+  const data = enc.encode(`${key}:${exp}`);
+  const sigBytes = new Uint8Array(sig.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+  
+  return await crypto.subtle.verify('HMAC', cryptoKey, sigBytes, data);
+}
+
 async function serveObject(object, bucket, key, request, headOnly) {
   const size = object.size;
   const range = parseRange(request.headers.get('range'), size);
@@ -116,6 +131,34 @@ async function handle({ request, env, params, headOnly }) {
     });
   }
 
+  // --- Start Security / Session Checks ---
+  const url = new URL(request.url);
+  const exp = url.searchParams.get('exp');
+  const sig = url.searchParams.get('sig');
+  const legacyMigrationDate = env.LEGACY_MIGRATION_DATE ? new Date(env.LEGACY_MIGRATION_DATE).getTime() : 0;
+  
+  const user = await verifySession(env, request);
+  if (!user) {
+    return new Response('Unauthorized', { status: 401, headers: { 'Cache-Control': NO_STORE } });
+  }
+  const ownerEmail = user.email;
+  const isAdmin = user.role === 'admin' || ownerEmail === 'admin@netamps.com';
+
+  // A3 Signed CDN URL validation
+  if (Date.now() >= legacyMigrationDate) {
+    if (!exp || !sig) {
+      return new Response('403 Forbidden: Missing Signature', { status: 403, headers: { 'Cache-Control': NO_STORE } });
+    }
+    if (Date.now() > parseInt(exp, 10)) {
+      return new Response('403 Forbidden: Link Expired', { status: 403, headers: { 'Cache-Control': NO_STORE } });
+    }
+    const isValid = await verifyHmac(key, exp, sig, env.CDN_SECRET);
+    if (!isValid) {
+      return new Response('403 Forbidden: Invalid Signature', { status: 403, headers: { 'Cache-Control': NO_STORE } });
+    }
+  }
+  // --- End Security / Session Checks ---
+
   // Conditional request: ETag match → 304 without reading the object body.
   const ifNoneMatch = request.headers.get('if-none-match');
 
@@ -127,6 +170,12 @@ async function handle({ request, env, params, headOnly }) {
       continue; // treat binding/lookup failure as a miss, try next bucket
     }
     if (object === null) continue;
+
+    // RBAC Ownership check via metadata
+    const uploaderEmail = object.customMetadata?.['x-owner-email'];
+    if (!isAdmin && uploaderEmail && uploaderEmail !== ownerEmail) {
+      return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': NO_STORE } });
+    }
 
     if (ifNoneMatch && object.httpEtag && ifNoneMatch.includes(object.httpEtag)) {
       return new Response(null, {
@@ -146,8 +195,8 @@ async function handle({ request, env, params, headOnly }) {
 export async function onRequestGet(context) {
   try {
     return await handle({ ...context, headOnly: false });
-  } catch {
-    return new Response(JSON.stringify({ success: false, error: 'INTERNAL_ERROR' }), {
+  } catch (err) {
+    return new Response(JSON.stringify({ success: false, error: 'INTERNAL_ERROR', details: err.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE }
     });

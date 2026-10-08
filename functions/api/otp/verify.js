@@ -153,7 +153,35 @@ export async function onRequestPost({ request, env }) {
 
     stage = 'otp-consume';
     await deleteOtp(env, email, kind); // single-use: consume on success
-    return json({ success: true, message: 'OTP verified successfully' });
+
+    // Mint server-verifiable session token
+    const sessionId = crypto.randomUUID() + crypto.randomUUID();
+    let role = 'user';
+    if (kind === 'd1' || env.DB) {
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          token TEXT PRIMARY KEY,
+          email TEXT NOT NULL,
+          role TEXT NOT NULL,
+          expires_at DATETIME NOT NULL
+        )
+      `).run();
+      
+      const userRow = await env.DB.prepare('SELECT role FROM users WHERE email = ?').bind(email.toLowerCase()).first();
+      if (userRow) role = userRow.role;
+      
+      const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+      await env.DB.prepare('INSERT INTO sessions (token, email, role, expires_at) VALUES (?, ?, ?, ?)').bind(sessionId, email.toLowerCase(), role, expiresAt).run();
+    }
+
+    const cookie = `session_token=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600`;
+    
+    return new Response(JSON.stringify({ success: true, message: 'OTP verified successfully' }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Set-Cookie': cookie
+      }
+    });
   } catch (err) {
     console.error(`[otp] Verify error at stage=${stage}:`, err);
     return json({ success: false, message: 'Failed to verify OTP. Please try again shortly.', stage }, 500);

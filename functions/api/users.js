@@ -26,8 +26,28 @@ export async function onRequestPost({ request, env }) {
       if (action === 'login') {
         const { results } = await env.DB.prepare('SELECT hash, role FROM users WHERE email = ?').bind(email).all();
         if (results.length > 0 && results[0].hash === passwordHash) {
-          const sessionId = crypto.randomUUID();
-          return new Response(JSON.stringify({ success: true, role: results[0].role, sessionId }), { headers: { 'Content-Type': 'application/json' } });
+          const sessionId = crypto.randomUUID() + crypto.randomUUID(); // Mock 256-bit token
+          
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS sessions (
+              token TEXT PRIMARY KEY,
+              email TEXT NOT NULL,
+              role TEXT NOT NULL,
+              expires_at DATETIME NOT NULL
+            )
+          `).run();
+          
+          const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+          await env.DB.prepare('INSERT INTO sessions (token, email, role, expires_at) VALUES (?, ?, ?, ?)').bind(sessionId, email, results[0].role, expiresAt).run();
+
+          const cookie = `session_token=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600`;
+          
+          return new Response(JSON.stringify({ success: true, role: results[0].role }), { 
+            headers: { 
+              'Content-Type': 'application/json',
+              'Set-Cookie': cookie 
+            } 
+          });
         }
         return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
