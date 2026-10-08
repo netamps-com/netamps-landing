@@ -81,7 +81,7 @@ export async function onRequestPost({ request, env }) {
 export async function onRequestGet({ env }) {
   try {
     if (!env.DB || typeof env.DB.prepare !== 'function') {
-      return json({ success: true, logs: [] });
+      return json({ success: true, logs: [], store: 'none' });
     }
     await ensureTable(env);
     const { results } = await env.DB.prepare(
@@ -96,7 +96,7 @@ export async function onRequestGet({ env }) {
       user: row.username,
       ipAddress: row.ip_address
     }));
-    return json({ success: true, logs: formattedLogs });
+    return json({ success: true, logs: formattedLogs, store: 'd1' });
   } catch (err) {
     console.error('[logs] GET error:', err);
     return json({ success: false, message: 'Failed to read audit logs.' }, 500);

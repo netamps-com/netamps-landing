@@ -12,6 +12,7 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
   const [dateFilter, setDateFilter] = useState('');
   const [pageFilter, setPageFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc'|'asc'>('desc');
+  const [storeState, setStoreState] = useState<'d1' | 'none' | 'local'>('d1');
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -21,14 +22,23 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
         const data = await res.json();
         if (data.success && data.logs) {
           setLogs(data.logs);
+          setStoreState(data.store === 'none' ? 'none' : 'd1');
+          if (data.store === 'none') {
+            // Central store not connected — merge on-device logs so the view is still useful
+            const { getLogs } = await import('../lib/logger');
+            const local = getLogs();
+            if (local.length > 0) setLogs((prev) => [...prev, ...local.filter((l) => !prev.some((p) => p.id === l.id))]);
+          }
         } else {
           // Fallback to local storage if API fails
           const { getLogs } = await import('../lib/logger');
           setLogs(getLogs());
+          setStoreState('local');
         }
       } catch (err) {
         const { getLogs } = await import('../lib/logger');
         setLogs(getLogs());
+        setStoreState('local');
       }
     };
     fetchLogs();
@@ -99,6 +109,12 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
             <p className="text-xs text-slate-500 mt-1">
               Retrieved from the central audit store (D1) when available, with on-device fallback. Stores up to 5000 recent events.
             </p>
+            {storeState !== 'd1' && (
+              <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                Central audit store not connected — showing on-device logs only. Attach the D1
+                database binding in Cloudflare Pages → Settings → Functions → Production, then redeploy.
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors">
             <X className="w-6 h-6" />
