@@ -18,10 +18,10 @@ bucket_name = "netamps-quarantine"
 binding = "PRODUCTION_BUCKET"
 bucket_name = "netamps-evidence"
 
-[[kv_namespaces]]
-binding = "CACHE_KV"
-id = "cache-kv-id"
-
-[[queues.producers]]
-queue = "intake-processing-queue"
-binding = "INTAKE_QUEUE"
+# NOTE (deploy-validated): do NOT add [[kv_namespaces]] or [[queues.*]] sections
+# here until the backing resources actually exist in the Cloudflare account.
+# Unresolvable IDs (e.g. id = "cache-kv-id") and uncreated queues fail
+# `wrangler pages deploy` validation AND the native Pages build (runs 118/119/121
+# precedent). Create the resource first (KV namespace / Queue), then declare it.
+# Code paths that use CACHE_KV / INTAKE_QUEUE already guard with truthiness checks
+# and fall back to direct D1, so removal is runtime-safe.

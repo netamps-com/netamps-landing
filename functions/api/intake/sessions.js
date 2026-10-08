@@ -139,17 +139,30 @@ export async function onRequestPost({ request, env }) {
 
     // Insert assets
     if (data.rows && Array.isArray(data.rows)) {
-      if (data.rows.length > 500 && env.INTAKE_QUEUE) {
-        // Send large payloads to background queue to prevent HTTP timeout
-        await env.INTAKE_QUEUE.send({ sessionId: id, ownerEmail, rows: data.rows });
-      } else {
+      // Queue messages are capped at 128 KiB, so large payloads are split into
+      // small chunk messages ({rows, base}) the consumer inserts idempotently.
+      // Queue path is best-effort with inline-D1 fallback, never fatal.
+      let queued = false;
+      if (data.rows.length > 500 && env.INTAKE_QUEUE && typeof env.INTAKE_QUEUE.send === 'function') {
+        try {
+          const CHUNK = 50;
+          for (let base = 0; base < data.rows.length; base += CHUNK) {
+            await env.INTAKE_QUEUE.send({ sessionId: id, ownerEmail, rows: data.rows.slice(base, base + CHUNK), base });
+          }
+          queued = true;
+        } catch {
+          queued = false;
+        }
+      }
+      if (!queued) {
         // D1 batches for performance
         const stmt = env.DB.prepare('INSERT INTO intake_assets (session_id, row_no, data) VALUES (?, ?, ?) ON CONFLICT(session_id, row_no) DO UPDATE SET data=excluded.data');
-      const batch = data.rows.map((row, idx) => stmt.bind(id, idx, JSON.stringify(row)));
-      if (batch.length > 0) {
-        // max batch size for D1 is 100, chunk it if large
-        for (let i = 0; i < batch.length; i += 100) {
-          await env.DB.batch(batch.slice(i, i + 100));
+        const batch = data.rows.map((row, idx) => stmt.bind(id, idx, JSON.stringify(row)));
+        if (batch.length > 0) {
+          // max batch size for D1 is 100, chunk it if large
+          for (let i = 0; i < batch.length; i += 100) {
+            await env.DB.batch(batch.slice(i, i + 100));
+          }
         }
       }
       }
