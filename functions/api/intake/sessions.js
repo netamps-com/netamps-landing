@@ -152,6 +152,7 @@ export async function onRequestPost({ request, env }) {
           await env.DB.batch(batch.slice(i, i + 100));
         }
       }
+      }
     }
 
     // A5 Guardrails: Log event (real audit_logs schema:
