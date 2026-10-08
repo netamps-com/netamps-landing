@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
-import { v4 as uuidv4 } from 'uuid';
 import SecureMediaUploader from './SecureMediaUploader';
 
 interface ProductItem {
@@ -26,17 +25,13 @@ export default function ReturnsPage() {
   const [otpError, setOtpError] = useState('');
   const [formDataCache, setFormDataCache] = useState<FormData | null>(null);
   
-  // Demo Email Toast State
-  const [showDemoEmail, setShowDemoEmail] = useState(false);
-  const [demoEmailAddress, setDemoEmailAddress] = useState('');
-
   // Tracking State
   const [trackingId, setTrackingId] = useState('');
   const [trackingResult, setTrackingResult] = useState<any>(null);
   const [trackingError, setTrackingError] = useState('');
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: uuidv4(), category: '', details: '', quantity: 1 }
+    { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
@@ -66,7 +61,7 @@ export default function ReturnsPage() {
   }, []);
 
   const addProduct = () => {
-    setProducts([...products, { id: uuidv4(), category: '', details: '', quantity: 1 }]);
+    setProducts([...products, { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]);
   };
 
   const removeProduct = (id: string) => {
@@ -292,42 +287,6 @@ export default function ReturnsPage() {
   return (
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       
-      {/* Demo Email Toast (Simulating Inbox) */}
-      {showDemoEmail && (
-        <motion.div
-          initial={{ opacity: 0, y: -50, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -50, scale: 0.95 }}
-          className="fixed top-6 right-6 z-50 w-full max-w-sm bg-white rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-slate-200 overflow-hidden"
-        >
-          <div className="bg-slate-50 border-b border-slate-100 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">New Email Received</span>
-            </div>
-            <button onClick={() => setShowDemoEmail(false)} className="text-slate-400 hover:text-slate-600">×</button>
-          </div>
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-slate-900">Netamps Security Team</span>
-              <span className="text-xs text-slate-500">Just now</span>
-            </div>
-            <div className="text-xs text-slate-600 mb-3">
-              To: <span className="font-medium text-indigo-600">{demoEmailAddress}</span>
-            </div>
-            <p className="text-sm text-slate-800 leading-relaxed mb-4">
-              Your secure Return Portal verification code has been dispatched. Please check your actual email inbox.
-            </p>
-            <div className="bg-slate-100 rounded-lg py-3 px-4 text-center">
-              <span className="text-sm font-semibold text-slate-500">Waiting for user input...</span>
-            </div>
-          </div>
-          <div className="bg-indigo-50 px-4 py-2 text-[10px] text-indigo-600 text-center font-medium">
-            (Connected to SOC 2 microservice backend)
-          </div>
-        </motion.div>
-      )}
-
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>

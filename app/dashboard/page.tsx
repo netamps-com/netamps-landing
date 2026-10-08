@@ -432,9 +432,9 @@ export default function DashboardPage() {
                                         return (
                                           <a key={idx} href={fileUrl} target="_blank" rel="noopener noreferrer" className="relative group block aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-800/50 flex items-center justify-center hover:border-indigo-500 transition-colors">
                                             {isVideo ? (
-                                              <video src={fileUrl} controls className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                              <video src={fileUrl} controls preload="none" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             ) : (
-                                              <img src={fileUrl} alt="Asset photo" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                              <img src={fileUrl} alt="Asset photo" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             )}
                                           </a>
                                         );
