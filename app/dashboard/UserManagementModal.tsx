@@ -195,7 +195,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   <select 
                     value={targetAccount}
                     onChange={(e) => setTargetAccount(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
                   >
                     <option value="" disabled>Select Target Account</option>
                     {users.map(u => (
@@ -206,7 +206,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
               ) : (
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Target Account</label>
-                  <input type="text" disabled value={currentUserRole} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-500" />
+                  <input type="text" disabled value={currentUserRole} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-500 cursor-not-allowed" />
                 </div>
               )}
               
@@ -217,8 +217,8 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   required
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder={pwdError ? "" : "Verify your authority"}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  placeholder="Verify your authority"
                 />
               </div>
               <div>
@@ -229,8 +229,8 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   minLength={8}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder={pwdError ? "" : "Enter new 8+ char password"}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  placeholder="Enter new 8+ char password"
                 />
               </div>
               <button 
@@ -250,8 +250,8 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   required
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder={pwdError ? "" : "e.g. manager@netamps.com"}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  placeholder="e.g. manager@netamps.com"
                 />
               </div>
               <div>
@@ -262,8 +262,8 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   minLength={8}
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder={pwdError ? "" : "Enter 8+ char password"}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  placeholder="Enter 8+ char password"
                 />
               </div>
               <div>
@@ -271,7 +271,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                 <select 
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
                 >
                   <option value="staff">Staff</option>
                   <option value="admin">Admin</option>
