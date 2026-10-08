@@ -10,13 +10,10 @@ binding = "DB"
 database_name = "netamps-db"
 database_id = "544297c4-e412-4b42-86d0-3c4383d92efa"
 
-[[r2_buckets]]
-binding = "QUARANTINE_BUCKET"
-bucket_name = "netamps-quarantine"
-
-[[r2_buckets]]
-binding = "PRODUCTION_BUCKET"
-bucket_name = "netamps-evidence"
+# NOTE: R2 sections removed 2026-10-08 — `pages deploy` step fails while they are
+# present (kept D1 only to isolate). Re-add an [[r2_buckets]] section ONLY after the
+# bucket exists in the account AND a deploy with it goes green; dashboard bindings
+# remain the preferred path for R2.
 
 # NOTE (deploy-validated): do NOT add [[kv_namespaces]] or [[queues.*]] sections
 # here until the backing resources actually exist in the Cloudflare account.
