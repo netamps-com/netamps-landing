@@ -9,7 +9,6 @@ import NetampsLogo from '../NetampsLogo';
 export default function IntakeWorkbench() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState('');
   
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [rawFile, setRawFile] = useState<File | null>(null);
@@ -35,21 +34,26 @@ export default function IntakeWorkbench() {
   const [previewData, setPreviewData] = useState<any[]>([]);
 
   useEffect(() => {
-    const cookies = document.cookie.split(';');
-    let hasSession = false;
-    let role = '';
-    cookies.forEach(cookie => {
-      const [name, value] = cookie.trim().split('=');
-      if (name === 'session_id' && value) hasSession = true;
-      if (name === 'user_role') role = value;
-    });
-
-    if (!hasSession) {
-      router.push('/login');
-    } else {
-      setIsAuthenticated(true);
-      setUserRole(role);
-    }
+    // The session cookie is HttpOnly (invisible to document.cookie by design),
+    // so authentication is probed server-side: 401 means logged out.
+    let cancelled = false;
+    (async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/intake/sessions`, { credentials: 'same-origin' });
+        if (cancelled) return;
+        if (res.status === 401 || res.status === 403) {
+          router.push('/login');
+          return;
+        }
+        setIsAuthenticated(true);
+      } catch {
+        if (!cancelled) router.push('/login');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Quick naive CSV parser for Phase 1

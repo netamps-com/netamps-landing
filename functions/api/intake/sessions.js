@@ -68,6 +68,7 @@ export async function onRequestPost({ request, env }) {
       return new Response(JSON.stringify({ success: false, message: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
     const ownerEmail = user.email;
+    const isAdmin = user.role === 'admin';
 
     const body = await request.json();
     const { id, data, status } = body;
@@ -75,6 +76,10 @@ export async function onRequestPost({ request, env }) {
     if (!id || !data) {
       return new Response(JSON.stringify({ success: false, message: 'Missing required fields' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
+
+    // Ownership guard on update (BOLA): an existing session owned by someone
+    // else can only be overwritten by an admin. Missing table → guard skipped,
+    // upsert below creates it owned by the caller (correct either way).
 
     // Ensure tables exist (for environments where schema.sql isn't run automatically)
     await env.DB.prepare(`
@@ -98,6 +103,15 @@ export async function onRequestPost({ request, env }) {
 
     const mappingStr = data.mapping ? JSON.stringify(data.mapping) : '{}';
 
+    try {
+      const existing = await env.DB.prepare('SELECT owner_email FROM intake_sessions WHERE id = ?1').bind(id).first();
+      if (existing && existing.owner_email !== ownerEmail && !isAdmin) {
+        return new Response(JSON.stringify({ success: false, message: 'Not found or forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+      }
+    } catch {
+      // Table may not exist yet — upsert below creates it owned by the caller.
+    }
+
     await env.DB.prepare(
       'INSERT INTO intake_sessions (id, owner_email, status, mapping) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET mapping=excluded.mapping, status=excluded.status, updated_at=CURRENT_TIMESTAMP'
     ).bind(id, ownerEmail, status || 'DRAFT', mappingStr).run();
@@ -115,17 +129,19 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    // A5 Guardrails: Log event
+    // A5 Guardrails: Log event (real audit_logs schema:
+    // id, timestamp, event_type, page, details, username, ip_address)
     try {
       await env.DB.prepare(
-        'INSERT INTO audit_logs (id, actor_ip, actor_email, action, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
       ).bind(
         crypto.randomUUID(),
-        request.headers.get('cf-connecting-ip') || 'unknown',
-        ownerEmail,
+        new Date().toISOString(),
         status === 'EXPORTED' ? 'EXPORT' : 'INSPECT',
-        id,
-        JSON.stringify({ row_count: Array.isArray(data.rows) ? data.rows.length : 0 })
+        'Intake Session',
+        JSON.stringify({ session: id, row_count: Array.isArray(data.rows) ? data.rows.length : 0 }),
+        ownerEmail,
+        request.headers.get('cf-connecting-ip') || 'unknown'
       ).run();
     } catch(e) {}
 

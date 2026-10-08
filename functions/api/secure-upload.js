@@ -144,7 +144,7 @@ export async function onRequestPost({ request, env }) {
     const contentLength = request.headers.get('content-length');
 
     if (contentLength && parseInt(contentLength, 10) > MAX_PAYLOAD_SIZE) {
-      return json({ success: false, error: 'SIZE_VIOLATION', message: 'Upload blocked' }, 413);
+      return json({ success: false, error: 'SIZE_VIOLATION', message: 'Upload blocked: payload exceeds the 300 MB per-request limit. Split the asset photos across multiple requests.' }, 413);
     }
 
     const formData = await request.formData();
@@ -159,14 +159,14 @@ export async function onRequestPost({ request, env }) {
 
     if (fileSize > MAX_PAYLOAD_SIZE) {
       audit('upload.blocked.size', { ip, sessionId, fileName, size: fileSize, verdict: 'BLOCKED_SIZE' });
-      return json({ success: false, error: 'SIZE_VIOLATION', message: 'Limit exceeded' }, 413);
+      return json({ success: false, error: 'SIZE_VIOLATION', message: `Upload blocked: "${fileName}" is ${(fileSize / 1048576).toFixed(1)} MB, over the 300 MB limit. Compress the file or split it across requests.` }, 413);
     }
 
     const ext = String(fileName.split('.').pop() || '').toLowerCase();
     const mime = String(file.type || '').toLowerCase();
     if (!ALLOWED_EXTENSIONS.has(ext) || (mime && !ALLOWED_MIME.has(mime))) {
       audit('upload.blocked.type', { ip, sessionId, fileName, size: fileSize, verdict: 'BLOCKED_TYPE' });
-      return json({ success: false, error: 'TYPE_VIOLATION', message: 'Invalid type' }, 415);
+      return json({ success: false, error: 'TYPE_VIOLATION', message: `Upload blocked: ".${ext || '?'}" files are not accepted. Allowed types: PNG, JPEG, WEBP, GIF, TIFF, HEIC photos and MP4, MOV, WEBM, MKV, AVI, FLV videos.` }, 415);
     }
 
     const buffer = await file.arrayBuffer();
@@ -174,27 +174,32 @@ export async function onRequestPost({ request, env }) {
 
     if (!validateMagicBytes(bytes.slice(0, 16), ext)) {
       audit('upload.blocked.signature', { ip, sessionId, fileName, size: fileSize, verdict: 'BLOCKED_SIGNATURE_SPOOF' });
-      return json({ success: false, error: 'SIGNATURE_SPOOF', message: 'Signature verification failed' }, 415);
+      return json({ success: false, error: 'SIGNATURE_SPOOF', message: 'Upload blocked: file signature does not match a verified photo/video container. Renamed executables are rejected.' }, 415);
     }
 
     const scan = scanMalware(bytes, fileName);
     if (scan.infected) {
       const entry = { ip, sessionId, fileName, size: fileSize, sha256: null, signature: scan.signature, verdict: 'BLOCKED_MALWARE' };
       audit('upload.blocked.malware', entry);
-      return json({ success: false, error: 'MALWARE_BLOCKED', message: 'Malicious signature detected' }, 403);
+      return json({ success: false, error: 'MALWARE_BLOCKED', message: 'Upload Blocked: Malicious signature detected. Incident logged to security console.' }, 403);
     }
 
     const digest = await crypto.subtle.digest('SHA-256', buffer);
     const sha256 = hexOf(new Uint8Array(digest));
 
     if (!env.QUARANTINE_BUCKET || typeof env.QUARANTINE_BUCKET.put !== 'function') {
-      return json({ success: false, error: 'STORAGE_UNBOUND', message: 'Storage unbound' }, 503);
+      return json({ success: false, error: 'STORAGE_UNBOUND', message: 'Upload pipeline unavailable: quarantine storage is not attached. Please try again shortly.' }, 503);
     }
     
-    // Auth Check A0 / RBAC
-    const user = await verifySession(env, request);
-    if (!user) return json({ success: false, message: 'Unauthorized' }, 401);
-    const ownerEmail = user.email;
+    // Identity (A0): a logged-in session tags ownership; the public Returns
+    // form uploads pre-authentication, so anonymous uploads stay allowed and
+    // are tagged as such (staff/admin can still review them; see CDN rule).
+    // verifySession never throws (null on missing/invalid), stay defensive anyway.
+    let ownerEmail = 'anonymous';
+    try {
+      const sessionUser = await verifySession(env, request);
+      if (sessionUser && sessionUser.email) ownerEmail = sessionUser.email;
+    } catch {}
 
     const trackingId = crypto.randomUUID();
     const safeExt = ALLOWED_EXTENSIONS.has(ext) ? ext : 'bin';
@@ -244,6 +249,7 @@ export async function onRequestPost({ request, env }) {
       scan: 'CLEAN'
     }, 201);
   } catch (err) {
-    return json({ success: false, error: 'INTERNAL_ERROR', message: err.message }, 500);
+    console.error('[upload] Internal error:', err); // server log only — client gets a generic message
+    return json({ success: false, error: 'INTERNAL_ERROR', message: 'Upload pipeline error. Please try again shortly.' }, 500);
   }
 }

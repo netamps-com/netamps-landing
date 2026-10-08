@@ -132,11 +132,7 @@ async function handle({ request, env, params, headOnly }) {
   }
 
   // --- Start Security / Session Checks ---
-  const url = new URL(request.url);
-  const exp = url.searchParams.get('exp');
-  const sig = url.searchParams.get('sig');
-  const legacyMigrationDate = env.LEGACY_MIGRATION_DATE ? new Date(env.LEGACY_MIGRATION_DATE).getTime() : 0;
-  
+  // Authenticated session required (open internet gets 401, never asset bytes).
   const user = await verifySession(env, request);
   if (!user) {
     return new Response('Unauthorized', { status: 401, headers: { 'Cache-Control': NO_STORE } });
@@ -144,10 +140,16 @@ async function handle({ request, env, params, headOnly }) {
   const ownerEmail = user.email;
   const isAdmin = user.role === 'admin' || ownerEmail === 'admin@netamps.com';
 
-  // A3 Signed CDN URL validation
-  if (Date.now() >= legacyMigrationDate) {
-    if (!exp || !sig) {
-      return new Response('403 Forbidden: Missing Signature', { status: 403, headers: { 'Cache-Control': NO_STORE } });
+  // A3 Signed CDN URL validation — verified when present (strict shape, expiry,
+  // HMAC). Absent signatures are still allowed: no signer endpoint exists yet, so
+  // mandatory signatures would 403 every dashboard image. Flip to mandatory once a
+  // server-side signer issues exp+sig links.
+  const url = new URL(request.url);
+  const exp = url.searchParams.get('exp');
+  const sig = url.searchParams.get('sig');
+  if (exp !== null || sig !== null) {
+    if (!exp || !/^\d+$/.test(exp) || !sig || !/^[0-9a-fA-F]+$/.test(sig) || sig.length % 2 !== 0) {
+      return new Response('403 Forbidden: Invalid Signature', { status: 403, headers: { 'Cache-Control': NO_STORE } });
     }
     if (Date.now() > parseInt(exp, 10)) {
       return new Response('403 Forbidden: Link Expired', { status: 403, headers: { 'Cache-Control': NO_STORE } });
@@ -171,9 +173,13 @@ async function handle({ request, env, params, headOnly }) {
     }
     if (object === null) continue;
 
-    // RBAC Ownership check via metadata
+    // RBAC ownership: objects tagged with a real owner email are visible to that
+    // owner (or admin). Untagged / 'anonymous' objects (e.g. public-form uploads
+    // from before login) are visible to any authenticated user — authentication
+    // itself is the gate; the open internet still gets 401 above.
     const uploaderEmail = object.customMetadata?.['x-owner-email'];
-    if (!isAdmin && uploaderEmail && uploaderEmail !== ownerEmail) {
+    const ownerKnown = uploaderEmail && uploaderEmail !== 'anonymous';
+    if (!isAdmin && ownerKnown && uploaderEmail !== ownerEmail) {
       return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': NO_STORE } });
     }
 
@@ -195,8 +201,8 @@ async function handle({ request, env, params, headOnly }) {
 export async function onRequestGet(context) {
   try {
     return await handle({ ...context, headOnly: false });
-  } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: 'INTERNAL_ERROR', details: err.message }), {
+  } catch {
+    return new Response(JSON.stringify({ success: false, error: 'INTERNAL_ERROR' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE }
     });

@@ -1,23 +1,32 @@
--- Create Intake Sessions table for the Third-Party ITAD Workbench
+-- ITAD Intake Workbench reference schema (D1, SQLite dialect).
+-- NOTE: audit_logs already exists in production with the columns below (owned by
+-- the logging module). Do NOT redefine it with different columns — INSERTs must use:
+--   (id, timestamp, event_type, page, details, username, ip_address)
+-- Code self-creates intake_* tables at runtime (CREATE TABLE IF NOT EXISTS), so this
+-- file is documentation for D1 Studio / fresh environments, not an auto-run migration.
+
 CREATE TABLE IF NOT EXISTS intake_sessions (
     id TEXT PRIMARY KEY,
     owner_email TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'DRAFT',
-    data TEXT NOT NULL, -- JSON string containing the mapped schema payload
+    mapping TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index for efficient owner-scoped fetching (OWASP API5:2023)
 CREATE INDEX IF NOT EXISTS idx_intake_sessions_owner ON intake_sessions(owner_email);
 
--- Audit Logs Table (SIEM Compliance)
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id TEXT PRIMARY KEY,
-    actor_ip TEXT NOT NULL,
-    actor_email TEXT,
-    action TEXT NOT NULL,
-    resource_id TEXT,
-    details TEXT, -- JSON string
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS intake_assets (
+    session_id TEXT NOT NULL,
+    row_no INTEGER NOT NULL,
+    data TEXT NOT NULL,
+    PRIMARY KEY (session_id, row_no)
+);
+
+-- Server-verified login sessions (minted by OTP verify / users login)
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL,
+    expires_at DATETIME NOT NULL
 );

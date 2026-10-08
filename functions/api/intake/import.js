@@ -17,12 +17,12 @@ export async function onRequestPost({ request, env }) {
       return new Response(JSON.stringify({ success: false, message: 'Unauthorized' }), { status: 401 });
     }
 
-    // Rate-limit check
+    // Rate-limit check (real audit_logs schema)
     if (env.DB) {
       try {
         const ip = request.headers.get('cf-connecting-ip') || 'unknown';
         const { results } = await env.DB.prepare(
-          "SELECT count(*) as c FROM audit_logs WHERE actor_ip = ? AND action = 'UPLOAD' AND created_at > datetime('now', '-1 minute')"
+          "SELECT count(*) as c FROM audit_logs WHERE ip_address = ? AND event_type = 'UPLOAD' AND timestamp > datetime('now', '-1 minute')"
         ).bind(ip).all();
         if (results.length > 0 && results[0].c > 5) {
           return new Response(JSON.stringify({ success: false, message: '429 Too Many Requests' }), { status: 429 });
@@ -104,17 +104,19 @@ export async function onRequestPost({ request, env }) {
       warnings.push('XLSX uploaded securely. Must be parsed by frontend SheetJS.');
     }
 
-    // SIEM Logging
+    // SIEM Logging (real audit_logs schema:
+    // id, timestamp, event_type, page, details, username, ip_address)
     try {
       await env.DB.prepare(
-        'INSERT INTO audit_logs (id, actor_ip, actor_email, action, resource_id, details) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
       ).bind(
-        crypto.randomUUID(), 
-        request.headers.get('cf-connecting-ip') || 'unknown',
-        user.email,
+        crypto.randomUUID(),
+        new Date().toISOString(),
         'UPLOAD',
-        fileHashHex,
-        JSON.stringify({ filename: file.name, size: file.size, extension, verdict: 'CLEAN' })
+        'Intake Import',
+        JSON.stringify({ filename: file.name, size: file.size, extension, verdict: 'CLEAN', sha256: fileHashHex }),
+        user.email,
+        request.headers.get('cf-connecting-ip') || 'unknown'
       ).run();
     } catch (e) {}
 
