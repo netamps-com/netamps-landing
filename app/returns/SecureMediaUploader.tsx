@@ -3,6 +3,11 @@ import { UploadCloud, CheckCircle, AlertTriangle, Trash2, Film, Image as ImageIc
 
 const MAX_SESSION_BYTES = 300 * 1024 * 1024; // 300MB
 
+const ALLOWED_EXTENSIONS = new Set([
+  'png', 'jpg', 'jpeg', 'webp', 'gif', 'tiff', 'tif', 'heic', 'heif',
+  'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv'
+]);
+
 type FileState = 'QUEUED' | 'UPLOADING' | 'SUCCESS' | 'ERROR';
 
 interface QueuedFile {
@@ -103,6 +108,17 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
       let running = currentBytes;
       const next: QueuedFile[] = [];
       for (const file of incoming) {
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (!ALLOWED_EXTENSIONS.has(ext)) {
+          next.push({
+            id: crypto.randomUUID(),
+            file,
+            state: 'ERROR',
+            progress: 0,
+            errorMessage: `Type not allowed: ".${ext || '?'}" files are rejected. Use PNG, JPEG, WEBP, GIF, TIFF, HEIC photos or MP4, MOV, WEBM, MKV, AVI, FLV videos.`
+          });
+          continue;
+        }
         if (running + file.size > MAX_SESSION_BYTES) {
           next.push({
             id: crypto.randomUUID(),
@@ -258,14 +274,17 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
                     </div>
                   )}
                   {qFile.state === 'SUCCESS' && (
-                    <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle className="w-3.5 h-3.5" /> Stored{qFile.hash ? <span className="font-mono font-normal text-slate-500 truncate"> · {qFile.hash.slice(0, 12)}…</span> : null}
+                    <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Securely Stored & Encrypted (AES-256)
+                      {qFile.hash ? <span className="font-mono font-normal text-emerald-400/70 truncate"> · {qFile.hash.slice(0, 12)}…</span> : null}
                     </p>
                   )}
                   {qFile.state === 'ERROR' && (
-                    <p className="text-xs font-semibold text-rose-400 flex items-start gap-1.5 leading-relaxed">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> <span>{qFile.errorMessage || 'Upload failed.'}</span>
-                    </p>
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-md p-2.5" role="alert">
+                      <p className="text-xs font-bold text-red-300 flex items-start gap-1.5 leading-relaxed">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> <span>{qFile.errorMessage || 'Upload failed.'}</span>
+                      </p>
+                    </div>
                   )}
                   {qFile.state === 'QUEUED' && (
                     <p className="text-xs text-slate-500">Queued…</p>

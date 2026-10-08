@@ -26,6 +26,19 @@
   Cache-Control: no-store
   X-Content-Type-Options: nosniff
 
+# OTP + upload + debug endpoints — never cache; responses are per-request and may carry security state
+/api/otp/*
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+
+/api/secure-upload
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+
+/api/bindings-status
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+
 /*.jpg
   Cache-Control: public, max-age=31536000, immutable
 
