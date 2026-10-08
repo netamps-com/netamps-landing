@@ -385,7 +385,7 @@ export default function ReturnsPage() {
                           <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {trackingResult.company}</p>
                           <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(trackingResult.date).toLocaleDateString()}</p>
                           {trackingResult.attachedFiles && trackingResult.attachedFiles.length > 0 && (
-                            <p className="text-sm text-slate-600"><strong className="text-slate-800">ITAD Data & Evidence:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
+                            <p className="text-sm text-slate-600"><strong className="text-slate-800">Asset photos:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
                           )}
                         </div>
 
@@ -620,7 +620,7 @@ export default function ReturnsPage() {
             { icon: ShieldCheck, title: 'SOC 2 controls', text: 'Audited handling for every request' },
             { icon: Lock, title: 'Encrypted in transit & at rest', text: 'TLS 1.3 upload · AES-256 storage' },
             { icon: FileCheck, title: 'Verified media only', text: 'Magic-byte inspection rejects spoofed files' },
-            { icon: Archive, title: 'Quarantine vault', text: 'ITAD Data & Evidence land in zero-public-access R2' }
+            { icon: Archive, title: 'Quarantine vault', text: 'Asset photos land in zero-public-access R2' }
           ].map(({ icon: Icon, title, text }) => (
             <div key={title} className="bg-white/80 backdrop-blur border border-slate-200/70 rounded-2xl px-4 py-3.5 flex items-start gap-3 shadow-sm">
               <span className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">

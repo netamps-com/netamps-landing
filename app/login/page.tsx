@@ -140,8 +140,9 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
-        document.cookie = `session_id=${data.sessionId}; path=/; max-age=3600; SameSite=Strict; Secure`;
-        document.cookie = `user_role=${email}; path=/; max-age=3600; SameSite=Strict; Secure`;
+        // Note: `Secure` cookies require HTTPS. Localhost HTTP will drop them. Use Pages preview URLs.
+        document.cookie = `session_id=${data.sessionId}; path=/; max-age=28800; SameSite=Strict; Secure`;
+        document.cookie = `user_role=${email}; path=/; max-age=28800; SameSite=Strict; Secure`;
         
         try {
           const { logEvent } = await import('../lib/logger');

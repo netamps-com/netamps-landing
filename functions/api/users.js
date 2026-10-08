@@ -37,10 +37,11 @@ export async function onRequestPost({ request, env }) {
             )
           `).run();
           
-          const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+          const expiresAt = new Date(Date.now() + 8 * 3600 * 1000).toISOString();
           await env.DB.prepare('INSERT INTO sessions (token, email, role, expires_at) VALUES (?, ?, ?, ?)').bind(sessionId, email, results[0].role, expiresAt).run();
 
-          const cookie = `session_token=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600`;
+          // Note: `Secure` cookies require HTTPS. Localhost HTTP will drop them. Use Pages preview URLs.
+          const cookie = `session_token=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`;
           
           return new Response(JSON.stringify({ success: true, role: results[0].role }), { 
             headers: { 
@@ -119,14 +120,7 @@ export async function onRequestPost({ request, env }) {
       await client.end();
     }
     
-    // Fallback if no DB is connected
-    if (action === 'login') {
-      const DEFAULT_HASH = 'bfc7e9309e970b4802affde33a9c07151af5897ef4b4d251b119c171d24a4bec'; // netamps2026
-      if ((email === 'admin@netamps.com' || email === 'staff@netamps.com') && passwordHash === DEFAULT_HASH) {
-        return new Response(JSON.stringify({ success: true, role: email.split('@')[0], sessionId: crypto.randomUUID() }), { headers: { 'Content-Type': 'application/json' } });
-      }
-    }
-    
+    // Fallback logic removed per R5 hardening.
     return new Response(JSON.stringify({ success: false, message: 'DB not connected' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });

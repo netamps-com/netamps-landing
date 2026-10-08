@@ -195,7 +195,7 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
     <div className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl font-sans text-slate-200">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold text-white">ITAD Data & Evidence</h3>
+          <h3 className="text-lg font-bold text-white">Asset photos</h3>
           <p className="text-xs text-slate-400 mt-1">Data payloads or evidence of the equipment · CSV, JSON, XLSX, MP4, MOV, WEBM, MKV, PNG, JPEG, WEBP, GIF, TIFF, HEIC · up to 300 MB per request</p>
         </div>
         {queuedFiles.length > 0 && (
@@ -220,7 +220,7 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
       <div
         role="button"
         tabIndex={0}
-        aria-label="Upload ITAD Data & Evidence"
+        aria-label="Upload Asset photos"
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
