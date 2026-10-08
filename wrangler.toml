@@ -4,15 +4,25 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "out"
 
 # Cloudflare Pages configuration - static export (output: out/)
-# Bindings (D1/R2) added per explicit user instruction.
-# NOTE 2026-10-08: bindings stripped to isolate a `pages deploy` step failure.
-# D1-only config also failed, so D1 is out too until proven otherwise. Dashboard
-# bindings remain the preferred path for ALL bindings (D1/KV/R2).
+# Bindings (D1/R2) live here per project convention. Dashboard bindings work too,
+# but file-declared bindings ship with the deployment (no separate dashboard step).
+# NOTE 2026-10-08: the recent red deploys were a stray `}` in
+# functions/api/intake/sessions.js breaking the Functions bundle — NOT these
+# sections. KEEP this file UTF-8 and keep every referenced resource existing.
+[[d1_databases]]
+binding = "DB"
+database_name = "netamps-db"
+database_id = "544297c4-e412-4b42-86d0-3c4383d92efa"
 
-# NOTE (deploy-validated): do NOT add [[kv_namespaces]] or [[queues.*]] sections
-# here until the backing resources actually exist in the Cloudflare account.
-# Unresolvable IDs (e.g. id = "cache-kv-id") and uncreated queues fail
-# `wrangler pages deploy` validation AND the native Pages build (runs 118/119/121
-# precedent). Create the resource first (KV namespace / Queue), then declare it.
-# Code paths that use CACHE_KV / INTAKE_QUEUE already guard with truthiness checks
-# and fall back to direct D1, so removal is runtime-safe.
+[[r2_buckets]]
+binding = "QUARANTINE_BUCKET"
+bucket_name = "netamps-quarantine"
+
+[[r2_buckets]]
+binding = "PRODUCTION_BUCKET"
+bucket_name = "netamps-evidence"
+
+# NOTE: [[kv_namespaces]] / [[queues.*]] stay out until those resources are created
+# in the account (the old id = "cache-kv-id" placeholder and the uncreated queue were
+# never validated live). Code using CACHE_KV / INTAKE_QUEUE guards with truthiness
+# checks and falls back to direct D1, so absence is runtime-safe.
