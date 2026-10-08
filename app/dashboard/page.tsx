@@ -10,6 +10,8 @@ import LogViewerModal from './LogViewerModal';
 
 interface ProductItem {
   id: string;
+  strategicTarget?: 'resale' | 'compliance';
+  lifecycleAge?: string;
   category: string;
   details: string;
   quantity: number;
@@ -384,33 +386,47 @@ export default function DashboardPage() {
                                 <div className="space-y-3">
                                   {req.products && req.products.length > 0 ? (
                                     req.products.map((product, idx) => (
-                                      <div key={product.id || idx} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 flex justify-between items-center">
-                                        <div>
-                                          <div className="text-sm font-bold text-slate-200 capitalize mb-1">
-                                            {product.category.replace('_', ' ')}
-                                          </div>
-                                          <div className="text-xs text-slate-400 max-w-2xl">
-                                            {product.details}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                          <div className="flex flex-col items-end">
-                                            <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Unit Price (INR)</label>
-                                            <div className="relative">
-                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                                              <input
-                                                type="number"
-                                                min="0"
-                                                disabled={userRole !== 'admin@netamps.com'}
-                                                value={product.price || ''}
-                                                onChange={(e) => handlePriceChange(req.id, product.id, e.target.value)}
-                                                placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
-                                                className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
-                                              />
+                                      <div key={product.id || idx} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 flex flex-col gap-3">
+                                        <div className="flex justify-between items-start">
+                                          <div>
+                                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                                              {product.strategicTarget && (
+                                                <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${product.strategicTarget === 'resale' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                                                  {product.strategicTarget === 'resale' ? 'Resale Value Opt.' : 'Compliance Recycling'}
+                                                </span>
+                                              )}
+                                              {product.lifecycleAge && (
+                                                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-300 border border-slate-600">
+                                                  {product.lifecycleAge}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-sm font-bold text-slate-200 capitalize mb-1">
+                                              {product.category.replace('_', ' ')}
+                                            </div>
+                                            <div className="text-xs text-slate-400 max-w-2xl">
+                                              {product.details}
                                             </div>
                                           </div>
-                                          <div className="text-lg font-mono font-bold text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-lg border border-indigo-500/20">
-                                            x{product.quantity}
+                                          <div className="flex items-center gap-4">
+                                            <div className="flex flex-col items-end">
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Unit Price (INR)</label>
+                                              <div className="relative">
+                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                                                <input
+                                                  type="number"
+                                                  min="0"
+                                                  disabled={userRole !== 'admin@netamps.com'}
+                                                  value={product.price || ''}
+                                                  onChange={(e) => handlePriceChange(req.id, product.id, e.target.value)}
+                                                  placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
+                                                  className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                                                />
+                                              </div>
+                                            </div>
+                                            <div className="text-lg font-mono font-bold text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-lg border border-indigo-500/20">
+                                              x{product.quantity}
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
@@ -424,7 +440,7 @@ export default function DashboardPage() {
                                 {req.attachedFiles && req.attachedFiles.length > 0 && (
                                   <div className="mt-6">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                      <FileImage className="w-4 h-4" /> Attached Asset photos ({req.attachedFiles.length})
+                                      <FileImage className="w-4 h-4" /> Attached Attach asset details of any type below ({req.attachedFiles.length})
                                     </h4>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                       {req.attachedFiles.map((fileKey, idx) => {
@@ -437,7 +453,7 @@ export default function DashboardPage() {
                                             {isVideo ? (
                                               <video src={fileUrl} controls preload="none" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             ) : (
-                                              <img src={fileUrl} alt="Asset photos" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                              <img src={fileUrl} alt="Attach asset details of any type below" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                                             )}
                                           </a>
                                         );

@@ -21,14 +21,23 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
         const res = await fetch(`${API_URL}/api/logs`);
         const data = await res.json();
         if (data.success && data.logs) {
-          setLogs(data.logs);
           setStoreState(data.store === 'none' ? 'none' : 'd1');
-          if (data.store === 'none') {
-            // Central store not connected — merge on-device logs so the view is still useful
-            const { getLogs } = await import('../lib/logger');
-            const local = getLogs();
-            if (local.length > 0) setLogs((prev) => [...prev, ...local.filter((l) => !prev.some((p) => p.id === l.id))]);
-          }
+          
+          // Always merge on-device logs so the view retains history during D1 transition
+          // or captures any events that failed to POST to the central API.
+          const { getLogs } = await import('../lib/logger');
+          const local = getLogs();
+          
+          const remote = data.logs;
+          const merged = [...remote];
+          
+          local.forEach((l: AuditLog) => {
+            if (!merged.some(m => m.id === l.id)) {
+              merged.push(l);
+            }
+          });
+          
+          setLogs(merged);
         } else {
           // Fallback to local storage if API fails
           const { getLogs } = await import('../lib/logger');
@@ -47,13 +56,13 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
   const filteredLogs = useMemo(() => {
     return logs
       .filter(log => 
-        (searchTerm === '' || log.eventType.toLowerCase().includes(searchTerm.toLowerCase()) || log.details.toLowerCase().includes(searchTerm.toLowerCase()) || log.user?.toLowerCase().includes(searchTerm.toLowerCase())) &&
-        (dateFilter === '' || log.timestamp.startsWith(dateFilter)) &&
+        (searchTerm === '' || log.eventType?.toLowerCase().includes(searchTerm.toLowerCase()) || log.details?.toLowerCase().includes(searchTerm.toLowerCase()) || log.user?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (dateFilter === '' || log.timestamp?.startsWith(dateFilter)) &&
         (pageFilter === '' || log.page === pageFilter)
       )
       .sort((a, b) => sortOrder === 'desc' 
-        ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        : new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        ? new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+        : new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
       );
   }, [logs, searchTerm, dateFilter, pageFilter, sortOrder]);
 

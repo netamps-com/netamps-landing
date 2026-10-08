@@ -38,7 +38,8 @@ export function logEvent(eventType: string, page: string, details: string, user:
     fetch(`${API_URL}/api/logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(log)
+      body: JSON.stringify(log),
+      keepalive: true
     }).catch(() => {});
   } catch (err) {
     console.error('Failed to write to audit log', err);

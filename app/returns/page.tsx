@@ -9,6 +9,8 @@ import SecureMediaUploader from './SecureMediaUploader';
 
 interface ProductItem {
   id: string;
+  strategicTarget: 'resale' | 'compliance';
+  lifecycleAge: string;
   category: string;
   details: string;
   quantity: number;
@@ -31,7 +33,7 @@ export default function ReturnsPage() {
   const [trackingError, setTrackingError] = useState('');
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }
+    { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
@@ -61,7 +63,7 @@ export default function ReturnsPage() {
   }, []);
 
   const addProduct = () => {
-    setProducts([...products, { id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]);
+    setProducts([...products, { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]);
   };
 
   const removeProduct = (id: string) => {
@@ -89,7 +91,7 @@ export default function ReturnsPage() {
       const email = formData.get('email') as string;
       const phone = formData.get('phone') as string;
 
-      if (!name.trim() || !company.trim() || !email.trim() || !phone.trim()) {
+      if (!name.trim() || (intent === 'sell' && !company.trim()) || !email.trim() || !phone.trim()) {
         setCaptchaError('Please ensure all required fields contain valid text, not just spaces.');
         setIsSubmitting(false);
         return;
@@ -334,14 +336,14 @@ export default function ReturnsPage() {
               <div className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
                 <button 
                   type="button"
-                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
+                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   SELL Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); }}
+                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   BUY Equipment
@@ -385,7 +387,7 @@ export default function ReturnsPage() {
                           <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {trackingResult.company}</p>
                           <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(trackingResult.date).toLocaleDateString()}</p>
                           {trackingResult.attachedFiles && trackingResult.attachedFiles.length > 0 && (
-                            <p className="text-sm text-slate-600"><strong className="text-slate-800">Asset photos:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
+                            <p className="text-sm text-slate-600"><strong className="text-slate-800">Attach asset details of any type below:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
                           )}
                         </div>
 
@@ -464,10 +466,10 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
-                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), category: '', details: '', quantity: 1 }]); setUploadedSecureFiles([]); }}>
+                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]); setUploadedSecureFiles([]); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name</label>
+                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name *</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <User className="h-5 w-5 text-slate-400" />
@@ -477,17 +479,17 @@ export default function ReturnsPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="company" className="block text-sm font-medium text-slate-700">Company</label>
+                    <label htmlFor="company" className="block text-sm font-medium text-slate-700">Company {intent === 'sell' ? '*' : ''}</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Building2 className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="text" name="company" id="company" required pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
+                      <input type="text" name="company" id="company" required={intent === 'sell'} pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Work Email</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <span className="text-slate-400 font-bold text-lg">@</span>
@@ -497,12 +499,21 @@ export default function ReturnsPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Phone Number</label>
+                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Mobile Number *</label>
                     <div className="mt-2 relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Phone className="h-5 w-5 text-slate-400" />
                       </div>
-                      <input type="tel" name="phone" id="phone" required pattern="^\+?[0-9\s\-()]+$" maxLength={20} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
+                      <input 
+                        type="tel" 
+                        name="phone" 
+                        id="phone" 
+                        required 
+                        pattern="^\+?[0-9]+$" 
+                        maxLength={20} 
+                        onChange={(e) => { e.target.value = e.target.value.replace(/(?!^\+)[^\d]/g, ''); }}
+                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                      />
                     </div>
                   </div>
                 </div>
@@ -525,9 +536,57 @@ export default function ReturnsPage() {
                         )}
                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Product #{index + 1}</h5>
                         
+                        {intent === 'sell' && (
+                          <div className="space-y-4 mb-2">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-700 mb-2">Strategic Recovery Target *</label>
+                              <div className="flex bg-slate-100 p-1 rounded-xl">
+                                <button
+                                  type="button"
+                                  onClick={() => updateProduct(product.id, 'strategicTarget', 'resale')}
+                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${product.strategicTarget === 'resale' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                                >
+                                  Resale Value Optimization
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateProduct(product.id, 'strategicTarget', 'compliance')}
+                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${product.strategicTarget === 'compliance' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                                >
+                                  Compliance Recycling
+                                </button>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-slate-700 mb-1">Hardware Lifecycle Batch Age *</label>
+                              <div className="relative">
+                                <select
+                                  required={intent === 'sell'}
+                                  value={product.lifecycleAge}
+                                  onChange={(e) => updateProduct(product.id, 'lifecycleAge', e.target.value)}
+                                  className="block w-full px-3 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm appearance-none shadow-sm"
+                                >
+                                  <option value="">Select Age Profile...</option>
+                                  <option value="Current Generation (1-3 Years)">Current Generation (1-3 Years)</option>
+                                  <option value="Mid-Lifecycle (3-5 Years)">Mid-Lifecycle (3-5 Years)</option>
+                                  <option value="Legacy Enterprise End-of-Life (~10%)">Legacy Enterprise End-of-Life (~10%)</option>
+                                  <option value="End of Support / Obsolete (>7 Years)">End of Support / Obsolete (&gt;7 Years)</option>
+                                  <option value="Mixed / Unknown Age">Mixed / Unknown Age</option>
+                                </select>
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                  <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-slate-700 mb-1">Equipment Category</label>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Equipment Category *</label>
                             <select 
                               required
                               value={product.category}
@@ -544,7 +603,7 @@ export default function ReturnsPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-700 mb-1">Quantity</label>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Quantity *</label>
                             <input 
                               type="number" 
                               min="1" 
@@ -556,7 +615,7 @@ export default function ReturnsPage() {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-700 mb-1">Details & Specs</label>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Details & Specs *</label>
                           <textarea 
                             rows={2} 
                             required
@@ -615,23 +674,21 @@ export default function ReturnsPage() {
         </motion.div>
 
         {/* Compliance & handling trust strip */}
-        <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
-          {[
-            { icon: ShieldCheck, title: 'SOC 2 controls', text: 'Audited handling for every request' },
-            { icon: Lock, title: 'Encrypted in transit & at rest', text: 'TLS 1.3 upload · AES-256 storage' },
-            { icon: FileCheck, title: 'Verified media only', text: 'Magic-byte inspection rejects spoofed files' },
-            { icon: Archive, title: 'Quarantine vault', text: 'Asset photos land in zero-public-access R2' }
-          ].map(({ icon: Icon, title, text }) => (
-            <div key={title} className="bg-white/80 backdrop-blur border border-slate-200/70 rounded-2xl px-4 py-3.5 flex items-start gap-3 shadow-sm">
-              <span className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-                <Icon className="w-4 h-4 text-indigo-600" />
-              </span>
-              <span>
-                <span className="block text-xs font-bold text-slate-900">{title}</span>
-                <span className="block text-[11px] leading-snug text-slate-500 mt-0.5">{text}</span>
-              </span>
-            </div>
-          ))}
+        <div className="mt-8 flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-500 relative z-10 pb-8">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-indigo-600" />
+            <span>SOC 2 Type II</span>
+          </div>
+          <span className="hidden sm:inline text-slate-300">|</span>
+          <div className="flex items-center gap-2">
+            <Lock className="w-5 h-5 text-indigo-600" />
+            <span>TLS 1.3/AES-256</span>
+          </div>
+          <span className="hidden sm:inline text-slate-300">|</span>
+          <div className="flex items-center gap-2">
+            <Archive className="w-5 h-5 text-indigo-600" />
+            <span>Zero-Access R2</span>
+          </div>
         </div>
       </div>
     </div>

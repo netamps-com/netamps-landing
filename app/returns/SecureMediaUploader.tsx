@@ -43,7 +43,7 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isImage = (f: File) => f.type.startsWith('image/');
+  const isImage = (f: File) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(f.name);
   const isVideo = (f: File) => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi|flv)$/i.test(f.name);
 
   const uploadFile = useCallback((qFile: QueuedFile) => {
@@ -132,7 +132,7 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
           next.push({
             id: crypto.randomUUID(),
             file,
-            previewUrl: isImage(file) ? URL.createObjectURL(file) : undefined,
+            previewUrl: (isImage(file) || isVideo(file)) ? URL.createObjectURL(file) : undefined,
             state: 'QUEUED',
             progress: 0
           });
@@ -195,8 +195,8 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
     <div className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl font-sans text-slate-200">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold text-white">Asset photos</h3>
-          <p className="text-xs text-slate-400 mt-1">Data payloads or evidence of the equipment · CSV, JSON, XLSX, MP4, MOV, WEBM, MKV, PNG, JPEG, WEBP, GIF, TIFF, HEIC · up to 300 MB per request</p>
+          <h3 className="text-lg font-bold text-white">Attach asset details of any type below</h3>
+          <p className="text-xs text-slate-400 mt-1">Accepted Payloads: Data (CSV, JSON, XLSX) • Video (MP4, MOV, WEBM, MKV) • Image (PNG, JPEG, WEBP, GIF, TIFF, HEIC) | Max Size: 300 MB per request</p>
         </div>
         {queuedFiles.length > 0 && (
           <span className="shrink-0 text-xs font-mono text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
@@ -220,7 +220,7 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
       <div
         role="button"
         tabIndex={0}
-        aria-label="Upload Asset photos"
+        aria-label="Upload Attach asset details of any type below"
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
@@ -257,7 +257,15 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
                   ) : (
                     <ImageIcon className="w-5 h-5 text-slate-400" />
                   )}
-                  {qFile.previewUrl && (
+                  {qFile.previewUrl && isVideo(qFile.file) && (
+                    <video
+                      src={qFile.previewUrl}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      autoPlay muted loop playsInline
+                      onError={(e) => { e.currentTarget.remove(); }}
+                    />
+                  )}
+                  {qFile.previewUrl && isImage(qFile.file) && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={qFile.previewUrl}

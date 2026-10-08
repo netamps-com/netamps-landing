@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model inventory_stock_registry {
+  sku                         String  @id @db.VarChar
+  current_on_hand_balance     Int     @default(0)
+  reserved_pending_allocation Int     @default(0)
+}
+
+model documents {
+  document_id      String                @id @default(uuid()) @db.Uuid
+  document_number  String                @unique
+  doc_type         DocumentType
+  lifecycle_status LifecycleStatus
+  subtotal         Decimal
+  tax_rate         Decimal
+  total_payable    Decimal
+  line_items       document_line_items[]
+}
+
+model document_line_items {
+  id                String    @id @default(uuid()) @db.Uuid
+  document_id       String    @db.Uuid
+  sku               String    @db.VarChar
+  selected_quantity Int
+  unit_cost         Decimal
+  extended_total    Decimal
+  document          documents @relation(fields: [document_id], references: [document_id])
+}
+
+model audit_ledger {
+  audit_id    String   @id @default(uuid()) @db.Uuid
+  actor_id    String?  @db.Uuid
+  ip_address  String?
+  action_type String
+  old_state   Json?    @db.JsonB
+  new_state   Json?    @db.JsonB
+  timestamp   DateTime @db.Timestamptz()
+}
+
+enum DocumentType {
+  QUOTE
+  PURCHASE_ORDER
+  PROFORMA_INVOICE
+  INVOICE
+  CASH_MEMO
+}
+
+enum LifecycleStatus {
+  DRAFT
+  COMMITTED
+  SETTLED
+  CANCELLED
+}

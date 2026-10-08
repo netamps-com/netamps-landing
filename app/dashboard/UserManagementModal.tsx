@@ -13,6 +13,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
   const [newPassword, setNewPassword] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState('staff');
   const [pwdError, setPwdError] = useState('');
   const [pwdSuccess, setPwdSuccess] = useState('');
   const [isUpdatingPwd, setIsUpdatingPwd] = useState(false);
@@ -121,7 +122,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       const res = await fetch(`${API_URL}/api/users/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newUserEmail, passwordHash: newHashed, role: 'staff' })
+        body: JSON.stringify({ email: newUserEmail, passwordHash: newHashed, role: newUserRole })
       });
       const data = await res.json();
       
@@ -196,6 +197,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                     onChange={(e) => setTargetAccount(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                   >
+                    <option value="" disabled>Select Target Account</option>
                     {users.map(u => (
                       <option key={u.email} value={u.email}>{u.email}</option>
                     ))}
@@ -263,6 +265,18 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder={pwdError ? "" : "Enter 8+ char password"}
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Role Type</label>
+                <select 
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                >
+                  <option value="staff">Staff</option>
+                  <option value="admin">Admin</option>
+                  <option value="user">User</option>
+                </select>
               </div>
               <button 
                 type="submit" 

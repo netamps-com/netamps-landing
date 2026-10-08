@@ -96,6 +96,23 @@ function scanMalware(headBytes, fileName) {
   }
 }
 
+async function scanVirustotal(sha256, apiKey) {
+  if (!apiKey) return false;
+  try {
+    const res = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
+      headers: { 'x-apikey': apiKey }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const malicious = data.data?.attributes?.last_analysis_stats?.malicious || 0;
+      if (malicious > 0) return true;
+    }
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
 function audit(event, fields) {
   try {
     console.log(JSON.stringify({
@@ -144,12 +161,19 @@ export async function onRequestPost({ request, env }) {
     const contentLength = request.headers.get('content-length');
 
     if (contentLength && parseInt(contentLength, 10) > MAX_PAYLOAD_SIZE) {
-      return json({ success: false, error: 'SIZE_VIOLATION', message: 'Upload blocked: payload exceeds the 300 MB per-request limit. Split the asset photos across multiple requests.' }, 413);
+      return json({ success: false, error: 'SIZE_VIOLATION', message: 'Upload blocked: payload exceeds the 300 MB per-request limit. Split the attached asset details across multiple requests.' }, 413);
     }
 
     const formData = await request.formData();
     const file = formData.get('file');
     sessionId = formData.get('sessionId') || crypto.randomUUID();
+
+    if (env.CACHE_KV) {
+      const banCount = parseInt(await env.CACHE_KV.get(`ban_${sessionId}`) || '0', 10);
+      if (banCount >= 3) {
+        return json({ success: false, error: 'SESSION_BLOCKED', message: 'Session terminated due to repeated malicious uploads. Please restart session with a new ID.' }, 403);
+      }
+    }
 
     if (!file || typeof file.arrayBuffer !== 'function') {
       return json({ success: false, error: 'BAD_REQUEST', message: 'No file payload attached.' }, 400);
@@ -172,23 +196,38 @@ export async function onRequestPost({ request, env }) {
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
 
-    if (!validateMagicBytes(bytes.slice(0, 16), ext)) {
-      audit('upload.blocked.signature', { ip, sessionId, fileName, size: fileSize, verdict: 'BLOCKED_SIGNATURE_SPOOF' });
-      return json({ success: false, error: 'SIGNATURE_SPOOF', message: 'Upload blocked: file signature does not match a verified photo/video container. Renamed executables are rejected.' }, 415);
-    }
-
-    const scan = scanMalware(bytes, fileName);
-    if (scan.infected) {
-      const entry = { ip, sessionId, fileName, size: fileSize, sha256: null, signature: scan.signature, verdict: 'BLOCKED_MALWARE' };
-      audit('upload.blocked.malware', entry);
-      return json({ success: false, error: 'MALWARE_BLOCKED', message: 'Upload Blocked: Malicious signature detected. Incident logged to security console.' }, 403);
-    }
-
     const digest = await crypto.subtle.digest('SHA-256', buffer);
     const sha256 = hexOf(new Uint8Array(digest));
 
-    if (!env.QUARANTINE_BUCKET || typeof env.QUARANTINE_BUCKET.put !== 'function') {
-      return json({ success: false, error: 'STORAGE_UNBOUND', message: 'Upload pipeline unavailable: quarantine storage is not attached. Please try again shortly.' }, 503);
+    if (env.CACHE_KV) {
+      const blacklisted = await env.CACHE_KV.get(`blacklist_${sha256}`);
+      if (blacklisted) {
+        const currentBan = parseInt(await env.CACHE_KV.get(`ban_${sessionId}`) || '0', 10);
+        await env.CACHE_KV.put(`ban_${sessionId}`, (currentBan + 1).toString(), { expirationTtl: 86400 });
+        audit('upload.blocked.blacklist', { ip, sessionId, fileName, size: fileSize, sha256, verdict: 'BLOCKED_BLACKLIST' });
+        return json({ success: false, error: 'MALWARE_BLOCKED', message: 'Upload Blocked: Known malicious file signature detected.' }, 403);
+      }
+    }
+
+    const isMagicSpoofed = !validateMagicBytes(bytes.slice(0, 16), ext);
+    const scan = scanMalware(bytes, fileName);
+    const isVtMalicious = await scanVirustotal(sha256, env.VIRUSTOTAL_API_KEY);
+
+    if (isMagicSpoofed || scan.infected || isVtMalicious) {
+      if (env.CACHE_KV) {
+        await env.CACHE_KV.put(`blacklist_${sha256}`, '1', { expirationTtl: 86400 * 30 });
+        const currentBan = parseInt(await env.CACHE_KV.get(`ban_${sessionId}`) || '0', 10);
+        await env.CACHE_KV.put(`ban_${sessionId}`, (currentBan + 1).toString(), { expirationTtl: 86400 });
+      }
+      
+      const signature = scan.signature || (isVtMalicious ? 'VIRUSTOTAL_MALICIOUS' : 'SIGNATURE_SPOOF');
+      const entry = { ip, sessionId, fileName, size: fileSize, sha256, signature, verdict: 'BLOCKED_MALWARE' };
+      audit('upload.blocked.malware', entry);
+      return json({ success: false, error: 'MALWARE_BLOCKED', message: 'Upload Blocked: Malicious signature detected or spoofed file. Incident logged.' }, 403);
+    }
+
+    if (!env.QUARANTINE_BUCKET || typeof env.QUARANTINE_BUCKET.put !== 'function' || !env.PRODUCTION_BUCKET || typeof env.PRODUCTION_BUCKET.put !== 'function') {
+      return json({ success: false, error: 'STORAGE_UNBOUND', message: 'Upload pipeline unavailable: quarantine or evidence storage is not attached. Please try again shortly.' }, 503);
     }
     
     // Identity (A0): a logged-in session tags ownership; the public Returns
@@ -216,25 +255,22 @@ export async function onRequestPost({ request, env }) {
       }
     });
 
-    let finalKey = objectKey;
-    let finalBucket = 'quarantine';
-    if (env.PRODUCTION_BUCKET && typeof env.PRODUCTION_BUCKET.put === 'function') {
-      const prodKey = `evidence/${trackingId}.${safeExt}`;
-      await env.PRODUCTION_BUCKET.put(prodKey, buffer, {
-        httpMetadata: { contentType: mime || 'application/octet-stream' },
-        customMetadata: {
-          'x-actor-ip': ip,
-          'x-session-id': String(sessionId),
-          'x-owner-email': ownerEmail,
-          'x-payload-sha256': sha256,
-          'x-scan-verdict': 'SCANNED_CLEAN',
-          'x-encryption': 'SSE-AES256',
-          'x-quarantine-key': objectKey
-        }
-      });
-      finalKey = prodKey;
-      finalBucket = 'production';
-    }
+    const prodKey = `evidence/${trackingId}.${safeExt}`;
+    await env.PRODUCTION_BUCKET.put(prodKey, buffer, {
+      httpMetadata: { contentType: mime || 'application/octet-stream' },
+      customMetadata: {
+        'x-actor-ip': ip,
+        'x-session-id': String(sessionId),
+        'x-owner-email': ownerEmail,
+        'x-payload-sha256': sha256,
+        'x-scan-verdict': 'SCANNED_CLEAN',
+        'x-encryption': 'SSE-AES256',
+        'x-quarantine-key': objectKey
+      }
+    });
+    
+    let finalKey = prodKey;
+    let finalBucket = 'production';
 
     const done = { ip, sessionId, fileName, size: fileSize, sha256, verdict: 'CLEAN', bucket: finalBucket, key: finalKey, ownerEmail };
     audit('upload.accepted', done);

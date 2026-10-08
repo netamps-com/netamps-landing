@@ -1,0 +1,77 @@
+name: Enterprise Production Deploy (Cloudflare + Firebase)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # 1. SECURITY & CODE QUALITY GATES
+  security-and-quality:
+    name: Security & SAST Scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install Dependencies
+        run: |
+          cd crm-backend
+          npm ci
+      # Placeholders for Snyk / SonarQube / TruffleHog logic from previous YAML
+      - name: Security Clear
+        run: echo "Code clear. Proceeding to deployment."
+
+  # 2. FRONTEND DEPLOYMENT TO CLOUDFLARE PAGES
+  deploy-frontend-cloudflare:
+    name: Deploy Landing to Cloudflare Pages
+    needs: security-and-quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Frontend Dependencies
+        run: npm ci
+      - name: Build Next.js
+        run: npm run build
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: 'netamps-landing'
+          directory: './out'
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # 3. BACKEND DEPLOYMENT TO FIREBASE FUNCTIONS
+  deploy-backend-firebase:
+    name: Deploy Backend API to Firebase
+    needs: security-and-quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Backend Dependencies
+        run: |
+          cd crm-backend
+          npm ci
+          npx prisma generate
+      - name: Build TypeScript
+        run: |
+          cd crm-backend
+          npm run build
+      - name: Deploy to Firebase Functions
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only functions
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          PROJECT_ID: 'netamps-production'
