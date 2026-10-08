@@ -70,10 +70,10 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       const newHashed = await hashPassword(newPassword);
       
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/users`, {
+      const res = await fetch(`${API_URL}/api/users/modify-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_password', email: targetAccount, passwordHash: newHashed, currentPasswordHash: hashedInput })
+        body: JSON.stringify({ email: targetAccount, passwordHash: newHashed, currentPasswordHash: hashedInput })
       });
       const data = await res.json();
       
@@ -118,10 +118,10 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       const newHashed = await hashPassword(newUserPassword);
       
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/users`, {
+      const res = await fetch(`${API_URL}/api/users/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'add', email: newUserEmail, passwordHash: newHashed, role: 'staff' })
+        body: JSON.stringify({ email: newUserEmail, passwordHash: newHashed, role: 'staff' })
       });
       const data = await res.json();
       
@@ -216,7 +216,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Verify your authority"
+                  placeholder={pwdError ? "" : "Verify your authority"}
                 />
               </div>
               <div>
@@ -228,7 +228,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Enter new 8+ char password"
+                  placeholder={pwdError ? "" : "Enter new 8+ char password"}
                 />
               </div>
               <button 
@@ -249,7 +249,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g. manager@netamps.com"
+                  placeholder={pwdError ? "" : "e.g. manager@netamps.com"}
                 />
               </div>
               <div>
@@ -261,7 +261,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Enter 8+ char password"
+                  placeholder={pwdError ? "" : "Enter 8+ char password"}
                 />
               </div>
               <button 
