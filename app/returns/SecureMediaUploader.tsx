@@ -251,14 +251,20 @@ export default function SecureMediaUploader({ onUploadSuccess, sessionId }: Secu
           {queuedFiles.map((qFile) => (
             <li key={qFile.id} className="bg-slate-800/80 border border-slate-700 rounded-lg p-3">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
-                  {qFile.previewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={qFile.previewUrl} alt={qFile.file.name} className="w-full h-full object-cover" />
-                  ) : isVideo(qFile.file) ? (
+                <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden relative">
+                  {isVideo(qFile.file) ? (
                     <Film className="w-5 h-5 text-slate-400" />
                   ) : (
                     <ImageIcon className="w-5 h-5 text-slate-400" />
+                  )}
+                  {qFile.previewUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={qFile.previewUrl}
+                      alt={qFile.file.name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      onError={(e) => { e.currentTarget.remove(); }}
+                    />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
