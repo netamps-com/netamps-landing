@@ -241,6 +241,7 @@ export default function ReturnsPage() {
   };
 
   const processReturnSubmit = async (formData?: FormData) => {
+    try {
       const actualFormData = formData || formDataCache;
       if (!actualFormData) return;
       setIsUploading(true);
