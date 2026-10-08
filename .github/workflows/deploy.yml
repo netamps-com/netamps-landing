@@ -19,7 +19,7 @@ jobs:
       - name: Install Dependencies
         run: |
           cd crm-backend
-          npm ci
+          npm install
       # Placeholders for Snyk / SonarQube / TruffleHog logic from previous YAML
       - name: Security Clear
         run: echo "Code clear. Proceeding to deployment."
@@ -62,7 +62,7 @@ jobs:
       - name: Install Backend Dependencies
         run: |
           cd crm-backend
-          npm ci
+          npm install
           npx prisma generate
       - name: Build TypeScript
         run: |
@@ -75,3 +75,4 @@ jobs:
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           PROJECT_ID: 'netamps-production'
+          PROJECT_PATH: 'crm-backend'
