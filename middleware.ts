@@ -16,7 +16,8 @@ export function middleware(request: NextRequest) {
   // 1. Hardened Session ID (sid) in Cookie
   // Check if session cookie exists, if not generate one securely
   if (!request.cookies.has('sid')) {
-    const sid = crypto.randomUUID();
+    // Use Web Crypto API compatible with Edge Runtime
+    const sid = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     response.cookies.set({
       name: 'sid',
       value: sid,
@@ -43,5 +44,5 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   // Apply middleware to all routes except API, Next.js static assets, and images
-  matcher: '/((?!api|_next/static|_next/image|favicon.ico|robots.txt).*)',
+  matcher: '/((?!api|_next/static|_next/image|favicon.ico|robots.txt|functions).*)',
 };
