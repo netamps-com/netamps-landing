@@ -16,7 +16,7 @@ function generateLiveMetrics(env) {
   const now = Date.now();
   
   // Simulate some variance for realistic live data
-  const variance = (base: number, range: number) => Math.max(0, base + (Math.random() - 0.5) * range);
+  const variance = (base, range) => Math.max(0, base + (Math.random() - 0.5) * range);
   
   return {
     timestamp: new Date().toISOString(),
