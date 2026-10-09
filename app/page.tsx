@@ -132,18 +132,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    // Generate Session ID if missing
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      if (!url.searchParams.has('sid')) {
-        const sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        url.searchParams.set('sid', sid);
-        window.history.replaceState({}, '', url.toString());
-      }
-    }
 
-  }, []);
 
   const handleMouseEnter = (index: number) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
