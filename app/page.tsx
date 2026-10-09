@@ -57,7 +57,7 @@ const FlyoutLink = ({ children, href, FlyoutContent }: any) => {
     <div
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
-      className="relative w-fit h-fit"
+      className="relative w-fit h-fit flex flex-col items-center"
     >
       <a 
         href={href} 
@@ -69,11 +69,11 @@ const FlyoutLink = ({ children, href, FlyoutContent }: any) => {
              <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
           )}
         </span>
-        <span
-          style={{ transform: open ? "scaleX(1)" : "scaleX(0)" }}
-          className="absolute bottom-0 left-0 right-0 h-[3px] origin-left scale-x-0 bg-indigo-500 transition-transform duration-300 ease-out z-20"
-        />
       </a>
+      <span
+        style={{ transform: showFlyout ? "scaleX(1)" : "scaleX(0)" }}
+        className="absolute -bottom-2 left-2 right-2 h-1 origin-left scale-x-0 rounded-full bg-indigo-500 transition-transform duration-300 ease-out z-20"
+      />
       <AnimatePresence>
         {showFlyout && (
           <motion.div
