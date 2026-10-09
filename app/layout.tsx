@@ -94,9 +94,6 @@ export const metadata: Metadata = {
 
 import SecurityWrapper from "./SecurityWrapper";
 import TrustSeal from "./TrustSeal";
-import DesktopNav from "@/components/navigation/DesktopNav";
-import MobileNav from "@/components/navigation/MobileNav";
-import DeviceSwitcher from "@/components/navigation/DeviceSwitcher";
 
 export default function RootLayout({
   children,
@@ -123,16 +120,11 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://www.google.com" />
       </head>
       <body
-        className={`${inter.variable} ${outfit.variable} font-sans select-none antialiased bg-gray-50 flex flex-col min-h-screen`}
+        className={`${inter.variable} ${outfit.variable} font-sans select-none antialiased`}
       >
         <SecurityWrapper>
-          <DesktopNav />
-          <MobileNav />
-          <main className="flex-grow w-full">
-            {children}
-          </main>
+          {children}
           <TrustSeal />
-          <DeviceSwitcher />
         </SecurityWrapper>
         {/* Google AdSense — loaded after interactive to not block render */}
         <Script
