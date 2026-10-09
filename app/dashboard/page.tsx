@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video, Mail, Database } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
@@ -32,6 +32,130 @@ interface ReturnRequest {
   status: string;
 }
 
+const statusColors = {
+  operational: 'bg-emerald-500 text-emerald-400',
+  degraded: 'bg-amber-500 text-amber-400',
+  maintenance: 'bg-blue-500 text-blue-400',
+  outage: 'bg-red-500 text-red-400',
+  unknown: 'bg-slate-500 text-slate-400'
+};
+
+const HealthStatusWidget = ({ status, loading }: { status: any; loading: boolean }) => {
+  if (loading || !status) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700">
+        <div className="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></div>
+        <span className="text-xs text-slate-400">Loading health...</span>
+      </div>
+    );
+  }
+
+  const getOverallStatus = () => {
+    const statuses = [status.database?.status, status.api?.status, status.payload?.status, status.cdn?.status].filter(Boolean);
+    if (statuses.includes('outage')) return 'outage';
+    if (statuses.includes('degraded')) return 'degraded';
+    if (statuses.includes('maintenance')) return 'maintenance';
+    return 'operational';
+  };
+
+  const overall = getOverallStatus();
+
+  return (
+    <div className="relative flex items-center gap-3">
+      {/* Overall Status Indicator */}
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors"
+        style={{ 
+          backgroundColor: overall === 'operational' ? 'rgba(16, 185, 129, 0.1)' : 
+                          overall === 'degraded' ? 'rgba(245, 158, 11, 0.1)' :
+                          overall === 'outage' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+          borderColor: overall === 'operational' ? 'rgba(16, 185, 129, 0.3)' : 
+                      overall === 'degraded' ? 'rgba(245, 158, 11, 0.3)' :
+                      overall === 'outage' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'
+      }>
+        <div className={`w-2 h-2 rounded-full animate-ping ${overall === 'operational' ? 'bg-emerald-500' : 
+                          overall === 'degraded' ? 'bg-amber-500' :
+                          overall === 'outage' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+        <span className={`text-xs font-bold ${overall === 'operational' ? 'text-emerald-400' : 
+                          overall === 'degraded' ? 'text-amber-400' :
+                          overall === 'outage' ? 'text-red-400' : 'text-blue-400'}`}>
+          {overall.charAt(0).toUpperCase() + overall.slice(1)}
+        </span>
+      </div>
+
+      {/* Detailed Status Dropdown */}
+      <div className="relative">
+        <button 
+          className="flex items-center gap-1 px-2 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors"
+          onClick={(e) => { e.stopPropagation(); }}
+        >
+          <Server className="w-3.5 h-3.5 text-slate-400" />
+        </button>
+        
+        {/* Tooltip/Popover with detailed metrics */}
+        <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+          <div className="p-3 border-b border-slate-700">
+            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+              Live System Metrics
+            </h4>
+            <p className="text-[10px] text-slate-500 mt-1">Updated: {new Date(status.lastUpdated).toLocaleTimeString()}</p>
+          </div>
+          
+          <div className="p-3 space-y-3">
+            {/* Database */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.database?.status] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">Database</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-emerald-400">{status.database?.latency}ms</span>
+                <span className="text-[10px] text-slate-500 ml-1">{status.database?.uptime}% uptime</span>
+              </div>
+            </div>
+
+            {/* API */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.api?.status] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">API Gateway</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-emerald-400">{status.api?.latency}ms</span>
+                <span className="text-[10px] text-slate-500 ml-1">{status.api?.uptime}% uptime</span>
+              </div>
+            </div>
+
+            {/* Payload/Website Traffic */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.payload?.status] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">Website Payload</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-indigo-400">{status.payload?.requestsPerMin}/min</span>
+                <span className="text-[10px] text-slate-500 ml-1">{status.payload?.avgLatency}ms avg • {status.payload?.errorRate}% errors</span>
+              </div>
+            </div>
+
+            {/* CDN */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.cdn?.status] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">Edge CDN</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-emerald-400">{status.cdn?.latency}ms</span>
+                <span className="text-[10px] text-slate-500 ml-1">{status.cdn?.cacheHitRate}% cache hit</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -39,9 +163,41 @@ export default function DashboardPage() {
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
+  // Real-time health monitoring
+  const [healthStatus, setHealthStatus] = useState<{
+    database: { status: string; latency: number; uptime: number };
+    api: { status: string; latency: number; uptime: number };
+    payload: { status: string; requestsPerMin: number; avgLatency: number; errorRate: number };
+    cdn: { status: string; latency: number; cacheHitRate: number };
+    lastUpdated: string;
+  } | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+  
   // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
+
+  // Fetch real-time health status
+  const fetchHealthStatus = useCallback(async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/health/live`);
+      if (res.ok) {
+        const data = await res.json();
+        setHealthStatus(data);
+      }
+    } catch (err) {
+      console.error('Health check failed:', err);
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHealthStatus();
+    const interval = setInterval(fetchHealthStatus, 30000); // Every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchHealthStatus]);
 
   useEffect(() => {
     // Check industry-standard session ID cookie
@@ -245,7 +401,22 @@ export default function DashboardPage() {
               </span>
             </div>
             
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
+              {/* Real-time Health Status Widget */}
+              <HealthStatusWidget status={healthStatus} loading={healthLoading} />
+              
+              {/* Webmail Access Button */}
+              <a
+                href="https://webmail.netamps.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/20"
+                title="Access Webmail"
+              >
+                <Mail className="w-4 h-4" />
+                <span className="hidden sm:inline">Webmail</span>
+              </a>
+              
               <div className="text-sm font-medium text-slate-300">
                 Logged in as <span className="text-white capitalize">{userRole}</span>
               </div>

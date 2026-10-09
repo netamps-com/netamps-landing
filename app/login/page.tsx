@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from "motion/react";
-import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
+import { Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
 const ServerStatusWidget = () => {
@@ -277,44 +277,7 @@ export default function LoginPage() {
             </div>
           </form>
           
-          <div className="mt-4 flex items-center justify-between px-1">
-            <span className="text-xs text-slate-500 font-medium">Database Health</span>
-            {errorMsg === 'DB not connected' ? (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 rounded-full border border-red-500/20">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
-                <span className="text-[10px] text-red-600 font-bold tracking-wide uppercase">Disconnected</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                <span className="text-[10px] text-emerald-600 font-bold tracking-wide uppercase">Connected</span>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white/90 text-slate-500 backdrop-blur-xl">Webmail Access</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <a
-                href="https://webmail.netamps.in"
-                target="webmail.netamps.in"
-                rel="noopener noreferrer"
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-              >
-                <Mail className="w-4 h-4" />
-                Webmail Login
-              </a>
-            </div>
-          </div>
-        </motion.div>
+          </motion.div>
         
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
