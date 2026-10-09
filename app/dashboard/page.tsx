@@ -43,6 +43,24 @@ export default function DashboardPage() {
   // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchReturns = useCallback(async (silent = true) => {
+    if (!silent) setIsRefreshing(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/returns`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success && data.returns) {
+        setReturns(data.returns);
+        localStorage.setItem('netamps_returns', JSON.stringify(data.returns));
+      }
+    } catch (e) {
+      // Keep existing data to avoid UI errors/flicker
+    } finally {
+      if (!silent) setIsRefreshing(false);
+    }
+  }, []);
   
   useEffect(() => {
     // Check industry-standard session ID cookie
@@ -62,36 +80,29 @@ export default function DashboardPage() {
       } else {
         setIsAuthenticated(true);
         setUserRole(role);
-        const fetchReturns = async () => {
-          try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-            const res = await fetch(`${API_URL}/api/returns`);
-            const data = await res.json();
-            if (data.success && data.returns.length > 0) {
-              setReturns(data.returns);
-              localStorage.setItem('netamps_returns', JSON.stringify(data.returns));
-            } else {
-              loadFallback();
-            }
-          } catch(e) {
-            loadFallback();
-          }
-        };
 
-        const loadFallback = () => {
-          const stored = localStorage.getItem('netamps_returns');
-          if (stored) {
-            try {
-              setReturns(JSON.parse(stored));
-            } catch (e) {}
-          }
-        };
-        fetchReturns();
+        // Load offline cache first for zero latency
+        const stored = localStorage.getItem('netamps_returns');
+        if (stored) {
+          try {
+            setReturns(JSON.parse(stored));
+          } catch (e) {}
+        }
+        
+        // Fetch fresh data immediately
+        fetchReturns(false);
+        
+        // Start real-time polling (every 10 seconds)
+        const intervalId = setInterval(() => fetchReturns(true), 10000);
+        return () => clearInterval(intervalId);
       }
     };
 
-    checkAuth();
-  }, [router]);
+    const cleanup = checkAuth();
+    return () => {
+      if (typeof cleanup === 'function') cleanup();
+    };
+  }, [router, fetchReturns]);
 
   const handleLogout = () => {
     // Securely terminate session by destroying cookies
@@ -310,6 +321,14 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-3">
+            <button 
+              onClick={() => fetchReturns(false)}
+              disabled={isRefreshing}
+              title="Refresh Data"
+              className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50 shadow-lg"
+            >
+              <RefreshCw className={`w-4 h-4 text-slate-300 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
             <Link href="/intake" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20 mr-2">
               <Database className="w-4 h-4" /> Intake Workbench
             </Link>
