@@ -5,7 +5,7 @@ import SecureLoginButton from './SecureLoginButton';
 import FirmOverviewBanner from './FirmOverviewBanner';
 import ServerStatusWidget from './ServerStatusWidget';
 import NetampsLogo from './NetampsLogo';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle, Mail, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Target, ShoppingCart } from 'lucide-react';
 
 const fadeInUp = {
@@ -48,6 +48,66 @@ const expertiseAreas = [
   { title: "Smart Enterprise & EdTech Infrastructure", desc: "Engineering next-generation collaborative environments integrated with secure network connectivity and unified communications.", color: "border-orange-200 bg-orange-100 text-orange-600", icon: BookOpen, bgImage: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&q=80&w=600" },
   { title: "Managed Cloud Architecture Services (MSP)", desc: "End-to-end cloud lifecycle administration, workload migration, and FinOps resource optimization across distributed infrastructures.", color: "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-600", icon: Server, bgImage: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600" }
 ];
+
+const FlyoutLink = ({ children, href, FlyoutContent }: any) => {
+  const [open, setOpen] = useState(false);
+  const showFlyout = FlyoutContent && open;
+
+  return (
+    <div
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      className="relative w-fit h-fit"
+    >
+      <a 
+        href={href} 
+        className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm block group overflow-hidden"
+      >
+        <span className="relative z-10 group-hover:text-white transition-colors flex items-center gap-1">
+          {children}
+          {FlyoutContent && (
+             <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+          )}
+        </span>
+        <span
+          style={{ transform: open ? "scaleX(1)" : "scaleX(0)" }}
+          className="absolute bottom-0 left-0 right-0 h-[3px] origin-left scale-x-0 bg-indigo-500 transition-transform duration-300 ease-out z-20"
+        />
+      </a>
+      <AnimatePresence>
+        {showFlyout && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 15 }}
+            style={{ translateX: "-50%" }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="absolute left-1/2 top-12 z-[60]"
+          >
+            <div className="absolute -top-6 left-0 right-0 h-6 bg-transparent" />
+            <div className="absolute left-1/2 top-0 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-white border-l border-t border-slate-200" />
+            <div className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden w-48 relative z-10">
+              <FlyoutContent />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const EsgReturnsContent = () => {
+  return (
+    <a 
+      href="/returns"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+    >
+      Request a Return
+    </a>
+  );
+};
 
 export default function Home() {
   const [hoveredExpertise, setHoveredExpertise] = useState<number | null>(null);
@@ -138,36 +198,11 @@ export default function Home() {
                 { name: 'Home', href: '#' },
                 { name: 'Services', href: '#services' },
                 { name: 'Solutions', href: '#solutions' },
-                { name: 'ESG Initiatives', href: '#csr', hasDropdown: true }
+                { name: 'ESG Initiatives', href: '#csr', content: EsgReturnsContent }
               ].map((item) => (
-                item.hasDropdown ? (
-                  <div key={item.name} className="relative group">
-                    <a 
-                      href={item.href}
-                      className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm overflow-hidden block group-hover:rounded-b-none group-hover:border-b-transparent z-10"
-                    >
-                      <span className="relative z-10 group-hover:text-white transition-colors flex items-center gap-1">{item.name} <svg className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></span>
-                    </a>
-                    <div className="absolute left-0 mt-0 w-48 bg-white border border-slate-200 border-t-0 rounded-b-xl rounded-tr-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 overflow-hidden transform origin-top group-hover:scale-y-100 scale-y-95">
-                      <a 
-                        href="/returns"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                      >
-                        Request a Return
-                      </a>
-                    </div>
-                  </div>
-                ) : (
-                  <a 
-                    key={item.name}
-                    href={item.href}
-                    className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm group overflow-hidden block"
-                  >
-                    <span className="relative z-10 group-hover:text-white transition-colors">{item.name}</span>
-                  </a>
-                )
+                <FlyoutLink key={item.name} href={item.href} FlyoutContent={item.content}>
+                  {item.name}
+                </FlyoutLink>
               ))}
               <SecureLoginButton />
             </nav>
