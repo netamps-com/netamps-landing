@@ -36,7 +36,12 @@ export const metadata: Metadata = {
     "Bangalore Cyber Security", "Bangalore Network Infrastructure",
     "Bangalore CCTV", "Bangalore Smart City", "Bangalore Firewall",
     "Bangalore ITAD", "Bangalore Refurbish", "IT Asset Disposition Bangalore",
-    "Refurbished IT Hardware Bangalore", "Smart City Infrastructure"
+    "Refurbished IT Hardware Bangalore", "Smart City Infrastructure",
+    "India Cyber Security", "Tamilnadu Network Infrastructure", "Chennai CCTV",
+    "Coimbatore Smart City", "Kerala Firewall", "Andhra ITAD", "Telangana Refurbish",
+    "Cyber Security Chennai", "Network Infrastructure Kerala", "CCTV Tamilnadu",
+    "Smart City India", "Firewall Coimbatore", "ITAD Andhra", "Refurbished IT Hardware Telangana",
+    "South India IT Security", "Enterprise Security Chennai", "Data Protection Kerala"
   ],
   authors: [{ name: "Netamps Technologies", url: "https://netamps.com" }],
   creator: "Netamps Technologies",
