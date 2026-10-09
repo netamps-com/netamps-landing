@@ -8,7 +8,7 @@ import NetampsLogo from './NetampsLogo';
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle, Mail, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Target, ShoppingCart } from 'lucide-react';
 
-const fadeInUp = {
+const fadeInUp: any = {
   hidden: { opacity: 0, y: 60, scale: 0.95, filter: "blur(10px)" },
   visible: { 
     opacity: 1, 
@@ -25,7 +25,7 @@ const fadeInUp = {
   }
 };
 
-const staggerContainer = {
+const staggerContainer: any = {
   hidden: { opacity: 0 },
   visible: { 
     opacity: 1, 

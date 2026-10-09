@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from "motion/react";
-import { Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
+import { Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink, Mail } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
 const ServerStatusWidget = () => {

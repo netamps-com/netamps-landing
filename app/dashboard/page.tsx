@@ -71,7 +71,7 @@ const HealthStatusWidget = ({ status, loading }: { status: any; loading: boolean
           borderColor: overall === 'operational' ? 'rgba(16, 185, 129, 0.3)' : 
                       overall === 'degraded' ? 'rgba(245, 158, 11, 0.3)' :
                       overall === 'outage' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'
-      }>
+        }}>
         <div className={`w-2 h-2 rounded-full animate-ping ${overall === 'operational' ? 'bg-emerald-500' : 
                           overall === 'degraded' ? 'bg-amber-500' :
                           overall === 'outage' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
@@ -105,7 +105,7 @@ const HealthStatusWidget = ({ status, loading }: { status: any; loading: boolean
             {/* Database */}
             <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${statusColors[status.database?.status] || statusColors.unknown} split x`}></div>
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.database?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
                 <span className="text-xs font-medium text-slate-200">Database</span>
               </div>
               <div className="text-right">
@@ -117,7 +117,7 @@ const HealthStatusWidget = ({ status, loading }: { status: any; loading: boolean
             {/* API */}
             <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${statusColors[status.api?.status] || statusColors.unknown} split x`}></div>
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.api?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
                 <span className="text-xs font-medium text-slate-200">API Gateway</span>
               </div>
               <div className="text-right">
@@ -129,7 +129,7 @@ const HealthStatusWidget = ({ status, loading }: { status: any; loading: boolean
             {/* Payload/Website Traffic */}
             <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${statusColors[status.payload?.status] || statusColors.unknown} split x`}></div>
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.payload?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
                 <span className="text-xs font-medium text-slate-200">Website Payload</span>
               </div>
               <div className="text-right">
@@ -141,7 +141,7 @@ const HealthStatusWidget = ({ status, loading }: { status: any; loading: boolean
             {/* CDN */}
             <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${statusColors[status.cdn?.status] || statusColors.unknown} split x`}></div>
+                <div className={`w-2 h-2 rounded-full ${statusColors[status.cdn?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
                 <span className="text-xs font-medium text-slate-200">Edge CDN</span>
               </div>
               <div className="text-right">
