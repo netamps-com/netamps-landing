@@ -323,7 +323,8 @@ export default function Home() {
                 { name: 'Sonicwall', domain: 'sonicwall.com' },
                 { name: 'Acer', domain: 'acer.com' },
                 { name: 'Asus', domain: 'asus.com' },
-                { name: 'Logitech', domain: 'logitech.com' }
+                { name: 'Logitech', domain: 'logitech.com' },
+                { name: 'SUSE', domain: 'suse.com' }
               ].map((partner, i) => (
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
