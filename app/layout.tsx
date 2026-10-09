@@ -32,7 +32,11 @@ export const metadata: Metadata = {
     "Zero Trust Architecture", "SOC Monitoring", "Vulnerability Management",
     "Data Protection", "Netamps Technologies", "Enterprise Security",
     "Penetration Testing", "VAPT", "Cloud Architecture", "MSP",
-    "Network Infrastructure", "Smart Surveillance", "IoT Security"
+    "Network Infrastructure", "Smart Surveillance", "IoT Security",
+    "Bangalore Cyber Security", "Bangalore Network Infrastructure",
+    "Bangalore CCTV", "Bangalore Smart City", "Bangalore Firewall",
+    "Bangalore ITAD", "Bangalore Refurbish", "IT Asset Disposition Bangalore",
+    "Refurbished IT Hardware Bangalore", "Smart City Infrastructure"
   ],
   authors: [{ name: "Netamps Technologies", url: "https://netamps.com" }],
   creator: "Netamps Technologies",

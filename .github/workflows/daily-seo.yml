@@ -1,0 +1,39 @@
+name: Daily SEO Update
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at midnight (UTC)
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+
+jobs:
+  update-seo:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Need write permissions to commit and push changes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Run SEO Updater Script
+        run: node scripts/seo-updater.js
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/sitemap.xml
+          
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore(seo): daily automated sitemap.xml update"
+            git push origin main
+          fi
