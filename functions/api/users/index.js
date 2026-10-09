@@ -26,7 +26,8 @@ export async function onRequestPost({ request, env }) {
       if (action === 'login') {
         const { results } = await env.DB.prepare('SELECT hash, role FROM users WHERE email = ?').bind(email).all();
         if (results.length > 0 && results[0].hash === passwordHash) {
-          const sessionId = crypto.randomUUID() + crypto.randomUUID(); // Mock 256-bit token
+          const sessionId = crypto.randomUUID() + crypto.randomUUID(); // Authentication Context
+          const csrfToken = crypto.randomUUID(); // Intent Context
           
           await env.DB.prepare(`
             CREATE TABLE IF NOT EXISTS sessions (
@@ -40,15 +41,12 @@ export async function onRequestPost({ request, env }) {
           const expiresAt = new Date(Date.now() + 8 * 3600 * 1000).toISOString();
           await env.DB.prepare('INSERT INTO sessions (token, email, role, expires_at) VALUES (?, ?, ?, ?)').bind(sessionId, email, results[0].role, expiresAt).run();
 
-          // Note: `Secure` cookies require HTTPS. Localhost HTTP will drop them. Use Pages preview URLs.
-          const cookie = `session_token=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`;
+          const headers = new Headers();
+          headers.set('Content-Type', 'application/json');
+          headers.append('Set-Cookie', `session_token=${sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
+          headers.append('Set-Cookie', `csrf_token=${csrfToken}; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
           
-          return new Response(JSON.stringify({ success: true, role: results[0].role }), { 
-            headers: { 
-              'Content-Type': 'application/json',
-              'Set-Cookie': cookie 
-            } 
-          });
+          return new Response(JSON.stringify({ success: true, role: results[0].role }), { headers });
         }
         return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
@@ -98,9 +96,16 @@ export async function onRequestPost({ request, env }) {
       if (action === 'login') {
         const res = await client.query('SELECT hash, role FROM users WHERE email = $1', [email]);
         if (res.rows.length > 0 && res.rows[0].hash === passwordHash) {
-          const sessionId = crypto.randomUUID();
+          const sessionId = crypto.randomUUID() + crypto.randomUUID();
+          const csrfToken = crypto.randomUUID();
           await client.end();
-          return new Response(JSON.stringify({ success: true, role: res.rows[0].role, sessionId }), { headers: { 'Content-Type': 'application/json' } });
+          
+          const headers = new Headers();
+          headers.set('Content-Type', 'application/json');
+          headers.append('Set-Cookie', `session_token=${sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
+          headers.append('Set-Cookie', `csrf_token=${csrfToken}; Secure; SameSite=Strict; Path=/; Max-Age=28800`);
+
+          return new Response(JSON.stringify({ success: true, role: res.rows[0].role }), { headers });
         }
         await client.end();
         return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });

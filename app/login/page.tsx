@@ -7,68 +7,168 @@ import { motion } from "motion/react";
 import { Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink, Mail } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
-const ServerStatusWidget = () => {
+const statusColors = {
+  operational: 'bg-emerald-500 text-emerald-400',
+  degraded: 'bg-amber-500 text-amber-400',
+  maintenance: 'bg-blue-500 text-blue-400',
+  outage: 'bg-red-500 text-red-400',
+  unknown: 'bg-slate-500 text-slate-400'
+};
+
+const HealthStatusWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [status, setStatus] = useState<string>('checking');
+  const [isOnline, setIsOnline] = useState(true);
+  const [healthStatus, setHealthStatus] = useState<{
+    database: { status: string; latency: number | null };
+    api: { status: string };
+    payload: { status: string; latency: number | null };
+    cdn: { status: string; colo: string };
+    timestamp: string;
+  } | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
 
   useEffect(() => {
-    if (!isOpen) return;
-    fetch('/api/status')
-      .then(res => res.json())
-      .then(data => setStatus(data.overallStatus))
-      .catch(() => setStatus('unknown'));
-  }, [isOpen]);
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    const fetchHealthStatus = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/health/live`);
+        if (res.ok) {
+          const data = await res.json();
+          setHealthStatus(data);
+        }
+      } catch (err) {
+        console.error('Health check failed:', err);
+      } finally {
+        setHealthLoading(false);
+      }
+    };
+    fetchHealthStatus();
+    const interval = setInterval(fetchHealthStatus, 30000); // Every 30 seconds
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
-  const getStatusColor = () => {
-    if (status === 'operational') return 'bg-emerald-500';
-    if (status === 'degraded') return 'bg-amber-500';
-    if (status === 'outage') return 'bg-red-500';
-    if (status === 'checking') return 'bg-slate-500 animate-pulse';
-    return 'bg-slate-500';
-  };
-
-  const getStatusText = () => {
-    if (status === 'operational') return 'All Systems Operational';
-    if (status === 'degraded') return 'Degraded Performance';
-    if (status === 'outage') return 'System Outage';
-    if (status === 'checking') return 'Checking status...';
-    return 'Status Unknown';
-  };
-
-  if (!isOpen) {
+  if (healthLoading || !healthStatus) {
     return (
-      <button 
-        onClick={() => setIsOpen(true)} 
-        className="absolute top-4 right-4 z-50 bg-white/90 backdrop-blur-md border border-slate-200 p-2.5 rounded-full shadow-md text-slate-500 hover:text-indigo-600 transition-all hover:scale-110 focus:outline-none"
-        title="View System Status"
-      >
-        <Activity className="w-5 h-5" />
-      </button>
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700">
+        <div className="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></div>
+        <span className="text-xs text-slate-400">Loading health...</span>
+      </div>
     );
   }
 
+  const getOverallStatus = () => {
+    const statuses = [healthStatus.database?.status, healthStatus.api?.status, healthStatus.payload?.status, healthStatus.cdn?.status].filter(Boolean);
+    if (statuses.includes('outage')) return 'outage';
+    if (statuses.includes('degraded')) return 'degraded';
+    if (statuses.includes('maintenance')) return 'maintenance';
+    return 'operational';
+  };
+
+  const overall = getOverallStatus();
+
   return (
-    <div className="absolute top-4 right-4 z-50 bg-white border border-slate-200 p-3 rounded-xl shadow-lg flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
-      <div className="flex items-center gap-3">
-        <div className="relative flex h-3 w-3">
-          {status === 'operational' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
-          <span className={`relative inline-flex rounded-full h-3 w-3 ${getStatusColor()}`}></span>
-        </div>
-        <div>
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">System Status</div>
-          <div className="text-sm font-medium text-slate-900 flex items-center gap-1">
-            {getStatusText()}
+    <div className="absolute top-4 right-4 z-50 relative flex items-center gap-3">
+      {/* Overall Status Indicator */}
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors bg-white/90 backdrop-blur-md shadow-md cursor-pointer hover:scale-105"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ 
+          borderColor: overall === 'operational' ? 'rgba(16, 185, 129, 0.3)' : 
+                      overall === 'degraded' ? 'rgba(245, 158, 11, 0.3)' :
+                      overall === 'outage' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'
+        }}>
+        <div className={`w-2 h-2 rounded-full animate-ping ${overall === 'operational' ? 'bg-emerald-500' : 
+                          overall === 'degraded' ? 'bg-amber-500' :
+                          overall === 'outage' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+        <span className={`text-xs font-bold ${overall === 'operational' ? 'text-emerald-500' : 
+                          overall === 'degraded' ? 'text-amber-500' :
+                          overall === 'outage' ? 'text-red-500' : 'text-blue-500'}`}>
+          {overall.charAt(0).toUpperCase() + overall.slice(1)}
+        </span>
+      </div>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+          <div className="p-3 border-b border-slate-700 flex justify-between items-start">
+            <div>
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                Live System Metrics
+              </h4>
+              <p className="text-[10px] text-slate-500 mt-1">Updated: {healthStatus.timestamp ? new Date(healthStatus.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</p>
+            </div>
+            <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-300">
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          
+          <div className="p-3 space-y-3">
+            {/* Internet Connection */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">Internet Connection</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-slate-400">{isOnline ? 'Connected' : 'Offline'}</span>
+              </div>
+            </div>
+
+            {/* Database */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.database?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">Database</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-emerald-400">{healthStatus.database?.latency ? `${healthStatus.database.latency}ms` : 'N/A'}</span>
+              </div>
+            </div>
+
+            {/* API */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.api?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">API Gateway</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-slate-400">Online</span>
+              </div>
+            </div>
+
+            {/* Payload */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.payload?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">Website Payload</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-indigo-400">{healthStatus.payload?.latency ? `${healthStatus.payload.latency}ms` : 'N/A'}</span>
+              </div>
+            </div>
+
+            {/* CDN */}
+            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.cdn?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
+                <span className="text-xs font-medium text-slate-200">Edge CDN</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{healthStatus.cdn?.colo || 'Global'}</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex items-center gap-2 border-l border-slate-100 pl-3">
-        <Link href="/status" className="text-slate-400 hover:text-indigo-600 transition-colors" title="View Full Status">
-          <ExternalLink className="w-4 h-4" />
-        </Link>
-        <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors" title="Close">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
+      )}
     </div>
   );
 };
@@ -171,7 +271,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       
       {/* Floating Status Widget */}
-      <ServerStatusWidget />
+      <HealthStatusWidget />
 
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">

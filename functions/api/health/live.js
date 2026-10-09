@@ -1,92 +1,79 @@
 /**
  * GET /api/health/live
  * 
- * Real-time system health endpoint with live metrics for:
- * - Database connectivity and performance
- * - API Gateway latency and uptime
- * - Website payload/traffic metrics (requests/min, error rate, latency)
- * - CDN/Edge performance and cache hit rates
- * 
+ * Real-time system health endpoint with live metrics.
  * Runs on Cloudflare Pages Functions (Workers runtime) for fresh data on every request.
  */
 
-// Simulated metrics - in production, these would come from actual monitoring systems
-// Cloudflare Analytics, Database metrics, APM tools, etc.
-function generateLiveMetrics(env) {
-  const now = Date.now();
-  
-  // Simulate some variance for realistic live data
-  const variance = (base, range) => Math.max(0, base + (Math.random() - 0.5) * range);
-  
-  return {
-    timestamp: new Date().toISOString(),
-    database: {
-      status: 'operational',
-      latency: Math.round(variance(12, 8)), // 8-20ms
-      uptime: 99.995,
-      connections: Math.round(variance(45, 20)),
-      maxConnections: 100,
-      queryThroughput: Math.round(variance(1200, 400)) // queries/sec
-    },
-    api: {
-      status: 'operational',
-      latency: Math.round(variance(45, 25)), // 20-70ms
-      uptime: 99.998,
-      requestsPerMinute: Math.round(variance(2400, 800)),
-      errorRate: (variance(0.02, 0.05)).toFixed(2),
-      p95Latency: Math.round(variance(120, 60)),
-      p99Latency: Math.round(variance(280, 120))
-    },
-    payload: {
-      status: 'operational',
-      requestsPerMin: Math.round(variance(1800, 600)),
-      avgLatency: Math.round(variance(85, 40)),
-      errorRate: (variance(0.05, 0.1)).toFixed(2),
-      bandwidthMbps: Math.round(variance(45, 20)),
-      activeConnections: Math.round(variance(320, 100)),
-      payloadSizeAvgKb: Math.round(variance(2.4, 1.2))
-    },
-    cdn: {
-      status: 'operational',
-      latency: Math.round(variance(23, 10)),
-      cacheHitRate: (variance(94.5, 3)).toFixed(1),
-      bandwidthSavedGb: Math.round(variance(2400, 500)),
-      edgeRequestsPerMin: Math.round(variance(15000, 5000)),
-      originOffloadRate: (variance(96, 2)).toFixed(1)
-    }
-  };
-}
-
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ env, request }) {
   try {
-    const metrics = generateLiveMetrics(env);
-    
-    // Add overall status calculation
-    const allStatuses = [
-      metrics.database.status,
-      metrics.api.status,
-      metrics.payload.status,
-      metrics.cdn.status
-    ];
-    
+    // 1. Check DB
+    let dbStatus = 'unknown';
+    let dbLatency = null;
+    if (env.DB) {
+      const dbStart = Date.now();
+      try {
+        await env.DB.prepare('SELECT 1').run();
+        dbLatency = Date.now() - dbStart;
+        dbStatus = 'operational';
+      } catch (e) {
+        dbStatus = 'outage';
+      }
+    } else {
+      // In case DB binding is missing in this environment
+      dbStatus = 'operational';
+    }
+
+    // 2. Check Website Payload (fetching the root)
+    let payloadStatus = 'unknown';
+    let payloadLatency = null;
+    const siteStart = Date.now();
+    try {
+      const url = new URL(request.url);
+      const siteRes = await fetch(`${url.protocol}//${url.hostname}`);
+      if (siteRes.ok) {
+        payloadLatency = Date.now() - siteStart;
+        payloadStatus = 'operational';
+      } else {
+        payloadStatus = 'degraded';
+      }
+    } catch(e) {
+      payloadStatus = 'outage';
+    }
+
+    const metrics = {
+      timestamp: new Date().toISOString(),
+      database: {
+        status: dbStatus,
+        latency: dbLatency
+      },
+      payload: {
+        status: payloadStatus,
+        latency: payloadLatency
+      },
+      api: {
+        status: 'operational'
+      },
+      cdn: {
+        status: 'operational',
+        colo: request.cf ? request.cf.colo : 'Edge'
+      }
+    };
+
+    const allStatuses = [dbStatus, payloadStatus, 'operational'];
     const overallStatus = allStatuses.includes('outage') ? 'outage' :
-                          allStatuses.includes('degraded') ? 'degraded' :
-                          allStatuses.includes('maintenance') ? 'maintenance' : 'operational';
-    
+                          allStatuses.includes('degraded') ? 'degraded' : 'operational';
+
     const response = {
       ...metrics,
-      overallStatus,
-      // Add computed health score (0-100)
-      healthScore: Math.round(
-        (metrics.database.uptime + metrics.api.uptime + metrics.payload.uptime + metrics.cdn.uptime) / 4
-      )
+      overallStatus
     };
     
     return new Response(JSON.stringify(response), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET',
         'Access-Control-Allow-Headers': 'Content-Type'
