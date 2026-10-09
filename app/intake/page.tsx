@@ -317,7 +317,13 @@ export default function IntakeWorkbench() {
     }
   };
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#020817] flex items-center justify-center text-indigo-500">
+        <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#020817] text-white font-sans flex flex-col">
