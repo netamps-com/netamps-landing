@@ -138,15 +138,36 @@ export default function Home() {
                 { name: 'Home', href: '#' },
                 { name: 'Services', href: '#services' },
                 { name: 'Solutions', href: '#solutions' },
-                { name: 'ESG Initiatives', href: '#csr' }
+                { name: 'ESG Initiatives', href: '#csr', hasDropdown: true }
               ].map((item) => (
-                <a 
-                  key={item.name}
-                  href={item.href}
-                  className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm group overflow-hidden block"
-                >
-                  <span className="relative z-10 group-hover:text-white transition-colors">{item.name}</span>
-                </a>
+                item.hasDropdown ? (
+                  <div key={item.name} className="relative group">
+                    <a 
+                      href={item.href}
+                      className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm overflow-hidden block group-hover:rounded-b-none group-hover:border-b-transparent z-10"
+                    >
+                      <span className="relative z-10 group-hover:text-white transition-colors flex items-center gap-1">{item.name} <svg className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></span>
+                    </a>
+                    <div className="absolute left-0 mt-0 w-48 bg-white border border-slate-200 border-t-0 rounded-b-xl rounded-tr-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 overflow-hidden transform origin-top group-hover:scale-y-100 scale-y-95">
+                      <a 
+                        href="/returns"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                      >
+                        Request a Return
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <a 
+                    key={item.name}
+                    href={item.href}
+                    className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm group overflow-hidden block"
+                  >
+                    <span className="relative z-10 group-hover:text-white transition-colors">{item.name}</span>
+                  </a>
+                )
               ))}
               <SecureLoginButton />
             </nav>
@@ -170,16 +191,28 @@ export default function Home() {
                   { name: 'Home', href: '#' },
                   { name: 'Services', href: '#services' },
                   { name: 'Solutions', href: '#solutions' },
-                  { name: 'ESG Initiatives', href: '#csr' }
+                  { name: 'ESG Initiatives', href: '#csr', hasDropdown: true }
                 ].map((item) => (
-                  <a 
-                    key={item.name}
-                    href={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)} 
-                    className="block w-full text-left text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100"
-                  >
-                    {item.name}
-                  </a>
+                  <div key={item.name}>
+                    <a 
+                      href={item.href}
+                      onClick={() => !item.hasDropdown && setIsMobileMenuOpen(false)} 
+                      className="block w-full text-left text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100 flex justify-between items-center"
+                    >
+                      {item.name}
+                    </a>
+                    {item.hasDropdown && (
+                      <a 
+                        href="/returns"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setIsMobileMenuOpen(false)} 
+                        className="block w-full text-left text-base font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-colors py-2 pl-4 border-b border-slate-100"
+                      >
+                        ↳ Request a Return
+                      </a>
+                    )}
+                  </div>
                 ))}
                 <div className="pt-2 border-t border-slate-100 flex justify-center mt-2 w-full">
                   <SecureLoginButton />
