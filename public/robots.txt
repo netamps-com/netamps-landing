@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://netamps.com/sitemap.xml
-Host: https://netamps.com

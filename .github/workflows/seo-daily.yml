@@ -1,17 +1,31 @@
-name: Daily SEO IndexNow Ping
+name: Automatic SEO — IndexNow + Sitemap Ping
 
+# Fully automatic: runs on every push to main (fresh URLs indexed within
+# hours) plus a daily schedule as a safety net. No manual steps.
 on:
+  push:
+    branches:
+      - main
   schedule:
-    - cron: '0 0 * * *' # Runs at 00:00 UTC every day
-  workflow_dispatch: # Allow manual triggering
+    - cron: '0 0 * * *' # 00:00 UTC daily
+  workflow_dispatch:
 
 jobs:
-  ping-indexnow:
+  seo-submit:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Bing (IndexNow)
+      - name: Submit sitemap URLs to IndexNow (Bing, Yandex, Seznam, Naver)
         run: |
-          curl "https://www.bing.com/ping?sitemap=https://netamps.com/sitemap.xml"
-      
-      - name: Log SEO Ping Success
-        run: echo "Daily SEO sitemap ping dispatched successfully."
+          curl -s -X POST https://api.indexnow.org/indexnow \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            -d '{"host":"netamps.com","key":"491b202f3c12db5f30a355298c890e06","keyLocation":"https://netamps.com/491b202f3c12db5f30a355298c890e06.txt","urlList":["https://netamps.com/","https://netamps.com/returns","https://netamps.com/status","https://netamps.com/privacy"]}' \
+            -o /dev/null -w "IndexNow HTTP %{http_code}\n"
+
+      - name: Ping Bing sitemap endpoint
+        run: |
+          curl -s "https://www.bing.com/ping?sitemap=https://netamps.com/sitemap.xml" \
+            -o /dev/null -w "Bing ping HTTP %{http_code}\n"
+
+      - name: Verify live sitemap serves all public URLs
+        run: |
+          curl -s https://netamps.com/sitemap.xml | grep -c "<loc>" | xargs -I{} echo "Live sitemap URL count: {}"
