@@ -310,6 +310,9 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-3">
+            <Link href="/intake" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20 mr-2">
+              <Database className="w-4 h-4" /> Intake Workbench
+            </Link>
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input type="text" placeholder="Search orders..." className="pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 w-64" />
