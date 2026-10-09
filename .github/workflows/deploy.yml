@@ -44,7 +44,7 @@ jobs:
           cache: 'npm'
       - name: Install Frontend Dependencies
         run: npm ci
-      - name: Build Next.js for Cloudflare Pages
+      - name: Build Next.js for Cloudflare Pages (OpenNext)
         env:
           NEXT_ON_PAGES: '1'
         run: npm run build
@@ -54,7 +54,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: 'netamps-landing'
-          directory: './out'
+          directory: '.open-next/assets'
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
   # 3. BACKEND DEPLOYMENT TO FIREBASE FUNCTIONS

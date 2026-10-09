@@ -1,10 +1,10 @@
 const { execSync } = require('child_process');
 
 try {
-  // When next-on-pages internally calls `vercel build`, the Vercel CLI sets VERCEL="1"
-  if (process.env.VERCEL === '1' || process.env.NEXT_ON_PAGES === '1') {
-    console.log('-> Running internal Next.js build (vercel build detected)');
-    execSync('npx next build', { stdio: 'inherit' });
+  // OpenNext build for Cloudflare Pages
+  if (process.env.NEXT_ON_PAGES === '1' || process.env.CLOUDFLARE === '1') {
+    console.log('-> Running OpenNext build for Cloudflare Pages');
+    execSync('npx @opennextjs/cloudflare build', { stdio: 'inherit' });
   } else if (process.env.FIREBASE === '1') {
     console.log('-> Running Firebase static export build');
     execSync('npx next build', { stdio: 'inherit' });
