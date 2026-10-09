@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion } from "motion/react";
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader from './SecureMediaUploader';

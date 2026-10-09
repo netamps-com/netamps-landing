@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion } from "motion/react";
 import { Mail, Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 

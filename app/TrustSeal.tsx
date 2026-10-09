@@ -1,7 +1,7 @@
 'use client';
 
 import { ShieldCheck, Lock } from 'lucide-react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform } from "motion/react";
 import { useState, useEffect } from 'react';
 
 export default function TrustSeal() {

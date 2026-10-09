@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from "motion/react";
 import { Shield, Lock, Loader2, KeyRound } from 'lucide-react';
 
 export default function SecureLoginButton() {
