@@ -44,3 +44,52 @@ export function evalUnitPaise(p: { pricePaise?: number | null; price?: number | 
   if (!Number.isFinite(p.price) || p.price < 0) return null;
   return Math.round(p.price * 100);
 }
+
+export interface BreakdownLineInput {
+  qty: number;
+  basePaise: number | null;
+}
+
+export interface LotBreakdownRow {
+  qty: number;
+  basePaise: number | null;
+  lineTotal: number | null; // qty × basePaise, exact; null when base unstated or unsafe
+}
+
+export interface LotBreakdown {
+  rows: LotBreakdownRow[];
+  sumLines: number | null;
+  variance: number | null; // lotPaise − sumLines; null when either side unstated
+  partial: boolean; // some (not all) lines stated
+}
+
+/**
+ * Single authoritative lot-breakdown computation. Line totals are qty × base
+ * (integers, exact). Unsafe-integer results degrade to null + partial rather
+ * than corrupt figures. Dashboard ledger, email renderer (ported), form
+ * preview and exports must all use this shape — never inline arithmetic.
+ */
+export function lotBreakdownOf(
+  lines: BreakdownLineInput[],
+  lotPaise: number | null | undefined
+): LotBreakdown {
+  const rows: LotBreakdownRow[] = lines.map(l => {
+    const qty = Number.isInteger(l.qty) && l.qty > 0 ? l.qty : 1;
+    const base = l.basePaise ?? null;
+    if (base === null) return { qty, basePaise: null, lineTotal: null };
+    const total = qty * base;
+    if (!Number.isSafeInteger(total)) return { qty, basePaise: base, lineTotal: null };
+    return { qty, basePaise: base, lineTotal: total };
+  });
+  const stated = rows.filter(r => r.lineTotal !== null);
+  const sumLines = stated.length === 0
+    ? null
+    : stated.reduce((a, r) => a + (r.lineTotal as number), 0);
+  const lot = lotPaise ?? null;
+  return {
+    rows,
+    sumLines,
+    variance: (lot === null || sumLines === null) ? null : lot - sumLines,
+    partial: stated.length < rows.length
+  };
+}

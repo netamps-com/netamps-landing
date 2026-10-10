@@ -3,12 +3,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Download } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
 import EvidenceGallery from './EvidenceGallery';
-import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
+import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise, lotBreakdownOf } from '../lib/money';
 
 interface ProductItem {
   id: string;
@@ -20,6 +20,7 @@ interface ProductItem {
   price?: number;
   pricePaise?: number; // canonical evaluated unit price, integer paise (null/undefined = unstated)
   lineConsiderationPaise?: number | null; // visitor ask, line total paise (null = unstated)
+  basePricePaise?: number | null; // lot-mode base unit price, integer paise (null = unstated)
   attachedFiles?: string[];
 }
 
@@ -160,6 +161,79 @@ export default function DashboardPage() {
       if (typeof cleanup === 'function') cleanup();
     };
   }, [router, fetchReturns]);
+
+  // Admin-only request export (S2): full records plus the SAME computed
+  // figures shown on screen (ask/eval/final via shared helpers) — exported
+  // figures can never diverge from displayed figures.
+  const exportRequests = async (format: 'json' | 'csv') => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const enriched = returns.map(req => {
+      const ask = askTotalOf(req);
+      const ev = evalTotalOf(req);
+      return {
+        ...req,
+        _computed: {
+          askTotalPaise: ask.total,
+          askPartial: ask.partial,
+          evalTotalPaise: ev.total,
+          evalPartial: ev.partial,
+          finalTotalPaise: req.finalPrice?.totalPaise ?? null,
+          finalBasis: req.finalPrice?.basis ?? null
+        }
+      };
+    });
+    const download = (name: string, content: string, type: string) => {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    if (format === 'json') {
+      download(`netamps-requests-${stamp}.json`, JSON.stringify(enriched, null, 2), 'application/json');
+    } else {
+      const esc = (v: unknown) => {
+        const s = v === null || v === undefined ? '' : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const header = ['requestId', 'intent', 'status', 'company', 'email', 'date', 'pricingBasis',
+        'productId', 'category', 'details', 'quantity', 'lineAskPaise', 'lotAskPaise', 'basePricePaise',
+        'computedLineTotalPaise', 'evaluatedUnitPaise', 'evaluatedLinePaise', 'finalTotalPaise', 'finalBasis', 'manifestHash'];
+      const rows: string[] = [header.join(',')];
+      for (const req of enriched) {
+        const lines = (req.products || []).length > 0 ? req.products : [null];
+        for (const p of lines) {
+          const unit = p ? evalUnitPaise(p) : null;
+          const base = p && (p.basePricePaise ?? null) !== null ? (p.basePricePaise as number) : null;
+          const qty = p ? (Number(p.quantity) || 1) : 1;
+          const lineTotal = base === null ? null : (Number.isSafeInteger(qty * base) ? qty * base : null);
+          rows.push([
+            req.id, req.intent, req.status, req.company, req.email, req.date,
+            req.pricingBasis === 'lot' ? 'lot' : 'per_product',
+            p ? p.id : '', p ? p.category : '', p ? p.details : '', p ? p.quantity : '',
+            p && p.lineConsiderationPaise != null ? p.lineConsiderationPaise : '',
+            req.lotConsiderationPaise ?? '',
+            base ?? '',
+            lineTotal ?? '',
+            unit ?? '',
+            unit === null || !p ? '' : unit * (Number(p.quantity) || 1),
+            req._computed.finalTotalPaise ?? '',
+            req._computed.finalBasis ?? '',
+            req.manifest?.hash ?? ''
+          ].map(esc).join(','));
+        }
+      }
+      download(`netamps-requests-${stamp}.csv`, rows.join('\n'), 'text/csv');
+    }
+    try {
+      const { logEvent } = await import('../lib/logger');
+      logEvent('REQUESTS_EXPORTED', 'Dashboard Page', `Exported ${enriched.length} requests as ${format.toUpperCase()}`, userRole);
+    } catch {}
+  };
 
   const handleLogout = () => {
     // Securely terminate session by destroying cookies
@@ -434,6 +508,18 @@ export default function DashboardPage() {
                   >
                     <Key className="w-4 h-4" /> Manage Users
                   </button>
+                  <button 
+                    onClick={() => exportRequests('json')}
+                    className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                  >
+                    <Download className="w-4 h-4" /> Export JSON
+                  </button>
+                  <button 
+                    onClick={() => exportRequests('csv')}
+                    className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                  >
+                    <Download className="w-4 h-4" /> Export CSV
+                  </button>
                 </>
               )}
 
@@ -655,6 +741,51 @@ export default function DashboardPage() {
                                         <div className="border-t border-slate-700/60 my-1" />
                                         {row('Final', final ? `${paiseToDisplay(final.totalPaise)} (v${final.version})` : '—', null, 'text-white')}
                                       </div>
+                                    );
+                                  })()}
+                                  {req.pricingBasis === 'lot' && (() => {
+                                    const bd = lotBreakdownOf(
+                                      (req.products || []).map(p => ({
+                                        qty: Number(p.quantity) || 1,
+                                        basePaise: p.basePricePaise ?? null
+                                      })),
+                                      req.lotConsiderationPaise ?? null
+                                    );
+                                    const hasAnyBase = bd.rows.some(r => r.basePaise !== null);
+                                    return (
+                                      <details className="mt-3 rounded-lg bg-slate-950/60 border border-slate-800 px-4 py-2">
+                                        <summary className="cursor-pointer text-xs font-bold text-slate-400 uppercase tracking-wider">Lot breakdown</summary>
+                                        {!hasAnyBase ? (
+                                          <p className="text-xs text-slate-500 mt-2">Line breakdown unavailable — captured before per-line pricing.</p>
+                                        ) : (
+                                        <div className="mt-2 space-y-1">
+                                          {(req.products || []).map((p, i) => {
+                                            const r = bd.rows[i];
+                                            return (
+                                              <div key={p.id || i} className="flex justify-between gap-3 text-sm">
+                                                <span className="text-slate-400 truncate">{p.category} · Qty {r ? r.qty : Number(p.quantity) || 1}</span>
+                                                <span className="font-mono text-slate-200 shrink-0">
+                                                  {!r || r.basePaise === null
+                                                    ? '—'
+                                                    : `${r.qty} × ${paiseToDisplay(r.basePaise)} = ${paiseToDisplay(r.lineTotal)}`}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                          <div className="border-t border-slate-800/60 my-1" />
+                                          <div className="flex justify-between text-sm">
+                                            <span className="text-slate-400">Sum of lines</span>
+                                            <span className="font-mono text-slate-200">{paiseToDisplay(bd.sumLines)}{bd.partial ? ' (partial)' : ''}</span>
+                                          </div>
+                                          <div className="flex justify-between text-sm">
+                                            <span className="text-slate-400">Variance</span>
+                                            <span className={`font-mono font-bold ${bd.variance === null ? 'text-slate-500' : bd.variance === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                              {bd.variance === null ? '—' : bd.variance === 0 ? '✓ Reconciled' : `Differs by ${bd.variance < 0 ? '−' : '+'}${paiseToDisplay(Math.abs(bd.variance))}`}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        )}
+                                      </details>
                                     );
                                   })()}
                                 </div>

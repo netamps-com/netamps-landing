@@ -45,7 +45,8 @@ export default function IntakeWorkbench() {
     { key: 'strategicTarget', label: 'Strategic Recovery Target', required: false },
     { key: 'lifecycleAge', label: 'Hardware Lifecycle Batch Age', required: false },
     { key: 'lineConsideration', label: 'Line Consideration (₹)', required: false },
-    { key: 'lotConsideration', label: 'Lot Consideration (₹)', required: false }
+    { key: 'lotConsideration', label: 'Lot Consideration (₹)', required: false },
+    { key: 'basePrice', label: 'Base Price (₹/unit)', required: false }
   ];
 
   // Ask total for an intake-side order (same null semantics as dashboard).
@@ -184,7 +185,8 @@ export default function IntakeWorkbench() {
           quantity: parseInt(rowData.quantity) || 1,
           strategicTarget: rowData.strategicTarget || '',
           lifecycleAge: rowData.lifecycleAge || '',
-          lineConsiderationPaise: rowData.lineConsideration ? moneyStringToPaise(String(rowData.lineConsideration)) : null
+          lineConsiderationPaise: rowData.lineConsideration ? moneyStringToPaise(String(rowData.lineConsideration)) : null,
+          basePricePaise: rowData.basePrice ? moneyStringToPaise(String(rowData.basePrice)) : null
         });
       }
       // Lot consideration is request-wide: first valid value in the group wins,
@@ -666,6 +668,31 @@ export default function IntakeWorkbench() {
                                   <div className="text-indigo-300 text-xs mt-1">Avail Qty: {match.sellerQty}</div>
                                   <div className="text-slate-400 text-xs mt-1">Ask: <span className="font-mono text-slate-200">{formatPaise(askTotalOfOrder(match.seller))}</span></div>
                                 </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 mt-3">
+                                {[{ side: 'Buyer lines', order: match.buyer }, { side: 'Seller lines', order: match.seller }].map(({ side, order }) => (
+                                  <div key={side}>
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">{side}</div>
+                                    {(order.products || []).length === 0 ? (
+                                      <div className="text-xs text-slate-500">—</div>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {(order.products || []).map((p: any, i: number) => (
+                                          <div key={p.id || i} className="flex justify-between gap-2 text-xs">
+                                            <span className="text-slate-400 truncate">{p.category} · Qty {p.quantity}</span>
+                                            <span className="font-mono text-slate-200 shrink-0">{formatPaise(order.pricingBasis === 'lot' ? null : (p.lineConsiderationPaise ?? null))}</span>
+                                          </div>
+                                        ))}
+                                        {order.pricingBasis === 'lot' && (
+                                          <div className="flex justify-between gap-2 text-xs pt-1 border-t border-slate-800">
+                                            <span className="text-slate-400">Lot ask</span>
+                                            <span className="font-mono text-slate-200 shrink-0">{formatPaise(order.lotConsiderationPaise ?? null)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                               <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
                                 <span className="flex items-center gap-1 font-mono"><Clock className="w-3 h-3" /> {new Date(match.timestamp).toLocaleString()}</span>
