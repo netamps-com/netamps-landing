@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FileText, X, RotateCcw, Play, AlertTriangle } from 'lucide-react';
 
 export type AssetKind = 'image' | 'video' | 'data' | 'unknown';
@@ -58,6 +58,7 @@ function TileImage({ src, alt, onFail }: { src: string; alt: string; onFail: () 
 
 export default function EvidenceGallery({ files, cdnBase, title, compact }: EvidenceGalleryProps) {
   const [failedIds, setFailedIds] = useState<string[]>([]);
+  const [failStatus, setFailStatus] = useState<Record<string, number | null>>({});
   const [retryKey, setRetryKey] = useState(0);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
 
@@ -80,14 +81,49 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
 
   const markFailed = (id: string) =>
     setFailedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-  const unmarkFailed = (id: string) =>
+
+  // Probe the object URL so failures report their HTTP status instead of a
+  // generic message. 401 = session gate, 404 = key/binding mismatch,
+  // 5xx = server error, null = unreachable. Same-origin: cookies included.
+  const probeAndMark = useCallback((id: string, url: string) => {
+    markFailed(id);
+    fetch(url, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' })
+      .then((res) => {
+        setFailStatus((prev) => (prev[id] !== undefined ? prev : { ...prev, [id]: res.status }));
+      })
+      .catch(() => {
+        setFailStatus((prev) => (prev[id] !== undefined ? prev : { ...prev, [id]: null }));
+      });
+  }, []);
+
+  const unmarkFailed = (id: string) => {
     setFailedIds((prev) => prev.filter((f) => f !== id));
+    setFailStatus((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
   const retryAll = () => {
     setFailedIds([]);
+    setFailStatus({});
     setRetryKey((k) => k + 1);
   };
 
   const allFailed = items.length > 0 && items.every((it) => failedIds.includes(it.id));
+  const firstFailed = items.find((it) => failedIds.includes(it.id));
+  const firstStatus = firstFailed ? failStatus[firstFailed.id] : undefined;
+  const failReason =
+    firstStatus === 401
+      ? 'access denied (HTTP 401) — sign out and sign in again'
+      : firstStatus === 404
+      ? 'file not found in storage (HTTP 404) — key or R2 binding mismatch'
+      : typeof firstStatus === 'number' && firstStatus >= 500
+      ? `server error (HTTP ${firstStatus})`
+      : firstStatus === null
+      ? 'asset endpoint unreachable — check connectivity'
+      : 'check access and retry';
 
   useEffect(() => {
     if (!activeVideo) return;
@@ -110,7 +146,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
         <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm" role="alert">
           <span className="flex items-center gap-2 text-red-300">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            Couldn't load {list.length} attachment{list.length > 1 ? 's' : ''} — check access and retry.
+            Couldn't load {list.length} attachment{list.length > 1 ? 's' : ''} — {failReason}.
           </span>
           <button
             type="button"
@@ -139,7 +175,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                   </div>
                 ) : (
                   <div key={`${it.id}:${retryKey}`} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-700 bg-slate-800/50 hover:border-indigo-500 transition-colors">
-                    <TileImage src={it.url} alt={it.name} onFail={() => markFailed(it.id)} />
+                    <TileImage src={it.url} alt={it.name} onFail={() => probeAndMark(it.id, it.url)} />
                   </div>
                 )
               )}
@@ -239,7 +275,17 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
             >
               <X className="w-6 h-6" />
             </button>
-            <video src={activeVideo} controls autoPlay playsInline className="w-full max-h-[75vh] rounded-xl border border-slate-700 bg-black" />
+            <video
+              src={activeVideo}
+              controls
+              autoPlay
+              playsInline
+              className="w-full max-h-[75vh] rounded-xl border border-slate-700 bg-black"
+              onError={() => {
+                const hit = items.find((it) => it.url === activeVideo);
+                if (hit) probeAndMark(hit.id, hit.url);
+              }}
+            />
           </div>
         </div>
       )}
