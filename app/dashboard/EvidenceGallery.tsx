@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FileText, X, RotateCcw, Play, AlertTriangle } from 'lucide-react';
 
 export type AssetKind = 'image' | 'video' | 'data' | 'unknown';
@@ -111,9 +111,33 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
     setRetryKey((k) => k + 1);
   };
 
+  // Data-file links never fetch their bytes, so a dead key looks alive until
+  // clicked. HEAD-probe them on mount/retry and fold failures into the same
+  // failedIds/failStatus machinery as images and video.
+  const probing = useRef<Set<string>>(new Set());
+  const probeLink = useCallback((id: string, url: string) => {
+    if (probing.current.has(id)) return;
+    probing.current.add(id);
+    const done = () => { probing.current.delete(id); };
+    fetch(url, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' })
+      .then((res) => { done(); if (!res.ok) probeAndMark(id, url); })
+      .catch(() => { done(); probeAndMark(id, url); });
+  }, [probeAndMark]);
+
+  useEffect(() => {
+    for (const it of items) {
+      if ((it.kind === 'data' || it.kind === 'unknown') && !it.key.startsWith('data:')) {
+        if (!failedIds.includes(it.id) && failStatus[it.id] === undefined) probeLink(it.id, it.url);
+      }
+    }
+  });
+
   const allFailed = items.length > 0 && items.every((it) => failedIds.includes(it.id));
   const firstFailed = items.find((it) => failedIds.includes(it.id));
   const firstStatus = firstFailed ? failStatus[firstFailed.id] : undefined;
+  // Failures whose probe hasn't resolved yet: report "diagnosing" instead of
+  // the generic fallback, so a pending probe is never mistaken for a verdict.
+  const pendingCount = items.filter((it) => failedIds.includes(it.id) && failStatus[it.id] === undefined).length;
   const failReason =
     firstStatus === 401
       ? 'access denied (HTTP 401) — sign out and sign in again'
@@ -148,7 +172,9 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
         <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm" role="alert">
           <span className="flex items-center gap-2 text-red-300">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            Couldn't load {list.length} attachment{list.length > 1 ? 's' : ''} — {failReason}.
+            {pendingCount > 0
+              ? `Diagnosing ${list.length} attachment${list.length > 1 ? 's' : ''}…`
+              : `Couldn't load ${list.length} attachment${list.length > 1 ? 's' : ''} — ${failReason}.`}
           </span>
           <button
             type="button"
@@ -164,9 +190,12 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
             <div className={`grid gap-3 ${compact ? 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
               {photos.map((it) =>
                 failedIds.includes(it.id) ? (
-                  <div key={`${it.id}:${retryKey}`} className="aspect-square rounded-lg border border-red-500/30 bg-red-500/5 flex flex-col items-center justify-center gap-2 p-2 text-center">
+                  <div key={`${it.id}:${retryKey}`} className="aspect-square rounded-lg border border-red-500/30 bg-red-500/5 flex flex-col items-center justify-center gap-2 p-2 text-center" title={it.key}>
                     <AlertTriangle className="w-5 h-5 text-red-400" />
                     <p className="text-[11px] text-red-300 leading-tight truncate w-full px-1">{it.name}</p>
+                    <p className="text-[10px] font-mono text-red-400/70">
+                      {failStatus[it.id] === undefined ? 'diagnosing…' : failStatus[it.id] === null ? 'endpoint unreachable' : `HTTP ${failStatus[it.id]}`}
+                    </p>
                     <button
                       type="button"
                       onClick={() => { unmarkFailed(it.id); setRetryKey((k) => k + 1); }}
