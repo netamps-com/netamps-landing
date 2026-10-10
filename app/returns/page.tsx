@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
+import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
 
 function hexOfBytes(bytes: Uint8Array) {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -31,32 +32,9 @@ interface ProductItem {
   lineConsiderationPaise?: number | null;
 }
 
-// ── Money contract: paise integers end-to-end, null = unstated (never 0) ──
-const MAX_CONSIDERATION_PAISE = 999999999900; // ₹99,99,99,999 cap
-
-function sanitizeMoneyInput(raw: string): string {
-  const cleaned = raw.replace(/[₹,\s]/g, '').replace(/[^0-9.]/g, '');
-  const dot = cleaned.indexOf('.');
-  if (dot === -1) return cleaned;
-  const int = cleaned.slice(0, dot);
-  const dec = cleaned.slice(dot + 1).replace(/\./g, '').slice(0, 2);
-  return `${int}.${dec}`;
-}
-
-function moneyStringToPaise(s: string): number | null {
-  const t = s.replace(/[₹,\s]/g, '').trim();
-  if (t === '' || t === '.') return null;
-  const n = Number(t);
-  if (!Number.isFinite(n) || n < 0) return null;
-  const paise = Math.round(n * 100);
-  if (!Number.isInteger(paise) || paise > MAX_CONSIDERATION_PAISE) return null;
-  return paise;
-}
-
-function formatPaise(paise: number | null | undefined): string {
-  if (paise === null || paise === undefined) return '—';
-  return '₹' + (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+// ── Money contract lives in app/lib/money.ts (paise integers end-to-end,
+// null = unstated, never 0). Line consideration already includes all units;
+// evaluated price is per-unit. ──
 
 export default function ReturnsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -552,8 +530,18 @@ export default function ReturnsPage() {
                         {(trackingResult.status === 'Approved' || trackingResult.status === 'Declined') && trackingResult.products && (
                           <div>
                             <h4 className="text-sm font-bold text-slate-800 mb-3">Equipment Evaluation Details</h4>
+                            {trackingResult.pricingBasis === 'lot' && (
+                              <div className="mb-3 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm text-slate-700">
+                                Lot consideration (whole request): <span className="font-mono font-bold text-slate-900">{formatPaise(trackingResult.lotConsiderationPaise ?? null)}</span>
+                              </div>
+                            )}
                             <div className="space-y-3">
-                              {trackingResult.products.map((product: any, idx: number) => (
+                              {trackingResult.products.map((product: any, idx: number) => {
+                                const ask = trackingResult.pricingBasis === 'lot'
+                                  ? null
+                                  : (product.lineConsiderationPaise ?? null);
+                                const evaluated = evalUnitPaise(product);
+                                return (
                                 <div key={product.id || idx} className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                                   <div>
                                     <div className="text-sm font-bold text-slate-700 capitalize mb-1">
@@ -567,9 +555,13 @@ export default function ReturnsPage() {
                                     <div className="text-xs text-slate-500">
                                       Qty: <span className="font-bold text-slate-700">{product.quantity}</span>
                                     </div>
-                                    {product.price !== undefined ? (
+                                    <div className="text-xs text-slate-500 text-right">
+                                      <div className="uppercase tracking-wide text-[10px]">Consideration</div>
+                                      <div className="font-mono font-bold text-slate-800">{formatPaise(ask)}</div>
+                                    </div>
+                                    {evaluated !== null ? (
                                       <div className="text-sm font-mono font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
-                                        ₹{product.price.toLocaleString('en-IN')}
+                                        {formatPaise(evaluated)}
                                       </div>
                                     ) : (
                                       <div className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
@@ -578,7 +570,8 @@ export default function ReturnsPage() {
                                     )}
                                   </div>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}

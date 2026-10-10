@@ -7,6 +7,7 @@ import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCi
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
+import { formatPaise as paiseToDisplay, evalUnitPaise } from '../lib/money';
 
 interface ProductItem {
   id: string;
@@ -17,7 +18,18 @@ interface ProductItem {
   quantity: number;
   price?: number;
   pricePaise?: number; // canonical evaluated unit price, integer paise (null/undefined = unstated)
+  lineConsiderationPaise?: number | null; // visitor ask, line total paise (null = unstated)
   attachedFiles?: string[];
+}
+
+interface FinalPriceSnapshot {
+  version: number;
+  decidedAt: string;
+  decidedBy: string;
+  basis: 'evaluated' | 'consideration' | 'negotiated';
+  totalPaise: number;
+  lines: { productId: string; askPaise: number | null; evaluatedPaise: number | null; settledPaise: number | null }[];
+  manifestHashAtApproval: string | null;
 }
 
 interface ReturnRequest {
@@ -32,6 +44,41 @@ interface ReturnRequest {
   emailDeliveryStatus?: 'pending' | 'sent' | 'failed';
   date: string;
   status: string;
+  pricingBasis?: 'per_product' | 'lot';
+  lotConsiderationPaise?: number | null;
+  manifest?: { requestId: string; hash: string; generatedAt: string; version?: number } | null;
+  finalPrice?: FinalPriceSnapshot | null;
+}
+
+// ── Totals math (paise integers; null = unstated, never 0) ──
+// Line consideration already includes all units: NEVER × qty.
+// Evaluated price is per-unit: ALWAYS × qty. Two named functions, no inline math.
+function lineAskOf(req: ReturnRequest, p: ProductItem): number | null {
+  if (req.pricingBasis === 'lot') return null; // lot figure lives in the banner, never per-line
+  return p.lineConsiderationPaise ?? null;
+}
+
+function askTotalOf(req: ReturnRequest): { total: number | null; partial: boolean } {
+  if (req.pricingBasis === 'lot') return { total: req.lotConsiderationPaise ?? null, partial: false };
+  const lines = req.products || [];
+  const stated = lines.filter(p => p.lineConsiderationPaise !== null && p.lineConsiderationPaise !== undefined);
+  if (stated.length === 0) return { total: null, partial: false };
+  return {
+    total: stated.reduce((a, p) => a + (p.lineConsiderationPaise as number), 0),
+    partial: stated.length < lines.length
+  };
+}
+
+function evalTotalOf(req: ReturnRequest): { total: number | null; partial: boolean } {
+  const lines = (req.products || []).map(p => {
+    const unit = evalUnitPaise(p);
+    return unit === null ? null : unit * (Number(p.quantity) || 1);
+  });
+  if (lines.every(v => v === null)) return { total: null, partial: false };
+  return {
+    total: lines.reduce<number>((a, v) => a + (v ?? 0), 0),
+    partial: lines.some(v => v === null)
+  };
 }
 
 
@@ -430,6 +477,11 @@ export default function DashboardPage() {
                                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                                   <Tag className="w-4 h-4" /> Order Manifest
                                 </h4>
+                                {req.pricingBasis === 'lot' && (
+                                  <div className="mb-4 p-3 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-300">
+                                    Lot consideration (whole request): <span className="font-mono font-bold text-white">{paiseToDisplay(req.lotConsiderationPaise ?? null)}</span>
+                                  </div>
+                                )}
                                 <div className="space-y-3">
                                   {req.products && req.products.length > 0 ? (
                                     req.products.map((product, idx) => (
@@ -456,6 +508,12 @@ export default function DashboardPage() {
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-4">
+                                            <div className="flex flex-col items-end">
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Consideration (Ask)</label>
+                                              <div className="px-3 py-1.5 text-sm font-mono font-bold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated value — read-only">
+                                                {paiseToDisplay(lineAskOf(req, product))}
+                                              </div>
+                                            </div>
                                             <div className="flex flex-col items-end">
                                               <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Unit Price (INR)</label>
                                               <div className="relative">
@@ -504,14 +562,29 @@ export default function DashboardPage() {
                                     <div className="text-sm text-slate-500 italic">No products listed. (Legacy request)</div>
                                   )}
                                   
-                                  {req.products && req.products.length > 0 && (
-                                    <div className="mt-4 p-4 rounded-lg bg-slate-900 border border-slate-700 flex justify-between items-center">
-                                      <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">Total Evaluated Value</div>
-                                      <div className="text-2xl font-mono font-bold text-emerald-400">
-                                        ₹{req.products.reduce((acc, p) => acc + (Number(p.price) || 0) * (Number(p.quantity) || 1), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  {req.products && req.products.length > 0 && (() => {
+                                    const ask = askTotalOf(req);
+                                    const ev = evalTotalOf(req);
+                                    const final = req.finalPrice ?? null;
+                                    const row = (label: string, value: string, sub: string | null, accent: string) => (
+                                      <div className="flex justify-between items-center py-1.5">
+                                        <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">{label}</div>
+                                        <div className="text-right">
+                                          <div className={`text-2xl font-mono font-bold ${accent}`}>{value}</div>
+                                          {sub && <div className="text-[11px] text-amber-400">{sub}</div>}
+                                        </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    );
+                                    return (
+                                      <div className="mt-4 p-4 rounded-lg bg-slate-900 border border-slate-700">
+                                        {row('Total Asked', paiseToDisplay(ask.total), ask.partial ? 'Partial — some lines unstated' : null, 'text-sky-400')}
+                                        <div className="border-t border-slate-700/60 my-1" />
+                                        {row('Total Evaluated Value', paiseToDisplay(ev.total), ev.partial ? 'Partial — some lines unevaluated' : null, 'text-emerald-400')}
+                                        <div className="border-t border-slate-700/60 my-1" />
+                                        {row('Final', final ? `${paiseToDisplay(final.totalPaise)} (v${final.version})` : '—', null, 'text-white')}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                                 
                                 {/* Asset Photos Section */}

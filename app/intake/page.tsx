@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, UploadCloud, FileJson, CheckCircle, AlertTriangle, Play, Database, FileSpreadsheet, Send, Activity, ListChecks, ChevronDown, ChevronUp, Clock, Package } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
+import { moneyStringToPaise, formatPaise } from '../lib/money';
 
 export default function IntakeWorkbench() {
   const router = useRouter();
@@ -40,8 +41,20 @@ export default function IntakeWorkbench() {
     { key: 'phone', label: 'Phone', required: true },
     { key: 'category', label: 'Product Name', required: true },
     { key: 'details', label: 'Model Number', required: true },
-    { key: 'quantity', label: 'Quantity', required: true }
+    { key: 'quantity', label: 'Quantity', required: true },
+    { key: 'strategicTarget', label: 'Strategic Recovery Target', required: false },
+    { key: 'lifecycleAge', label: 'Hardware Lifecycle Batch Age', required: false },
+    { key: 'lineConsideration', label: 'Line Consideration (₹)', required: false },
+    { key: 'lotConsideration', label: 'Lot Consideration (₹)', required: false }
   ];
+
+  // Ask total for an intake-side order (same null semantics as dashboard).
+  const askTotalOfOrder = (order: any): number | null => {
+    if (order.pricingBasis === 'lot') return order.lotConsiderationPaise ?? null;
+    const lines = (order.products || []).map((p: any) => p.lineConsiderationPaise ?? null);
+    if (lines.every((v: any) => v === null || v === undefined)) return null;
+    return lines.reduce((a: number, v: any) => a + (v ?? 0), 0);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +168,8 @@ export default function IntakeWorkbench() {
           phone: rowData.phone || 'N/A',
           products: [],
           attachedFiles: [],
+          pricingBasis: 'per_product',
+          lotConsiderationPaise: null,
           date: new Date().toISOString(),
           status: 'Pending Review'
         });
@@ -166,10 +181,28 @@ export default function IntakeWorkbench() {
           id: `prod-auto-${Date.now().toString(36)}-${idx}`,
           category: rowData.category || 'other',
           details: rowData.details || 'No details provided',
-          quantity: parseInt(rowData.quantity) || 1
+          quantity: parseInt(rowData.quantity) || 1,
+          strategicTarget: rowData.strategicTarget || '',
+          lifecycleAge: rowData.lifecycleAge || '',
+          lineConsiderationPaise: rowData.lineConsideration ? moneyStringToPaise(String(rowData.lineConsideration)) : null
         });
       }
+      // Lot consideration is request-wide: first valid value in the group wins,
+      // and lines stay null so the ask total cannot double-count (mutual exclusivity).
+      if (rowData.lotConsideration && String(rowData.lotConsideration).trim() !== '' && (req.lotConsiderationPaise === null || req.lotConsiderationPaise === undefined)) {
+        const lot = moneyStringToPaise(String(rowData.lotConsideration));
+        if (lot !== null) {
+          req.pricingBasis = 'lot';
+          req.lotConsiderationPaise = lot;
+        }
+      }
     });
+    // Finalize: lot-mode requests must not carry line asks (mutual exclusivity).
+    for (const req of grouped.values()) {
+      if (req.pricingBasis === 'lot') {
+        req.products.forEach((p: any) => { p.lineConsiderationPaise = null; });
+      }
+    }
     return Array.from(grouped.values());
   };
 
@@ -222,6 +255,10 @@ export default function IntakeWorkbench() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
+      alert("MANDATORY SCHEMA REQUIRED:\n\nTo process this request according to industry standards & Intake workbench requirement, your file MUST contain the following columns:\n- Intent (sell/buy)\n- Client Name\n- Company\n- Email\n- Phone\n- Product Name\n- Model Number\n- Quantity\n- Strategic Recovery Target (optional)\n- Hardware Lifecycle Batch Age (optional)");
+    }
 
     if (file.size > 300 * 1024 * 1024) {
       setErrorMsg('File exceeds 300MB limit.');
@@ -620,12 +657,14 @@ export default function IntakeWorkbench() {
                                   <div className="text-slate-200">{match.buyer.name}</div>
                                   <div className="text-slate-400 text-xs">{match.buyer.email}</div>
                                   <div className="text-indigo-300 text-xs mt-1">Req Qty: {match.buyerQty}</div>
+                                  <div className="text-slate-400 text-xs mt-1">Ask: <span className="font-mono text-slate-200">{formatPaise(askTotalOfOrder(match.buyer))}</span></div>
                                 </div>
                                 <div>
                                   <div className="text-xs font-bold text-slate-500 uppercase mb-1">Seller Details</div>
                                   <div className="text-slate-200">{match.seller.name}</div>
                                   <div className="text-slate-400 text-xs">{match.seller.email}</div>
                                   <div className="text-indigo-300 text-xs mt-1">Avail Qty: {match.sellerQty}</div>
+                                  <div className="text-slate-400 text-xs mt-1">Ask: <span className="font-mono text-slate-200">{formatPaise(askTotalOfOrder(match.seller))}</span></div>
                                 </div>
                               </div>
                               <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
@@ -660,6 +699,9 @@ export default function IntakeWorkbench() {
                             </div>
                             <div className="text-xs text-slate-500 font-mono mt-0.5">
                               {order.products?.[0]?.details || 'Unknown Model'}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              Ask: <span className="font-mono text-slate-300">{formatPaise(askTotalOfOrder(order))}</span>
                             </div>
                           </div>
                           <span className={`px-2 py-1 rounded text-xs font-bold ${order.intent?.toLowerCase() === 'buy' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
