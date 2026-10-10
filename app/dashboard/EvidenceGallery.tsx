@@ -30,6 +30,13 @@ export function fileNameOf(key: string): string {
   return clean.split('/').pop() || clean;
 }
 
+/** Inline key preview for failed tiles. data: URIs can be megabytes —
+// never render them raw; show length instead. */
+export function keyPreview(key: string): string {
+  if (key.startsWith('data:')) return `embedded data URI (${key.length.toLocaleString()} chars)`;
+  return key;
+}
+
 interface EvidenceGalleryProps {
   files: string[];
   cdnBase: string;
@@ -193,6 +200,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                   <div key={`${it.id}:${retryKey}`} className="aspect-square rounded-lg border border-red-500/30 bg-red-500/5 flex flex-col items-center justify-center gap-2 p-2 text-center" title={it.key}>
                     <AlertTriangle className="w-5 h-5 text-red-400" />
                     <p className="text-[11px] text-red-300 leading-tight truncate w-full px-1">{it.name}</p>
+                    <p className="text-[10px] font-mono text-red-400/60 leading-tight break-all w-full px-1">{keyPreview(it.key)}</p>
                     <p className="text-[10px] font-mono text-red-400/70">
                       {failStatus[it.id] === undefined ? 'diagnosing…' : failStatus[it.id] === null ? 'endpoint unreachable' : `HTTP ${failStatus[it.id]}`}
                     </p>
@@ -221,6 +229,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                     <span className="flex items-center gap-2 text-red-300 truncate">
                       <AlertTriangle className="w-4 h-4 shrink-0" /> <span className="truncate">{it.name}</span>
                     </span>
+                    <span className="font-mono text-[10px] text-red-400/60 break-all text-right shrink-0 max-w-[50%]">{keyPreview(it.key)}</span>
                     <button
                       type="button"
                       onClick={() => { unmarkFailed(it.id); setRetryKey((k) => k + 1); }}
@@ -257,6 +266,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                     <span className="flex items-center gap-2 text-red-300 truncate">
                       <AlertTriangle className="w-4 h-4 shrink-0" /> <span className="truncate">{it.name}</span>
                     </span>
+                    <span className="font-mono text-[10px] text-red-400/60 break-all text-right shrink-0 max-w-[50%]">{keyPreview(it.key)}</span>
                     <button
                       type="button"
                       onClick={() => { unmarkFailed(it.id); setRetryKey((k) => k + 1); }}
