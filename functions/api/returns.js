@@ -140,6 +140,14 @@ export async function onRequestGet({ env }) {
         if (!raw) return null;
         try { return JSON.parse(raw); } catch { return null; }
       };
+      const parseFinalPrice = (raw) => {
+        if (!raw) return null;
+        try {
+          const fp = JSON.parse(raw);
+          if (fp && Number.isInteger(fp.version) && Number.isInteger(fp.totalPaise)) return fp;
+          return null;
+        } catch { return null; }
+      };
       const returns = results.map(row => ({
         id: row.id,
         intent: row.intent,
@@ -155,7 +163,8 @@ export async function onRequestGet({ env }) {
         totalAmount: Number(row.totalAmount || row.totalamount || 0),
         pricingBasis: row.pricingBasis === 'lot' ? 'lot' : 'per_product',
         lotConsiderationPaise: Number.isInteger(row.lotConsiderationPaise) ? row.lotConsiderationPaise : null,
-        manifest: parseManifest(row.manifest)
+        manifest: parseManifest(row.manifest),
+        finalPrice: parseFinalPrice(row.finalPrice)
       }));
       return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
     } else if (env.DATABASE_URL) {
@@ -183,6 +192,14 @@ export async function onRequestGet({ env }) {
         if (!raw) return null;
         try { return JSON.parse(raw); } catch { return null; }
       };
+      const parseFinalPricePg = (raw) => {
+        if (!raw) return null;
+        try {
+          const fp = JSON.parse(raw);
+          if (fp && Number.isInteger(fp.version) && Number.isInteger(fp.totalPaise)) return fp;
+          return null;
+        } catch { return null; }
+      };
       const returns = rows.map(row => ({
         id: row.id,
         intent: row.intent,
@@ -200,7 +217,8 @@ export async function onRequestGet({ env }) {
         lotConsiderationPaise: (row.lotconsiderationpaise === null || row.lotconsiderationpaise === undefined)
           ? null
           : (Number.isInteger(Number(row.lotconsiderationpaise)) ? Number(row.lotconsiderationpaise) : null),
-        manifest: parseManifestPg(row.manifest)
+        manifest: parseManifestPg(row.manifest),
+        finalPrice: parseFinalPricePg(row.finalprice)
       }));
       return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
     }
@@ -215,9 +233,45 @@ export async function onRequestPut({ request, env }) {
     const update = await request.json();
     if (!update.id) throw new Error('ID required');
 
+    // FinalPriceSnapshot validation: malformed snapshots are rejected, never
+    // partially stored. Status and snapshot write atomically in one UPDATE.
+    const validFinalPrice = (fp) => {
+      if (fp === null || fp === undefined) return null;
+      if (!fp || typeof fp !== 'object') throw new Error('Invalid finalPrice snapshot');
+      if (!Number.isInteger(fp.version) || fp.version < 1) throw new Error('Invalid finalPrice snapshot');
+      if (!Number.isInteger(fp.totalPaise) || fp.totalPaise < 0) throw new Error('Invalid finalPrice snapshot');
+      if (!['evaluated', 'consideration', 'negotiated'].includes(fp.basis)) throw new Error('Invalid finalPrice snapshot');
+      if (typeof fp.decidedAt !== 'string' || typeof fp.decidedBy !== 'string') throw new Error('Invalid finalPrice snapshot');
+      if (!Array.isArray(fp.lines)) throw new Error('Invalid finalPrice snapshot');
+      for (const l of fp.lines) {
+        if (!l || typeof l.productId !== 'string') throw new Error('Invalid finalPrice snapshot');
+        for (const k of ['askPaise', 'evaluatedPaise', 'settledPaise']) {
+          if (l[k] !== null && !(Number.isInteger(l[k]) && l[k] >= 0)) throw new Error('Invalid finalPrice snapshot');
+        }
+      }
+      if (fp.manifestHashAtApproval !== null && fp.manifestHashAtApproval !== undefined && typeof fp.manifestHashAtApproval !== 'string') {
+        throw new Error('Invalid finalPrice snapshot');
+      }
+      return {
+        version: fp.version,
+        decidedAt: fp.decidedAt,
+        decidedBy: fp.decidedBy,
+        basis: fp.basis,
+        totalPaise: fp.totalPaise,
+        lines: fp.lines,
+        manifestHashAtApproval: fp.manifestHashAtApproval ?? null
+      };
+    };
+
     if (env.DB) {
+      try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN finalPrice TEXT').run(); } catch(e){}
       if (update.action === 'status') {
-        await env.DB.prepare('UPDATE returns SET status = ? WHERE id = ?').bind(update.status, update.id).run();
+        if (update.finalPrice !== undefined) {
+          const fp = validFinalPrice(update.finalPrice);
+          await env.DB.prepare('UPDATE returns SET status = ?, finalPrice = ? WHERE id = ?').bind(update.status, fp ? JSON.stringify(fp) : null, update.id).run();
+        } else {
+          await env.DB.prepare('UPDATE returns SET status = ? WHERE id = ?').bind(update.status, update.id).run();
+        }
       } else if (update.action === 'emailDelivery') {
         await env.DB.prepare('UPDATE returns SET emailDeliveryStatus = ? WHERE id = ?').bind(update.emailDeliveryStatus, update.id).run();
       } else if (update.action === 'price') {
@@ -252,8 +306,14 @@ export async function onRequestPut({ request, env }) {
       const { Client } = await import('pg');
       const client = new Client({ connectionString: env.DATABASE_URL });
       await client.connect();
+      try { await client.query('ALTER TABLE returns ADD COLUMN finalprice TEXT'); } catch(e){}
       if (update.action === 'status') {
-        await client.query('UPDATE returns SET status = $1 WHERE id = $2', [update.status, update.id]);
+        if (update.finalPrice !== undefined) {
+          const fp = validFinalPrice(update.finalPrice);
+          await client.query('UPDATE returns SET status = $1, finalprice = $2 WHERE id = $3', [update.status, fp ? JSON.stringify(fp) : null, update.id]);
+        } else {
+          await client.query('UPDATE returns SET status = $1 WHERE id = $2', [update.status, update.id]);
+        }
       } else if (update.action === 'emailDelivery') {
         await client.query('UPDATE returns SET emailDeliveryStatus = $1 WHERE id = $2', [update.emailDeliveryStatus, update.id]);
       } else if (update.action === 'price') {

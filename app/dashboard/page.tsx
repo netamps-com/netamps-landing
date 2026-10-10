@@ -7,7 +7,7 @@ import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCi
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
-import { formatPaise as paiseToDisplay, evalUnitPaise } from '../lib/money';
+import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
 
 interface ProductItem {
   id: string;
@@ -93,6 +93,13 @@ export default function DashboardPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Approval snapshot draft (per-request). Approving writes a FinalPriceSnapshot
+  // atomically with the status flip; post-approval price edits are locked.
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [approveBasis, setApproveBasis] = useState<'evaluated' | 'consideration' | 'negotiated'>('evaluated');
+  const [approveNegotiated, setApproveNegotiated] = useState('');
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   const fetchReturns = useCallback(async (silent = true) => {
     if (!silent) setIsRefreshing(true);
@@ -185,6 +192,73 @@ export default function DashboardPage() {
     } catch(err){}
   };
 
+  // Approval writes a FinalPriceSnapshot atomically with the status flip.
+  // Corrections re-approve (version+1 with history); post-approval edits lock.
+  const handleApproveWithSnapshot = async (req: ReturnRequest) => {
+    setApproveError(null);
+    const ev = evalTotalOf(req);
+    const ask = askTotalOf(req);
+    let total: number | null = null;
+    if (approveBasis === 'evaluated') {
+      if (ev.total === null) {
+        setApproveError('Cannot approve on Evaluated basis: some lines lack evaluated prices.');
+        return;
+      }
+      total = ev.total;
+    } else if (approveBasis === 'consideration') {
+      if (ask.total === null) {
+        setApproveError('Cannot approve on Consideration basis: the ask is unstated.');
+        return;
+      }
+      total = ask.total;
+    } else {
+      const negotiated = moneyStringToPaise(approveNegotiated);
+      if (negotiated === null) {
+        setApproveError('Enter a valid negotiated total (0 – ₹99,99,99,999, max 2 decimals).');
+        return;
+      }
+      total = negotiated;
+    }
+
+    const snapshot: FinalPriceSnapshot = {
+      version: (req.finalPrice?.version ?? 0) + 1,
+      decidedAt: new Date().toISOString(),
+      decidedBy: userRole || 'unknown',
+      basis: approveBasis,
+      totalPaise: total,
+      lines: (req.products || []).map(p => {
+        const a = lineAskOf(req, p);
+        const unit = evalUnitPaise(p);
+        const e = unit === null ? null : unit * (Number(p.quantity) || 1);
+        return {
+          productId: p.id,
+          askPaise: a,
+          evaluatedPaise: e,
+          settledPaise: approveBasis === 'negotiated' ? null : (approveBasis === 'evaluated' ? e : a)
+        };
+      }),
+      manifestHashAtApproval: req.manifest?.hash ?? null
+    };
+
+    const updatedReturns = returns.map(r =>
+      r.id === req.id ? { ...r, status: 'Approved', finalPrice: snapshot } : r
+    );
+    setReturns(updatedReturns);
+    localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
+    setApprovingId(null);
+    setApproveNegotiated('');
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      await fetch(`${API_URL}/api/returns`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: req.id, action: 'status', status: 'Approved', finalPrice: snapshot })
+      });
+      const { logEvent } = await import('../lib/logger');
+      logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${req.id} approved (final v${snapshot.version}, basis ${snapshot.basis}, total ${snapshot.totalPaise} paise)`, userRole);
+    } catch(err){}
+  };
+
   const handleDeleteRequest = async (id: string) => {
     if (window.confirm('Are you sure you want to permanently delete this request?')) {
       const updatedReturns = returns.filter(req => req.id !== id);
@@ -201,6 +275,8 @@ export default function DashboardPage() {
 
   const handlePriceChange = async (reqId: string, productId: string, newPrice: string) => {
     if (userRole !== 'admin@netamps.com') return;
+    const target = returns.find(r => r.id === reqId);
+    if (target && target.status === 'Approved') return; // locked once approved (see finalPrice snapshot)
     // Paise-integer contract: parse the ₹ string once, store integer paise.
     // Empty clears; invalid (negative/nonnumeric) clears like before — never NaN.
     const cleaned = newPrice.replace(/[₹,\s]/g, '');
@@ -521,7 +597,7 @@ export default function DashboardPage() {
                                                 <input
                                                   type="text"
                                                   inputMode="decimal"
-                                                  disabled={userRole !== 'admin@netamps.com'}
+                                                  disabled={userRole !== 'admin@netamps.com' || req.status === 'Approved'}
                                                   value={(product.pricePaise ?? null) !== null ? String((product.pricePaise as number) / 100) : (product.price ?? '')}
                                                   onChange={(e) => handlePriceChange(req.id, product.id, e.target.value.replace(/[^0-9.]/g, ''))}
                                                   placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
@@ -613,7 +689,66 @@ export default function DashboardPage() {
                                   </div>
                                 )}
 
-                                <div className="mt-6 flex gap-3 border-t border-slate-800 pt-4 items-center">
+                                <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-800 pt-4 items-center">
+                                  {approvingId === req.id && (
+                                    <div className="w-full mb-4 p-4 rounded-lg bg-slate-900 border border-emerald-500/30">
+                                      <div className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
+                                        Approve with final price snapshot {req.finalPrice ? `(correction → v${req.finalPrice.version + 1})` : '(v1)'}
+                                      </div>
+                                      <div className="flex flex-wrap gap-2 mb-3">
+                                        {(['evaluated', 'consideration', 'negotiated'] as const).map(b => (
+                                          <button
+                                            key={b}
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setApproveBasis(b); setApproveError(null); }}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${approveBasis === b ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}`}
+                                          >
+                                            {b === 'evaluated' ? 'Evaluated Total' : b === 'consideration' ? 'Consideration Total' : 'Negotiated Total'}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      {approveBasis === 'negotiated' && (
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={approveNegotiated}
+                                          onChange={(e) => setApproveNegotiated(sanitizeMoneyInput(e.target.value))}
+                                          placeholder="Negotiated total (₹)"
+                                          className="w-full sm:max-w-xs mb-3 px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:border-emerald-500 focus:outline-none"
+                                        />
+                                      )}
+                                      <div className="text-sm text-slate-400 mb-3">
+                                        Preview total:{' '}
+                                        <span className="font-mono font-bold text-white">
+                                          {(() => {
+                                            if (approveBasis === 'evaluated') return paiseToDisplay(evalTotalOf(req).total);
+                                            if (approveBasis === 'consideration') return paiseToDisplay(askTotalOf(req).total);
+                                            const n = moneyStringToPaise(approveNegotiated);
+                                            return n === null ? '—' : paiseToDisplay(n);
+                                          })()}
+                                        </span>
+                                      </div>
+                                      {approveError && (
+                                        <div className="text-xs text-red-400 mb-3">{approveError}</div>
+                                      )}
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); handleApproveWithSnapshot(req); }}
+                                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg transition-colors"
+                                        >
+                                          Confirm Approval
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setApprovingId(null); setApproveError(null); }}
+                                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors border border-slate-700"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                   {req.status === 'Approved' && (
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); handleEmailPush(req); }}
@@ -626,7 +761,7 @@ export default function DashboardPage() {
                                   )}
                                   <div className={req.status === 'Approved' ? 'flex gap-3' : 'ml-auto flex gap-3'}>
                                     <button 
-                                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Approved'); }}
+                                      onClick={(e) => { e.stopPropagation(); setApprovingId(req.id); setApproveBasis('evaluated'); setApproveNegotiated(''); setApproveError(null); }}
                                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors"
                                     >
                                       Approve Request
