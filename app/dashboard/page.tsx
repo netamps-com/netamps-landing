@@ -3,10 +3,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, FileImage, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
+import EvidenceGallery from './EvidenceGallery';
 import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
 
 interface ProductItem {
@@ -619,24 +620,12 @@ export default function DashboardPage() {
                                         </div>
                                         {product.attachedFiles && product.attachedFiles.length > 0 && (
                                           <div className="mt-4 pt-4 border-t border-slate-700/50">
-                                            <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Asset Photos ({product.attachedFiles.length})</h5>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                                              {product.attachedFiles.map((fileKey, fIdx) => {
-                                                const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn';
-                                                const isDataUri = fileKey.startsWith('data:');
-                                                const fileUrl = isDataUri ? fileKey : `${cdnUrl}/${fileKey}`;
-                                                const isVideo = isDataUri ? fileKey.startsWith('data:video') : (fileKey.endsWith('.mp4') || fileKey.endsWith('.webm'));
-                                                return (
-                                                  <a key={fIdx} href={fileUrl} target="_blank" rel="noopener noreferrer" className="relative group block aspect-square rounded-lg overflow-hidden border border-slate-700 bg-slate-800/50 flex items-center justify-center hover:border-indigo-500 transition-colors">
-                                                    {isVideo ? (
-                                                      <video src={fileUrl} controls preload="none" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                                                    ) : (
-                                                      <img src={fileUrl} alt="Asset" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                                                    )}
-                                                  </a>
-                                                );
-                                              })}
-                                            </div>
+                                            <EvidenceGallery
+                                              files={product.attachedFiles}
+                                              cdnBase={process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn'}
+                                              title="Asset Evidence"
+                                              compact
+                                            />
                                           </div>
                                         )}
                                       </div>
@@ -670,31 +659,14 @@ export default function DashboardPage() {
                                   })()}
                                 </div>
                                 
-                                {/* Asset Photos Section */}
-                                {req.attachedFiles && req.attachedFiles.length > 0 && (
-                                  <div className="mt-6">
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                      <FileImage className="w-4 h-4" /> Attached Attach asset details of any type below ({req.attachedFiles.length})
-                                    </h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                      {req.attachedFiles.map((fileKey, idx) => {
-                                        const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn';
-                                        const isDataUri = fileKey.startsWith('data:');
-                                        const fileUrl = isDataUri ? fileKey : `${cdnUrl}/${fileKey}`;
-                                        const isVideo = isDataUri ? fileKey.startsWith('data:video') : (fileKey.endsWith('.mp4') || fileKey.endsWith('.webm'));
-                                        return (
-                                          <a key={idx} href={fileUrl} target="_blank" rel="noopener noreferrer" className="relative group block aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-800/50 flex items-center justify-center hover:border-indigo-500 transition-colors">
-                                            {isVideo ? (
-                                              <video src={fileUrl} controls preload="none" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                                            ) : (
-                                              <img src={fileUrl} alt="Attach asset details of any type below" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                                            )}
-                                          </a>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
+                                {/* Attached evidence — renders nothing when empty (zero pixels reclaimed) */}
+                                <div className="mt-6">
+                                  <EvidenceGallery
+                                    files={req.attachedFiles || []}
+                                    cdnBase={process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn'}
+                                    title="Attached Evidence"
+                                  />
+                                </div>
 
                                 <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-800 pt-4 items-center">
                                   {approvingId === req.id && (
