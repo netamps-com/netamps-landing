@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from "motion/react";
+import { Turnstile } from '@marsidev/react-turnstile';
 import { Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink, Mail } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
@@ -177,6 +178,16 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Turnstile bot gate (action-pinned 'login'). Dormant when the site key is
+  // unset (.env.example contract) — the gate activates on key configuration.
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileKey, setTurnstileKey] = useState(0);
+
+  const resetTurnstile = () => {
+    setTurnstileToken('');
+    setTurnstileKey((k) => k + 1); // remount mints a fresh single-use token
+  };
 
 
   const router = useRouter();
@@ -217,10 +228,40 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg('');
 
+    // Bot gate first: no token, no login attempt (fail-closed when configured).
+    if (turnstileSiteKey && !turnstileToken) {
+      setErrorMsg('Complete the human verification challenge before signing in.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      await processLogin('no_captcha');
+      if (turnstileSiteKey) {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const verifyRes = await fetch(`${API_URL}/api/verify-turnstile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: turnstileToken, action: 'login' })
+        });
+        let verifyData: any = null;
+        try {
+          verifyData = await verifyRes.json();
+        } catch {
+          throw new Error('Verification service returned an invalid response.');
+        }
+        if (!verifyData.success) {
+          try {
+            const { logEvent } = await import('../lib/logger');
+            logEvent('TURNSTILE_BLOCKED', 'Login Page', 'Bot verification failed or expired', email);
+          } catch(e) {}
+          resetTurnstile();
+          setErrorMsg('Verification failed or expired. Complete the challenge again.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      await processLogin(turnstileSiteKey ? turnstileToken : 'no_captcha');
     } catch (err) {
       setErrorMsg('Encryption error occurred.');
       setIsSubmitting(false);
@@ -255,6 +296,7 @@ export default function LoginPage() {
 
       setErrorMsg(data.message || 'Invalid credentials');
       setIsSubmitting(false);
+      if (turnstileSiteKey) resetTurnstile(); // token is single-use — mint a fresh one
       try {
         const { logEvent } = await import('../lib/logger');
         logEvent('AUTH_FAILED_INVALID', 'Login Page', 'Invalid credentials provided', email);
@@ -264,6 +306,7 @@ export default function LoginPage() {
       logEvent('AUTH_ERROR', 'Login Page', 'Encryption error during login', email);
       setErrorMsg('Network error. Check connection.');
       setIsSubmitting(false);
+      if (turnstileSiteKey) resetTurnstile();
     }
   };
 
@@ -359,6 +402,18 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {turnstileSiteKey && (
+              <div className="flex justify-center">
+                <Turnstile
+                  key={turnstileKey}
+                  siteKey={turnstileSiteKey}
+                  options={{ theme: 'light', action: 'login', appearance: 'always' }}
+                  onSuccess={(token) => setTurnstileToken(token)}
+                  onExpire={() => setTurnstileToken('')}
+                  onError={() => setTurnstileToken('')}
+                />
+              </div>
+            )}
 
             <div>
               <button
