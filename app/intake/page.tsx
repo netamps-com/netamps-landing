@@ -280,6 +280,12 @@ export default function IntakeWorkbench() {
 
   // Schema validation state (inline error panel)
   const [validationResult, setValidationResult] = useState<SchemaValidationResult | null>(null);
+  // Tracking-ID notice: shown when a tracking file is held for manual review
+  const [trackingNotice, setTrackingNotice] = useState<string | null>(null);
+  // Per-item commit report (A5: partial failures are reported, never silent)
+  const [commitReport, setCommitReport] = useState<{ okIds: string[]; failed: { id: string; error: string }[] } | null>(null);
+  // Drag-drop hover state for the step-1 dropzone
+  const [dragging, setDragging] = useState(false);
   // Commit scope: when row-level issues exist, exclude flagged rows by default.
   // Unchecking requires explicit confirmation at commit time.
   const [excludeInvalidRows, setExcludeInvalidRows] = useState(true);
@@ -553,14 +559,13 @@ export default function IntakeWorkbench() {
     }, 500);
   };
 
-  // ── Core file upload handler: SheetJS-backed, schema-gated ──
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // ── Core file processor: SheetJS-backed, schema-gated (A1: shared by Browse + drop) ──
+  const processFile = useCallback(async (file: File) => {
     // Reset previous state
     setErrorMsg('');
     setValidationResult(null);
+    setTrackingNotice(null);
+    setCommitReport(null);
 
     // File-type scope: only .json/.csv/.xlsx enter this pipeline
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -764,11 +769,21 @@ export default function IntakeWorkbench() {
         sheetName: detectedSheet,
       };
 
-      // ── Tracking ID auto-route (existing behavior, untouched) ──
+      // ── Tracking ID route: validated, never blind (A4) ──
+      // Auto-commit runs ONLY for ALL-tier files with a clean first-50 spot
+      // check. Partial schemas and flagged rows stay in the manual flow with
+      // an explanatory notice — a tracking column is not a validity proof.
       const hasTrackingId = cols.some(c => normalizeHeader(c).includes('tracking') && normalizeHeader(c).includes('id'));
       if (hasTrackingId && tier !== 'insufficient') {
-        handleAutoIngestion('', cols, rows, file.name, file.size);
-        return;
+        if (tier === 'all' && rowErrors.length === 0) {
+          handleAutoIngestion('', cols, rows, file.name, file.size);
+          return;
+        }
+        setTrackingNotice(
+          tier === 'partial'
+            ? 'Tracking ID detected, but the schema is partial — review the mapping below before committing. Auto-commit runs only on fully valid files.'
+            : 'Tracking ID detected, but some rows failed validation — review before committing. Auto-commit runs only on fully valid files.'
+        );
       }
 
       // ── INSUFFICIENT tier: reject, show inline error, log, offer template ──
@@ -829,6 +844,21 @@ export default function IntakeWorkbench() {
     }
   }, []);
 
+  // ── Browse entry (A2: input reset so re-selecting the same file re-fires change) ──
+  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) void processFile(file);
+  }, [processFile]);
+
+  // ── Drop entry (A1: the "Drop files here" copy is now a real drop target) ──
+  const handleFileDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) void processFile(file);
+  }, [processFile]);
+
   // Row-validity check against the current mapping (commit-valid-only scope)
   const isMappedRowValid = (row: any, localMapping: Record<string, string>): boolean => {
     const mapped: Record<string, string> = {};
@@ -843,7 +873,37 @@ export default function IntakeWorkbench() {
     const source = excludeInvalid ? parsedData.filter((r) => isMappedRowValid(r, mapping)) : parsedData;
     const autoPreview = generateAutoPreview(source, mapping);
     setPreviewData(autoPreview);
+    setCommitReport(null);
     setStep(3);
+  };
+
+  // ── Per-item commit (A5): each request posts independently; failures are
+  // collected, never silent. No rollback is offered (server has no bulk
+  // delete) — the report states exactly what shipped and what did not.
+  const commitRequests = async (reqs: any[]) => {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    const okIds: string[] = [];
+    const failed: { id: string; error: string }[] = [];
+    for (const req of reqs) {
+      try {
+        const rRes = await fetch(`${API_URL}/api/returns`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req)
+        });
+        let rData: any;
+        try {
+          rData = await rRes.json();
+        } catch {
+          throw new Error('Server returned an invalid response.');
+        }
+        if (!rData.success) throw new Error(rData.message || 'Commit refused by server.');
+        okIds.push(req.id);
+      } catch (e: any) {
+        failed.push({ id: req.id, error: e?.message || 'Network error.' });
+      }
+    }
+    return { okIds, failed };
   };
 
   const submitBatch = async () => {
@@ -855,6 +915,7 @@ export default function IntakeWorkbench() {
       if (!ok) return;
     }
     setIsProcessing(true);
+    setCommitReport(null);
     try {
       const sessionId = `batch-${Date.now()}`;
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -873,18 +934,37 @@ export default function IntakeWorkbench() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
-      for (const req of previewData) {
-        await fetch(`${API_URL}/api/returns`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req)
-        });
-      }
+      const { okIds, failed } = await commitRequests(previewData);
 
-      // Success — navigate to dashboard (no blocking alert)
-      router.push('/dashboard');
+      if (failed.length === 0) {
+        // Full success — navigate to dashboard (no blocking alert)
+        router.push('/dashboard');
+        return;
+      }
+      setCommitReport({ okIds, failed });
+      setErrorMsg(`${failed.length} of ${previewData.length} requests failed to commit — ${okIds.length} committed and were NOT rolled back. See the report below; fix and retry the failed items.`);
     } catch (err: any) {
       setErrorMsg(err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Retry only the failed items of the last report; successes accumulate.
+  const retryFailedCommits = async () => {
+    if (!commitReport || commitReport.failed.length === 0) return;
+    setIsProcessing(true);
+    try {
+      const ids = new Set(commitReport.failed.map((f) => f.id));
+      const pending = previewData.filter((r: any) => ids.has(r.id));
+      const { okIds: retryOk, failed: retryFailed } = await commitRequests(pending);
+      const merged = { okIds: [...commitReport.okIds, ...retryOk], failed: retryFailed };
+      setCommitReport(merged);
+      if (retryFailed.length === 0) {
+        router.push('/dashboard');
+      } else {
+        setErrorMsg(`${retryFailed.length} request(s) still failing — ${merged.okIds.length} committed in total. See the report below.`);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -1006,6 +1086,14 @@ export default function IntakeWorkbench() {
           </div>
         )}
 
+        {/* ── Tracking-ID review notice (A4: held for manual review, not auto-committed) ── */}
+        {trackingNotice && activeTab === 'manual' && step !== 1 && (
+          <div className="mb-6 bg-indigo-500/10 border border-indigo-500/40 rounded-2xl p-5 flex items-start gap-3">
+            <FileSpreadsheet className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-indigo-300">{trackingNotice}</p>
+          </div>
+        )}
+
         {/* ── PARTIAL schema info banner ── */}
         {validationResult && validationResult.tier === 'partial' && step === 2 && activeTab === 'manual' && (
           <div className="mb-6 bg-amber-500/10 border border-amber-500/40 rounded-2xl p-5 space-y-3">
@@ -1071,10 +1159,15 @@ export default function IntakeWorkbench() {
             </div>
 
             {step === 1 && (
-              <div className="border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/50 p-16 flex flex-col items-center justify-center text-center transition-colors hover:border-indigo-500 hover:bg-slate-800/50">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleFileDrop}
+                className={`border-2 border-dashed rounded-2xl p-16 flex flex-col items-center justify-center text-center transition-colors ${dragging ? 'border-indigo-400 bg-indigo-500/10' : 'border-slate-700 bg-slate-900/50 hover:border-indigo-500 hover:bg-slate-800/50'}`}
+              >
                 <Database className="w-16 h-16 text-slate-500 mb-6" />
                 <h2 className="text-2xl font-bold text-white mb-2">Import Business Data</h2>
-                <p className="text-slate-400 mb-8 max-w-md">Drop CSV, JSON, or XLSX files here. Files with a &quot;Tracking ID&quot; column auto-route to the background Auto-Ingest Monitor.</p>
+                <p className="text-slate-400 mb-8 max-w-md">Drop CSV, JSON, or XLSX files here, or browse. Files with a &quot;Tracking ID&quot; column auto-commit only when fully valid — anything else stays here for review.</p>
                 <label className="relative cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2">
                   <UploadCloud className="w-5 h-5" /> Browse Files
                   <input type="file" className="hidden" accept=".csv,.json,.xlsx" onChange={handleFileUpload} />
@@ -1218,6 +1311,36 @@ export default function IntakeWorkbench() {
                       {JSON.stringify(previewData, null, 2)}
                     </pre>
                   </div>
+
+                  {/* Per-item commit report (A5: partial failures stated, retry offered) */}
+                  {commitReport && (
+                    <div className="mt-4 border border-slate-800 rounded-xl overflow-hidden">
+                      <div className="px-4 py-3 bg-slate-800/50 text-sm font-bold text-slate-200 flex items-center justify-between">
+                        <span>Commit report — {commitReport.okIds.length} committed, {commitReport.failed.length} failed</span>
+                        {commitReport.failed.length > 0 && (
+                          <button
+                            onClick={retryFailedCommits}
+                            disabled={isProcessing}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors disabled:opacity-50"
+                          >
+                            Retry failed ({commitReport.failed.length})
+                          </button>
+                        )}
+                      </div>
+                      {commitReport.failed.length > 0 ? (
+                        <ul className="divide-y divide-slate-800 text-xs">
+                          {commitReport.failed.map((f) => (
+                            <li key={f.id} className="px-4 py-2.5 flex items-start justify-between gap-3">
+                              <span className="font-mono text-red-300 break-all">{f.id}</span>
+                              <span className="text-red-400/80 text-right shrink-0 max-w-[60%]">{f.error}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="px-4 py-3 text-xs text-emerald-400">All items committed.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
