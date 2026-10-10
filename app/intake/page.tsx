@@ -153,6 +153,36 @@ async function downloadIntakeTemplate(): Promise<void> {
   XLSX.writeFile(wb, `netamps-intake-template-${stamp}.xlsx`);
 }
 
+// Fixed sales-escalation mailbox (UI label only — the server hardcodes the
+// recipient and accepts no client-supplied address).
+const SALES_ESCALATION_EMAIL = 'sales@netamps.in';
+
+// Matched-line ask in paise (or null): first product line whose category+details
+// equal the pair's product+model (same normalization as the matcher).
+// Lot-basis orders null their lines, so the delta degrades to null — never 0.
+function matchedLineAskPaise(order: any, productName: string, modelNumber: string): number | null {
+  if (!order || order.pricingBasis === 'lot') return null;
+  const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+  const line = (order.products || []).find(
+    (p: any) => norm(p.category) === norm(productName) && norm(p.details) === norm(modelNumber)
+  );
+  const v = line?.lineConsiderationPaise;
+  return Number.isInteger(v) && (v as number) >= 0 ? (v as number) : null;
+}
+
+// Signed line delta (seller − buyer) in paise, or null when either side is unstated.
+function matchLineDelta(buyerOrder: any, sellerOrder: any, productName: string, modelNumber: string): number | null {
+  const b = matchedLineAskPaise(buyerOrder, productName, modelNumber);
+  const s = matchedLineAskPaise(sellerOrder, productName, modelNumber);
+  return b !== null && s !== null ? s - b : null;
+}
+
+function formatSignedPaise(v: number | null): string {
+  if (v === null || v === undefined) return '—';
+  const sign = v > 0 ? '+' : '';
+  return sign + formatPaise(v);
+}
+
 // ── Duplicate header detector ──
 function findDuplicateHeaders(headers: string[]): string[] {
   const norm = headers.map(normalizeHeader);
@@ -261,6 +291,8 @@ export default function IntakeWorkbench() {
   const [stockMatches, setStockMatches] = useState<any[]>([]);
   const [unmatchedOrders, setUnmatchedOrders] = useState<any[]>([]);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
+  // Sales-escalation state per match id (idempotent: sending/sent block re-send)
+  const [escalateState, setEscalateState] = useState<Record<string, { status: 'sending' | 'sent' | 'failed'; error?: string }>>({});
 
   // Target schema — kept for generateAutoPreview compatibility
   const targetSchema = SCHEMA_FIELDS;
@@ -358,6 +390,62 @@ export default function IntakeWorkbench() {
       }
     } catch(err) {
       console.error("Error fetching matches", err);
+    }
+  };
+
+  const handleEscalate = async (match: any) => {
+    const cur = escalateState[match.id];
+    if (cur && (cur.status === 'sending' || cur.status === 'sent')) return; // idempotent
+    setEscalateState((prev) => ({ ...prev, [match.id]: { status: 'sending' } }));
+    const bLine = matchedLineAskPaise(match.buyer, match.productName, match.modelNumber);
+    const sLine = matchedLineAskPaise(match.seller, match.productName, match.modelNumber);
+    const delta = bLine !== null && sLine !== null ? sLine - bLine : null;
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/email/escalate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchId: match.id,
+          buyerRequestId: match.buyer?.id,
+          sellerRequestId: match.seller?.id,
+          productName: match.productName,
+          modelNumber: match.modelNumber,
+          buyer: { name: match.buyer?.name, email: match.buyer?.email, quantity: match.buyerQty },
+          seller: { name: match.seller?.name, email: match.seller?.email, quantity: match.sellerQty },
+          buyerLineAskPaise: bLine,
+          sellerLineAskPaise: sLine,
+          buyerOrderAskPaise: askTotalOfOrder(match.buyer),
+          sellerOrderAskPaise: askTotalOfOrder(match.seller),
+          buyerOtherLines: Math.max(0, (match.buyer?.products || []).length - 1),
+          sellerOtherLines: Math.max(0, (match.seller?.products || []).length - 1),
+          operator: getOperator()
+        })
+      });
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Server returned an invalid response. Please try again shortly.');
+      }
+      if (!data.success) throw new Error(data.message || 'Escalation failed.');
+      setEscalateState((prev) => ({ ...prev, [match.id]: { status: 'sent' } }));
+      try {
+        const { logEvent } = await import('../lib/logger');
+        logEvent(
+          'MATCH_ESCALATED',
+          'Intake Workbench',
+          `Match ${match.id} escalated to Sales (Buy ${match.buyer?.id} / Sell ${match.seller?.id}); line delta ${formatSignedPaise(delta)}`,
+          getOperator()
+        );
+      } catch { /* logger load failure non-fatal */ }
+    } catch (e: any) {
+      const msg = e?.message || 'Network error.';
+      setEscalateState((prev) => ({ ...prev, [match.id]: { status: 'failed', error: msg } }));
+      try {
+        const { logEvent } = await import('../lib/logger');
+        logEvent('MATCH_ESCALATE_FAILED', 'Intake Workbench', `Match ${match.id} escalation failed: ${msg}`, getOperator());
+      } catch { /* logger load failure non-fatal */ }
     }
   };
 
@@ -1280,6 +1368,63 @@ export default function IntakeWorkbench() {
                                   </div>
                                 ))}
                               </div>
+                              {/* Request IDs + match ID (traceability for sales handoff) */}
+                              <div className="mt-3 space-y-0.5 text-[11px] font-mono">
+                                <div className="text-slate-500 truncate" title={match.id}>Match <span className="text-slate-300">{match.id}</span></div>
+                                <div className="text-slate-500 truncate" title={`Buy ${match.buyer?.id} / Sell ${match.seller?.id}`}>
+                                  Buy <span className="text-indigo-300">{match.buyer?.id}</span>
+                                  <span className="text-slate-600"> · </span>
+                                  Sell <span className="text-indigo-300">{match.seller?.id}</span>
+                                </div>
+                              </div>
+
+                              {/* Price delta: matched lines primary, order context with caveat */}
+                              {(() => {
+                                const bLine = matchedLineAskPaise(match.buyer, match.productName, match.modelNumber);
+                                const sLine = matchedLineAskPaise(match.seller, match.productName, match.modelNumber);
+                                const d = bLine !== null && sLine !== null ? sLine - bLine : null;
+                                const pct = d !== null && bLine !== null && bLine > 0 ? `${d >= 0 ? '+' : ''}${((d / bLine) * 100).toFixed(1)}%` : '—';
+                                const sOthers = Math.max(0, (match.seller?.products || []).length - 1);
+                                const bOthers = Math.max(0, (match.buyer?.products || []).length - 1);
+                                return (
+                                  <div className="mt-3 bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-2.5 text-xs space-y-1">
+                                    <div className="flex justify-between gap-2">
+                                      <span className="text-slate-400">Matched-line ask (Buyer / Seller)</span>
+                                      <span className="font-mono text-slate-200 shrink-0">{formatPaise(bLine)} / {formatPaise(sLine)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-2">
+                                      <span className="text-slate-400">Line delta (seller − buyer)</span>
+                                      <span className={`font-mono font-bold shrink-0 ${d !== null && d > 0 ? 'text-amber-300' : d !== null && d < 0 ? 'text-emerald-300' : 'text-slate-200'}`}>
+                                        {formatSignedPaise(d)} <span className="font-normal text-slate-500">({pct})</span>
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-500">
+                                      Order context: Buyer {formatPaise(askTotalOfOrder(match.buyer))}{bOthers > 0 && ` (+${bOthers} other line${bOthers > 1 ? 's' : ''})`} · Seller {formatPaise(askTotalOfOrder(match.seller))}{sOthers > 0 && ` (+${sOthers} other line${sOthers > 1 ? 's' : ''})`}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Sales escalation (idempotent per match, fail-closed inline) */}
+                              <div className="mt-3 flex flex-wrap items-center gap-3">
+                                <button
+                                  onClick={() => handleEscalate(match)}
+                                  disabled={escalateState[match.id]?.status === 'sending' || escalateState[match.id]?.status === 'sent'}
+                                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-lg disabled:opacity-60 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
+                                >
+                                  {escalateState[match.id]?.status === 'sending'
+                                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    : <Send className="w-3.5 h-3.5" />}
+                                  {escalateState[match.id]?.status === 'sent' ? 'Escalated to Sales' : `Escalate to ${SALES_ESCALATION_EMAIL}`}
+                                </button>
+                                {escalateState[match.id]?.status === 'sent' && (
+                                  <span className="text-[11px] text-emerald-400">Sales notified — see audit log.</span>
+                                )}
+                                {escalateState[match.id]?.status === 'failed' && (
+                                  <span className="text-[11px] text-red-400">Failed: {escalateState[match.id]?.error} Click Escalate to retry.</span>
+                                )}
+                              </div>
+
                               <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
                                 <span className="flex items-center gap-1 font-mono"><Clock className="w-3 h-3" /> {new Date(match.timestamp).toLocaleString()}</span>
                                 <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded">Match Confirmed</span>
@@ -1315,6 +1460,9 @@ export default function IntakeWorkbench() {
                             </div>
                             <div className="text-xs text-slate-500 mt-0.5">
                               Ask: <span className="font-mono text-slate-300">{formatPaise(askTotalOfOrder(order))}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-600 font-mono mt-0.5 truncate" title={order.id}>
+                              Req <span className="text-slate-400">{order.id}</span>
                             </div>
                           </div>
                           <span className={`px-2 py-1 rounded text-xs font-bold ${order.intent?.toLowerCase() === 'buy' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
