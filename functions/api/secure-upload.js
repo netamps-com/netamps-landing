@@ -12,7 +12,7 @@ const SCAN_WINDOW_BYTES = 256 * 1024; // malware-signature scan window (head of 
 
 const ALLOWED_EXTENSIONS = new Set([
   'png', 'jpg', 'jpeg', 'webp', 'gif', 'tiff', 'tif', 'heic', 'heif',
-  'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'csv', 'json'
+  'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'csv', 'json', 'xlsx'
 ]);
 
 const ALLOWED_MIME = new Set([
@@ -20,7 +20,8 @@ const ALLOWED_MIME = new Set([
   'image/heic', 'image/heif',
   'video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska',
   'video/x-msvideo', 'video/x-flv',
-  'text/csv', 'application/json'
+  'text/csv', 'application/json',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ]);
 
 // EICAR anti-malware test signature
@@ -40,6 +41,11 @@ function hexOf(bytes) {
 function validateMagicBytes(headerArray, extension) {
   // text files like csv and json don't have magic bytes, so bypass for them
   if (['csv', 'json'].includes(extension)) return true;
+  // xlsx is a ZIP container — verify the ZIP local-file header signature
+  if (extension === 'xlsx') {
+    if (headerArray.length < 4) return false;
+    return hexOf(headerArray.slice(0, 4)) === '504b0304';
+  }
   
   if (headerArray.length < 12) return false;
   const hex = hexOf(headerArray);
@@ -167,6 +173,13 @@ export async function onRequestPost({ request, env }) {
     const formData = await request.formData();
     const file = formData.get('file');
     sessionId = formData.get('sessionId') || crypto.randomUUID();
+    // Product scope for chain-of-custody namespacing. Strict charset so the
+    // values are safe to embed in R2 object keys. 'unassigned' when the file
+    // was staged before being linked to a product card.
+    const rawProductId = String(formData.get('productId') || 'unassigned');
+    const rawRequestId = String(formData.get('requestId') || sessionId);
+    const productId = /^[A-Za-z0-9_-]{1,64}$/.test(rawProductId) ? rawProductId : 'unassigned';
+    const requestScope = /^[A-Za-z0-9_-]{1,64}$/.test(rawRequestId) ? rawRequestId : String(sessionId);
 
     if (env.CACHE_KV) {
       const banCount = parseInt(await env.CACHE_KV.get(`ban_${sessionId}`) || '0', 10);
@@ -190,7 +203,7 @@ export async function onRequestPost({ request, env }) {
     const mime = String(file.type || '').toLowerCase();
     if (!ALLOWED_EXTENSIONS.has(ext) || (mime && !ALLOWED_MIME.has(mime))) {
       audit('upload.blocked.type', { ip, sessionId, fileName, size: fileSize, verdict: 'BLOCKED_TYPE' });
-      return json({ success: false, error: 'TYPE_VIOLATION', message: `Upload blocked: ".${ext || '?'}" files are not accepted. Allowed types: PNG, JPEG, WEBP, GIF, TIFF, HEIC photos and MP4, MOV, WEBM, MKV, AVI, FLV videos.` }, 415);
+      return json({ success: false, error: 'TYPE_VIOLATION', message: `Upload blocked: ".${ext || '?'}" files are not accepted. Allowed: PNG, JPEG, WEBP, GIF, TIFF, HEIC photos; MP4, MOV, WEBM, MKV, AVI, FLV videos; CSV, JSON, XLSX data files.` }, 415);
     }
 
     const buffer = await file.arrayBuffer();
@@ -242,12 +255,16 @@ export async function onRequestPost({ request, env }) {
 
     const trackingId = crypto.randomUUID();
     const safeExt = ALLOWED_EXTENSIONS.has(ext) ? ext : 'bin';
-    const objectKey = `session-${sessionId}/${trackingId}.${safeExt}`;
+    // Custody-namespace: every key proves request scope + owning product.
+    // Unassigned files land under products/unassigned/ and are moved (not
+    // copied alongside) into the product namespace on mapping — see secure-move.
+    const objectKey = `requests/${requestScope}/products/${productId}/${trackingId}.${safeExt}`;
     await env.QUARANTINE_BUCKET.put(objectKey, buffer, {
       httpMetadata: { contentType: mime || 'application/octet-stream' },
       customMetadata: {
         'x-actor-ip': ip,
         'x-session-id': String(sessionId),
+        'x-product-id': productId,
         'x-owner-email': ownerEmail,
         'x-payload-sha256': sha256,
         'x-scan-verdict': 'CLEAN',
@@ -255,12 +272,13 @@ export async function onRequestPost({ request, env }) {
       }
     });
 
-    const prodKey = `evidence/${trackingId}.${safeExt}`;
+    const prodKey = objectKey;
     await env.PRODUCTION_BUCKET.put(prodKey, buffer, {
       httpMetadata: { contentType: mime || 'application/octet-stream' },
       customMetadata: {
         'x-actor-ip': ip,
         'x-session-id': String(sessionId),
+        'x-product-id': productId,
         'x-owner-email': ownerEmail,
         'x-payload-sha256': sha256,
         'x-scan-verdict': 'SCANNED_CLEAN',
@@ -280,6 +298,8 @@ export async function onRequestPost({ request, env }) {
       success: true,
       state: 'QUARANTINED_SCANNED_PROMOTED',
       key: finalKey,
+      assetUrl: `/api/cdn/${finalKey}`,
+      productId,
       hash: sha256,
       encrypted: 'AES-256',
       scan: 'CLEAN'

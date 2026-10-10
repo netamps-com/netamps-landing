@@ -1,11 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
-import SecureMediaUploader from './SecureMediaUploader';
+import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
+
+function hexOfBytes(bytes: Uint8Array) {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sha256Json(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return hexOfBytes(new Uint8Array(digest));
+}
 
 interface ProductItem {
   id: string;
@@ -14,6 +24,7 @@ interface ProductItem {
   category: string;
   details: string;
   quantity: number;
+  attachedFiles: string[];
 }
 
 export default function ReturnsPage() {
@@ -33,14 +44,36 @@ export default function ReturnsPage() {
   const [trackingError, setTrackingError] = useState('');
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }
+    { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
   
-  // Secure File Upload State
+  // Secure File Upload State — the queue itself lives in the single global
+  // SecureMediaUploader instance below; the page mirrors it for chips,
+  // gating, and the submit manifest. No parallel counters anywhere.
   const [uploadedSecureFiles, setUploadedSecureFiles] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const uploaderRef = useRef<SecureMediaUploaderHandle>(null);
+  const [queueSnapshot, setQueueSnapshot] = useState<AttachmentSnapshot[]>([]);
+  const [uploadReset, setUploadReset] = useState(0);
+  const [dragOverCard, setDragOverCard] = useState<string | null>(null);
+  const [requestScope, setRequestScope] = useState('');
+  const handleQueueChange = useCallback((snap: AttachmentSnapshot[]) => {
+    setQueueSnapshot(snap);
+  }, []);
+
+  // productId -> verified+staged attachments, derived (never synced)
+  const filesByProduct = useMemo(() => {
+    const m = new Map<string, AttachmentSnapshot[]>();
+    for (const f of queueSnapshot) {
+      if (!f.productId) continue;
+      const arr = m.get(f.productId) || [];
+      arr.push(f);
+      m.set(f.productId, arr);
+    }
+    return m;
+  }, [queueSnapshot]);
 
   useEffect(() => {
     document.title = 'Enterprise ITAD Exchange Portal - Netamps Technologies';
@@ -57,19 +90,28 @@ export default function ReturnsPage() {
         url.searchParams.set('sid', sid);
         window.history.replaceState({}, '', url.toString());
       }
+      setRequestScope(new URL(window.location.href).searchParams.get('sid') || '');
     } catch {
       // URL manipulation unavailable
     }
   }, []);
 
   const addProduct = () => {
-    setProducts([...products, { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]);
+    setProducts([...products, { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]);
   };
 
   const removeProduct = (id: string) => {
-    if (products.length > 1) {
-      setProducts(products.filter(p => p.id !== id));
+    if (products.length <= 1) return;
+    const index = products.findIndex((p) => p.id === id);
+    const mapped = queueSnapshot.filter((f) => f.productId === id);
+    if (mapped.length > 0) {
+      const ok = window.confirm(
+        `PRODUCT #${index + 1} holds ${mapped.length} attached file${mapped.length > 1 ? 's' : ''} — remove the product and discard its files?`
+      );
+      if (!ok) return;
+      uploaderRef.current?.purgeByProduct(id);
     }
+    setProducts(products.filter(p => p.id !== id));
   };
 
   const updateProduct = (id: string, field: keyof ProductItem, value: any) => {
@@ -101,6 +143,29 @@ export default function ReturnsPage() {
         setCaptchaError('Please ensure all product details are filled correctly.');
         setIsSubmitting(false);
         return;
+      }
+
+      // Custody gating (SELL only): every staged file must be verified and
+      // explicitly linked to a product before an OTP is even issued.
+      if (intent === 'sell') {
+        const uploading = queueSnapshot.filter((f) => f.status === 'uploading').length;
+        if (uploading > 0) {
+          setCaptchaError(`Files are still uploading (${uploading} remaining). Please wait for them to finish.`);
+          setIsSubmitting(false);
+          return;
+        }
+        const errored = queueSnapshot.filter((f) => f.status === 'error').length;
+        if (errored > 0) {
+          setCaptchaError(`${errored} file${errored > 1 ? 's' : ''} failed verification. Remove or retry them to continue.`);
+          setIsSubmitting(false);
+          return;
+        }
+        const unmapped = queueSnapshot.filter((f) => f.productId === null).length;
+        if (unmapped > 0) {
+          setCaptchaError(`${unmapped} file${unmapped > 1 ? 's need' : ' needs'} a linked product. Assign each file to its product in the attach panel.`);
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       // Generate OTP
@@ -243,7 +308,38 @@ export default function ReturnsPage() {
       if (!actualFormData) return;
       setIsUploading(true);
       const newId = generateMaskedSnowflake(intent);
-      
+
+      // Per-product evidence manifest: verified attachments grouped under
+      // their owning product, with a SHA-256 over the canonical structure.
+      // The flat attachedFiles list is retained for tracking-display compat.
+      const manifestProducts = products.map((p) => {
+        const mine = queueSnapshot
+          .filter((f) => f.productId === p.id && f.status === 'verified' && f.objectKey)
+          .map((f) => ({
+            attachmentId: f.attachmentId,
+            fileName: f.fileName,
+            sizeBytes: f.sizeBytes,
+            mimeType: f.mimeType,
+            sha256: f.sha256,
+            objectKey: f.objectKey as string,
+            assetUrl: f.assetUrl || null
+          }))
+          .sort((a, b) => a.attachmentId.localeCompare(b.attachmentId));
+        return {
+          productId: p.id,
+          category: p.category,
+          details: p.details,
+          quantity: p.quantity,
+          attachments: mine
+        };
+      });
+      const manifestHash = await sha256Json({ requestId: newId, products: manifestProducts });
+      const manifest = { requestId: newId, hash: manifestHash, generatedAt: new Date().toISOString() };
+      const productsWithAttachments = products.map((p, i) => ({
+        ...p,
+        attachedFiles: manifestProducts[i].attachments.map((a) => a.objectKey)
+      }));
+
       const uploadedFileUrls = [...uploadedSecureFiles];
       setGeneratedId(newId);
 
@@ -254,8 +350,9 @@ export default function ReturnsPage() {
         company: actualFormData.get('company'),
         email: actualFormData.get('email'),
         phone: actualFormData.get('phone'),
-        products: products,
+        products: productsWithAttachments,
         attachedFiles: uploadedFileUrls,
+        manifest,
         date: new Date().toISOString(),
         status: 'Pending'
       };
@@ -336,21 +433,21 @@ export default function ReturnsPage() {
               <div className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
                 <button 
                   type="button"
-                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]); }}
+                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   SELL Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]); }}
+                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   BUY Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); }}
+                  onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   TRACK Request
@@ -466,7 +563,7 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
-                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1 }]); setUploadedSecureFiles([]); }}>
+                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name *</label>
@@ -528,7 +625,18 @@ export default function ReturnsPage() {
 
                   <div className="space-y-4">
                     {products.map((product, index) => (
-                      <div key={product.id} className="p-4 bg-slate-50/50 border border-slate-200/80 rounded-xl flex flex-col gap-4 relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
+                      <div
+                        key={product.id}
+                        onDragOver={intent === 'sell' ? (e) => { e.preventDefault(); e.stopPropagation(); setDragOverCard(product.id); } : undefined}
+                        onDragLeave={() => setDragOverCard((cur) => (cur === product.id ? null : cur))}
+                        onDrop={intent === 'sell' ? (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDragOverCard(null);
+                          if (e.dataTransfer.files?.length) uploaderRef.current?.stageFiles(Array.from(e.dataTransfer.files), product.id);
+                        } : undefined}
+                        className={`p-4 bg-slate-50/50 border rounded-xl flex flex-col gap-4 relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)] transition-all ${dragOverCard === product.id ? 'border-indigo-500 ring-2 ring-indigo-500/40 bg-indigo-50/40' : 'border-slate-200/80'}`}
+                      >
                         {products.length > 1 && (
                           <button type="button" onClick={() => removeProduct(product.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors">
                             <Trash2 className="w-4 h-4" />
@@ -572,6 +680,7 @@ export default function ReturnsPage() {
                                   <option value="Mid-Lifecycle (3-5 Years)">Mid-Lifecycle (3-5 Years)</option>
                                   <option value="Legacy Enterprise End-of-Life (~10%)">Legacy Enterprise End-of-Life (~10%)</option>
                                   <option value="End of Support / Obsolete (>7 Years)">End of Support / Obsolete (&gt;7 Years)</option>
+                                  <option value="Damaged Assets">Damaged Assets</option>
                                   <option value="Mixed / Unknown Age">Mixed / Unknown Age</option>
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
@@ -626,17 +735,69 @@ export default function ReturnsPage() {
                             placeholder="e.g. 25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition"
                           />
                         </div>
+                        
+                        {intent === 'sell' && (
+                          <div className="mt-1 pt-3 border-t border-slate-200/60">
+                            {(filesByProduct.get(product.id) || []).length === 0 ? (
+                              <p className="text-[11px] text-slate-400">No files linked yet — drop files here or assign them in the attach panel below.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {(filesByProduct.get(product.id) || []).map((f) => (
+                                  <span
+                                    key={f.attachmentId}
+                                    title={`${f.fileName} · ${(f.sizeBytes / 1048576).toFixed(2)} MB · ${f.status}${f.assetUrl ? ` · ${f.assetUrl}` : ''}`}
+                                    className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md border ${
+                                      f.status === 'verified'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : f.status === 'uploading'
+                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                        : f.status === 'error'
+                                        ? 'bg-red-50 text-red-700 border-red-200'
+                                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                                    }`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      f.status === 'verified' ? 'bg-emerald-500'
+                                      : f.status === 'uploading' ? 'bg-indigo-500 animate-pulse'
+                                      : f.status === 'error' ? 'bg-red-500' : 'bg-slate-400'
+                                    }`} />
+                                    <span className="max-w-[140px] truncate">{f.fileName}</span>
+                                    {f.assetUrl ? (
+                                      <button
+                                        type="button"
+                                        title={`Copy asset URL: ${f.assetUrl}`}
+                                        onClick={() => { try { navigator.clipboard.writeText(new URL(f.assetUrl as string, window.location.origin).toString()); } catch {} }}
+                                        className="flex items-center gap-0.5 hover:underline"
+                                      >
+                                        <Link2 className="w-3 h-3" />
+                                      </button>
+                                    ) : null}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Secure File Upload (SOC 2) — SELL only */}
+                {/* Global attach panel — single instance for the whole request (SELL only).
+                    Files staged here carry no ownership until explicitly linked to a
+                    product; the SESSION USAGE meter below totals every staged file. */}
                 {intent === 'sell' && (
                   <div className="border-t border-slate-200 pt-6 mt-6">
-                    <SecureMediaUploader 
-                      sessionId={generatedId || 'session-' + Date.now()} 
-                      onUploadSuccess={(keys) => setUploadedSecureFiles(prev => [...prev, ...keys])} 
+                    <SecureMediaUploader
+                      ref={uploaderRef}
+                      sessionId={requestScope}
+                      requestScope={requestScope || 'anon'}
+                      products={products.map((p, i) => ({ id: p.id, label: `PRODUCT #${i + 1}` }))}
+                      onUploadSuccess={(keys) => {
+                        setUploadedSecureFiles(prev => [...prev, ...keys]);
+                      }}
+                      onQueueChange={handleQueueChange}
+                      resetSignal={uploadReset}
                     />
                   </div>
                 )}
