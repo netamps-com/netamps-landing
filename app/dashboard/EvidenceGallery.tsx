@@ -68,6 +68,23 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
   const [failStatus, setFailStatus] = useState<Record<string, number | null>>({});
   const [retryKey, setRetryKey] = useState(0);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  // Dismissed dead references (404s the reviewer has acknowledged). Persisted
+  // so refreshes stay clean. Keys — not indices — so reordering is safe.
+  const [dismissedKeys, setDismissedKeys] = useState<string[]>(() => {
+    try {
+      if (typeof window === 'undefined') return [];
+      return JSON.parse(localStorage.getItem('netamps_gallery_dismissed') || '[]');
+    } catch { return []; }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('netamps_gallery_dismissed', JSON.stringify(dismissedKeys.slice(-500)));
+    } catch { /* quota exceeded — session-only hiding */ }
+  }, [dismissedKeys]);
+
+  const dismissKey = (key: string) =>
+    setDismissedKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
 
   // Empty state: zero pixels. No chrome, no placeholder — the request header
   // already communicates completeness; empty panels are pure viewport tax.
@@ -82,9 +99,13 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
     name: fileNameOf(key)
   }));
 
-  const photos = items.filter((it) => it.kind === 'image');
-  const videos = items.filter((it) => it.kind === 'video');
-  const datas = items.filter((it) => it.kind === 'data' || it.kind === 'unknown');
+  // Dismissed keys stay hidden everywhere below (counts, grids, banners).
+  const visible = items.filter((it) => !dismissedKeys.includes(it.key));
+  const hiddenCount = items.length - visible.length;
+
+  const photos = visible.filter((it) => it.kind === 'image');
+  const videos = visible.filter((it) => it.kind === 'video');
+  const datas = visible.filter((it) => it.kind === 'data' || it.kind === 'unknown');
 
   const markFailed = (id: string) =>
     setFailedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
@@ -139,12 +160,20 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
     }
   });
 
-  const allFailed = items.length > 0 && items.every((it) => failedIds.includes(it.id));
-  const firstFailed = items.find((it) => failedIds.includes(it.id));
+  // Error flow split: 404 "missing reference" is an unwanted leftover, not a
+  // platform failure — it renders as a neutral unavailable row, never a red
+  // banner. 401/503/pending/unreachable stay red: those need operator action.
+  const isMissing = (id: string) => failStatus[id] === 404;
+  const errorItems = visible.filter((it) => failedIds.includes(it.id) && !isMissing(it.id));
+  const missingItems = visible.filter((it) => failedIds.includes(it.id) && isMissing(it.id));
+  const allFailed = visible.length > 0 && visible.every((it) => failedIds.includes(it.id));
+  const firstFailed = errorItems[0];
   const firstStatus = firstFailed ? failStatus[firstFailed.id] : undefined;
   // Failures whose probe hasn't resolved yet: report "diagnosing" instead of
   // the generic fallback, so a pending probe is never mistaken for a verdict.
-  const pendingCount = items.filter((it) => failedIds.includes(it.id) && failStatus[it.id] === undefined).length;
+  const pendingCount = errorItems.filter((it) => failStatus[it.id] === undefined).length;
+  const dismissAllMissing = () =>
+    setDismissedKeys((prev) => [...new Set([...prev, ...missingItems.map((m) => m.key)])]);
   const failReason =
     firstStatus === 401
       ? 'access denied (HTTP 401) — sign out and sign in again'
@@ -175,13 +204,13 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
         {title} ({list.length}) <span className="normal-case font-medium text-slate-600">· {counts}</span>
       </h4>
 
-      {allFailed ? (
+      {allFailed && errorItems.length > 0 ? (
         <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm" role="alert">
           <span className="flex items-center gap-2 text-red-300">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             {pendingCount > 0
-              ? `Diagnosing ${list.length} attachment${list.length > 1 ? 's' : ''}…`
-              : `Couldn't load ${list.length} attachment${list.length > 1 ? 's' : ''} — ${failReason}.`}
+              ? `Diagnosing ${errorItems.length} attachment${errorItems.length > 1 ? 's' : ''}…`
+              : `Couldn't load ${errorItems.length} attachment${errorItems.length > 1 ? 's' : ''} — ${failReason}.`}
           </span>
           <button
             type="button"
@@ -191,12 +220,50 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
             <RotateCcw className="w-3.5 h-3.5" /> Retry
           </button>
         </div>
-      ) : (
+      ) : allFailed && missingItems.length > 0 ? (
+        <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700 text-sm">
+          <span className="text-slate-400">
+            {missingItems.length} attachment{missingItems.length > 1 ? 's' : ''} unavailable — not found in storage. Re-upload to restore.
+          </span>
+          <button
+            type="button"
+            onClick={dismissAllMissing}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-colors shrink-0"
+          >
+            Hide
+          </button>
+        </div>
+      ) : visible.length > 0 ? (
         <>
+          {missingItems.length > 0 && (
+            <div className="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-800 text-xs">
+              <span className="text-slate-500">
+                {missingItems.length} unavailable attachment{missingItems.length > 1 ? 's' : ''} (not in storage) — re-upload to restore.
+              </span>
+              <button type="button" onClick={dismissAllMissing} className="text-slate-400 hover:text-slate-200 font-bold shrink-0">
+                Hide
+              </button>
+            </div>
+          )}
           {photos.length > 0 && (
             <div className={`grid gap-3 ${compact ? 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
               {photos.map((it) =>
                 failedIds.includes(it.id) ? (
+                  failStatus[it.id] === 404 ? (
+                    <div key={`${it.id}:${retryKey}`} className="aspect-square rounded-lg border border-slate-700 bg-slate-800/30 flex flex-col items-center justify-center gap-1.5 p-2 text-center" title={it.key}>
+                      <AlertTriangle className="w-5 h-5 text-slate-500" />
+                      <p className="text-[11px] text-slate-400 leading-tight truncate w-full px-1">{it.name}</p>
+                      <p className="text-[10px] font-mono text-slate-600 leading-tight break-all w-full px-1">{keyPreview(it.key)}</p>
+                      <p className="text-[10px] text-slate-500">Unavailable — re-upload to restore</p>
+                      <button
+                        type="button"
+                        onClick={() => dismissKey(it.key)}
+                        className="text-[11px] font-bold text-slate-400 hover:text-slate-200"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  ) : (
                   <div key={`${it.id}:${retryKey}`} className="aspect-square rounded-lg border border-red-500/30 bg-red-500/5 flex flex-col items-center justify-center gap-2 p-2 text-center" title={it.key}>
                     <AlertTriangle className="w-5 h-5 text-red-400" />
                     <p className="text-[11px] text-red-300 leading-tight truncate w-full px-1">{it.name}</p>
@@ -212,6 +279,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                       <RotateCcw className="w-3 h-3" /> Retry
                     </button>
                   </div>
+                  )
                 ) : (
                   <div key={`${it.id}:${retryKey}`} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-700 bg-slate-800/50 hover:border-indigo-500 transition-colors">
                     <TileImage src={it.url} alt={it.name} onFail={() => probeAndMark(it.id, it.url)} />
@@ -225,6 +293,21 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
             <div className={`grid gap-3 ${photos.length > 0 ? 'mt-3' : ''} grid-cols-1 sm:grid-cols-2`}>
               {videos.map((it) =>
                 failedIds.includes(it.id) ? (
+                  failStatus[it.id] === 404 ? (
+                    <div key={`${it.id}:${retryKey}`} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-800/40 border border-slate-800 text-sm">
+                      <span className="flex items-center gap-2 text-slate-400 truncate">
+                        <AlertTriangle className="w-4 h-4 shrink-0" /> <span className="truncate">{it.name}</span>
+                      </span>
+                      <span className="font-mono text-[10px] text-slate-600 break-all text-right shrink-0 max-w-[40%]">{keyPreview(it.key)}</span>
+                      <button
+                        type="button"
+                        onClick={() => dismissKey(it.key)}
+                        className="text-xs font-bold text-slate-400 hover:text-slate-200 shrink-0"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  ) : (
                   <div key={`${it.id}:${retryKey}`} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm">
                     <span className="flex items-center gap-2 text-red-300 truncate">
                       <AlertTriangle className="w-4 h-4 shrink-0" /> <span className="truncate">{it.name}</span>
@@ -238,6 +321,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                       <RotateCcw className="w-3.5 h-3.5" /> Retry
                     </button>
                   </div>
+                  )
                 ) : (
                   <button
                     key={`${it.id}:${retryKey}`}
@@ -262,6 +346,21 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
             <div className={`space-y-2 ${(photos.length > 0 || videos.length > 0) ? 'mt-3' : ''}`}>
               {datas.map((it) => {
                 return failedIds.includes(it.id) ? (
+                  failStatus[it.id] === 404 ? (
+                    <div key={`${it.id}:${retryKey}`} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-800/40 border border-slate-800 text-sm">
+                      <span className="flex items-center gap-2 text-slate-400 truncate">
+                        <AlertTriangle className="w-4 h-4 shrink-0" /> <span className="truncate">{it.name}</span>
+                      </span>
+                      <span className="font-mono text-[10px] text-slate-600 break-all text-right shrink-0 max-w-[40%]">{keyPreview(it.key)}</span>
+                      <button
+                        type="button"
+                        onClick={() => dismissKey(it.key)}
+                        className="text-xs font-bold text-slate-400 hover:text-slate-200 shrink-0"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  ) : (
                   <div key={`${it.id}:${retryKey}`} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm">
                     <span className="flex items-center gap-2 text-red-300 truncate">
                       <AlertTriangle className="w-4 h-4 shrink-0" /> <span className="truncate">{it.name}</span>
@@ -275,6 +374,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                       <RotateCcw className="w-3.5 h-3.5" /> Retry
                     </button>
                   </div>
+                  )
                 ) : (
                   <a
                     key={`${it.id}:${retryKey}`}
@@ -298,6 +398,16 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
             </div>
           )}
         </>
+      ) : null}
+
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setDismissedKeys((prev) => prev.filter((k) => !list.includes(k)))}
+          className="mt-3 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          {hiddenCount} unavailable attachment{hiddenCount > 1 ? 's' : ''} hidden — show
+        </button>
       )}
 
       {activeVideo && (
