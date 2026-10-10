@@ -458,6 +458,9 @@ export default function ReturnsPage() {
               </div>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Request Submitted Successfully</h3>
               <p className="text-slate-500 mb-2">Your request has been securely recorded.</p>
+              {intent === 'buy' && (
+                <p className="text-sm text-slate-500 mb-2 max-w-md mx-auto">Budgets noted are indicative; confirmed pricing depends on product and stock availability at processing time. We will revert with options at the soonest possible.</p>
+              )}
               <p className="text-xl font-mono text-indigo-600 font-bold mb-8">Tracking ID: {generatedId}</p>
               
               <Link href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl transition-colors font-medium border border-slate-200 shadow-sm">
@@ -726,6 +729,12 @@ export default function ReturnsPage() {
                       </div>
                     ) : (
                       <p className="text-[11px] text-slate-500 mt-3">Enter a line total per product below (all units included). Switch to lot for a single request-wide total — per-product values are preserved.</p>
+                    )}
+                    {intent === 'buy' && (
+                      <p className="text-[11px] text-slate-500 mt-3">Indicative budgets only. Final pricing varies by product, configuration, and live stock availability. Requests are processed on a best-effort basis at the earliest possible — our team will revert with confirmed options.</p>
+                    )}
+                    {intent === 'sell' && (
+                      <p className="text-[11px] text-slate-500 mt-3">Stated considerations are asks, not concluded prices. Evaluated values vary by product, condition, and prevailing secondary-market demand.</p>
                     )}
                   </div>
 
