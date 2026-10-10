@@ -164,7 +164,17 @@ async function handle({ request, env, params, headOnly }) {
   // Conditional request: ETag match → 304 without reading the object body.
   const ifNoneMatch = request.headers.get('if-none-match');
 
-  for (const bucket of candidateBuckets(env)) {
+  const buckets = candidateBuckets(env);
+  // No storage bound at all: report 503 (misconfiguration), NOT 404, so the
+  // dashboard can tell "storage not attached" apart from "key not found".
+  if (buckets.length === 0) {
+    return new Response(JSON.stringify({ success: false, error: 'STORAGE_UNBOUND' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE }
+    });
+  }
+
+  for (const bucket of buckets) {
     let object = null;
     try {
       object = await bucket.get(key);

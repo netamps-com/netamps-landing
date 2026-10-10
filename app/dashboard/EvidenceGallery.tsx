@@ -119,8 +119,10 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
       ? 'access denied (HTTP 401) — sign out and sign in again'
       : firstStatus === 404
       ? 'file not found in storage (HTTP 404) — key or R2 binding mismatch'
-      : typeof firstStatus === 'number' && firstStatus >= 500
+      : typeof firstStatus === 'number' && firstStatus >= 500 && firstStatus !== 503
       ? `server error (HTTP ${firstStatus})`
+      : firstStatus === 503
+      ? 'evidence storage not attached (HTTP 503) — contact support'
       : firstStatus === null
       ? 'asset endpoint unreachable — check connectivity'
       : 'check access and retry';
