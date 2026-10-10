@@ -247,6 +247,107 @@ function persistJobs(jobs: any[]): void {
   } catch { /* quota exceeded — degrade silently */ }
 }
 
+// ── Chain-of-custody job model (Auto-Ingest Monitor) ──
+// Custody metadata lives in localStorage; file content always refetches from
+// the server session API (localStorage cannot hold 300 MB blobs). Legacy
+// entries are migrated with explicit 'legacy-unknown' markers, never dropped.
+type CustodyStage = 'Uploaded' | 'Parsed' | 'Validated' | 'Committed' | 'Downloaded' | 'Reviewed';
+interface CustodyEvent {
+  stage: CustodyStage;
+  at: string;
+  by: string;
+  note?: string;
+}
+
+function migrateJob(j: any): any {
+  if (!j || typeof j !== 'object') return j;
+  return {
+    ...j,
+    sha256: typeof j.sha256 === 'string' ? j.sha256 : 'legacy-unknown',
+    tier: j.tier ?? null,
+    rowErrors: Array.isArray(j.rowErrors) ? j.rowErrors : [],
+    sessionId: j.sessionId ?? (typeof j.id === 'string' && j.id.startsWith('auto-') ? j.id : null),
+    requestIds: Array.isArray(j.requestIds) ? j.requestIds : [],
+    custody: Array.isArray(j.custody) ? j.custody : [],
+    reviewedBy: j.reviewedBy ?? null,
+    reviewedAt: j.reviewedAt ?? null,
+    ext: j.ext ?? null,
+  };
+}
+
+function custodyEvent(stage: CustodyStage, note?: string): CustodyEvent {
+  return {
+    stage,
+    at: new Date().toISOString(),
+    by: getOperator(),
+    ...(note ? { note } : {}),
+  };
+}
+
+// Integrity anchor: SHA-256 of the raw upload. Secure-context only —
+// degrades to 'unavailable' on file:// or ancient browsers, never fatal.
+async function sha256Hex(input: Blob): Promise<string> {
+  try {
+    if (typeof crypto === 'undefined' || !crypto.subtle) return 'unavailable';
+    const digest = await crypto.subtle.digest('SHA-256', await input.arrayBuffer());
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return 'unavailable';
+  }
+}
+
+async function sha256Text(text: string): Promise<string> {
+  try {
+    if (typeof crypto === 'undefined' || !crypto.subtle) return 'unavailable';
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return 'unavailable';
+  }
+}
+
+// Download filename: request ID(s) embedded so the file maps back later.
+// Single request → <req>__<name>.<ext>; multi → <job>__<n>-requests__<name>.<ext>
+function custodyFileName(job: any): string {
+  const raw = String(job.fileName || 'intake-file');
+  const dot = raw.lastIndexOf('.');
+  const base = (dot > 0 ? raw.slice(0, dot) : raw).replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80) || 'intake-file';
+  const ext = String(job.ext || 'csv').replace(/[^a-z]+/g, '') || 'csv';
+  const ids: string[] = Array.isArray(job.requestIds) ? job.requestIds : [];
+  const safeIds = ids.map((id) => String(id).replace(/[^a-zA-Z0-9-]+/g, '_').slice(0, 48));
+  if (safeIds.length === 1) return `${safeIds[0]}__${base}.${ext}`;
+  if (safeIds.length > 1) return `${String(job.id).replace(/[^a-zA-Z0-9-]+/g, '_').slice(0, 48)}__${safeIds.length}-requests__${base}.${ext}`;
+  return `${String(job.id).replace(/[^a-zA-Z0-9-]+/g, '_').slice(0, 48)}__${base}.${ext}`;
+}
+
+// Flatten grouped requests to review lines. Request ID leads every line —
+// the download maps file ↔ requests without a separate lookup.
+function flattenRequestsToLines(reqs: any[]): string[][] {
+  const lines: string[][] = [['Request ID', 'Intent', 'Client Name', 'Company', 'Email', 'Phone', 'Product Name', 'Model Number', 'Quantity']];
+  for (const r of reqs || []) {
+    for (const p of r?.products || []) {
+      lines.push([
+        String(r.id ?? ''), String(r.intent ?? ''), String(r.name ?? ''),
+        String(r.company ?? ''), String(r.email ?? ''), String(r.phone ?? ''),
+        String(p.category ?? ''), String(p.details ?? ''), String(p.quantity ?? ''),
+      ]);
+    }
+  }
+  return lines;
+}
+
+function downloadBlob(content: BlobPart, fileName: string, mime: string): void {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 // ── Schema validation result type for UI ──
 interface SchemaValidationResult {
   tier: 'all' | 'partial' | 'insufficient';
@@ -311,9 +412,9 @@ export default function IntakeWorkbench() {
     return lines.reduce((a: number, v: any) => a + (v ?? 0), 0);
   };
 
-  // Load persisted jobs on mount
+  // Load persisted jobs on mount (legacy entries migrated, never dropped)
   useEffect(() => {
-    setAutoJobs(loadPersistedJobs());
+    setAutoJobs(loadPersistedJobs().map(migrateJob));
   }, []);
 
   // Persist jobs whenever they change
@@ -518,9 +619,22 @@ export default function IntakeWorkbench() {
     return Array.from(grouped.values());
   };
 
-  const handleAutoIngestion = (content: string, cols: string[], rows: any[], fileName: string, size: number) => {
+  const handleAutoIngestion = (
+    content: string,
+    cols: string[],
+    rows: any[],
+    fileName: string,
+    size: number,
+    extra: { sha256: string; tier: string; rowErrors: Array<{ rowIndex: number; reasons: string[] }>; sheetName?: string; delimiter?: string; ext: string; custody: CustodyEvent[] }
+  ) => {
+    void content;
     const jobId = `auto-${Date.now().toString(36)}`;
-    const newJob = { id: jobId, fileName, size, status: 'Mapping', timestamp: new Date().toISOString() };
+    const newJob = {
+      id: jobId, fileName, size, status: 'Mapping', timestamp: new Date().toISOString(),
+      sha256: extra.sha256, tier: extra.tier, rowErrors: extra.rowErrors,
+      sheetName: extra.sheetName, delimiter: extra.delimiter, ext: extra.ext,
+      sessionId: jobId, requestIds: [] as string[], custody: extra.custody,
+    };
     setAutoJobs(prev => [newJob, ...prev]);
     setActiveTab('auto');
 
@@ -528,9 +642,9 @@ export default function IntakeWorkbench() {
        const { mapping: localMapping } = autoMapColumns(cols);
 
        const autoPreview = generateAutoPreview(rows, localMapping);
-       
+
        setAutoJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'Committing' } : j));
-       
+
        try {
          const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
          const res = await fetch(`${API_URL}/api/intake/sessions`, {
@@ -544,15 +658,47 @@ export default function IntakeWorkbench() {
          });
          const data = await res.json();
          if (!data.success) throw new Error(data.message);
-         
+
+         // Per-item commit: failures collected, never silent (A5 parity for auto path)
+         const committed: string[] = [];
+         const failed: { id: string; error: string }[] = [];
          for (const req of autoPreview) {
-            await fetch(`${API_URL}/api/returns`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(req)
-            });
+           try {
+             const rRes = await fetch(`${API_URL}/api/returns`, {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify(req)
+             });
+             let rData: any;
+             try {
+               rData = await rRes.json();
+             } catch {
+               throw new Error('Server returned an invalid response.');
+             }
+             if (!rData.success) throw new Error(rData.message || 'Commit refused by server.');
+             committed.push(req.id);
+           } catch (e: any) {
+             failed.push({ id: req.id, error: e?.message || 'Network error.' });
+           }
          }
-         setAutoJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'Done' } : j));
+
+         if (failed.length === 0) {
+           setAutoJobs(prev => prev.map(j => j.id === jobId
+             ? { ...j, status: 'Done', requestIds: committed, custody: [...(j.custody || []), custodyEvent('Committed', `${committed.length} request(s): ${committed.join(', ')}`)] }
+             : j));
+           try {
+             const { logEvent } = await import('../lib/logger');
+             logEvent('INTAKE_AUTO_COMMITTED', 'Intake Workbench', `Job ${jobId} (${fileName}) committed ${committed.length} request(s): ${committed.join(', ')}`, getOperator());
+           } catch { /* logger load failure non-fatal */ }
+         } else {
+           setAutoJobs(prev => prev.map(j => j.id === jobId
+             ? { ...j, status: `Failed: ${failed.length} of ${autoPreview.length} request(s) failed (${failed.map(f => f.id).join(', ')})`, requestIds: committed, custody: [...(j.custody || []), custodyEvent('Committed', `partial: ${committed.length} committed, ${failed.length} failed`)] }
+             : j));
+           try {
+             const { logEvent } = await import('../lib/logger');
+             logEvent('INTAKE_AUTO_COMMITTED', 'Intake Workbench', `Job ${jobId} (${fileName}) PARTIAL: ${committed.length} committed, ${failed.length} failed: ${failed.map(f => `${f.id} (${f.error})`).join('; ')}`, getOperator());
+           } catch { /* logger load failure non-fatal */ }
+         }
        } catch (err: any) {
          setAutoJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: `Failed: ${err.message}` } : j));
        }
@@ -583,6 +729,13 @@ export default function IntakeWorkbench() {
     setRawFile(file);
 
     try {
+      // Custody anchor: hash the raw upload before any parsing. secure-context
+      // only — degrades to 'unavailable', never fatal.
+      const fileHash = await sha256Hex(file);
+      const custody: CustodyEvent[] = [
+        custodyEvent('Uploaded', `${file.name} (${file.size} bytes, sha256 ${fileHash.slice(0, 16)}…)`),
+      ];
+
       let cols: string[] = [];
       let rows: any[] = [];
       let detectedDelimiter: string | undefined;
@@ -613,8 +766,15 @@ export default function IntakeWorkbench() {
         };
         setValidationResult(result);
         setExcludeInvalidRows(true);
+        if ((extra.totalRows ?? 0) > 0) custody.push(custodyEvent('Parsed', `${extra.totalRows} data rows (rejected before mapping)`));
+        custody.push(custodyEvent('Validated', `rejected: ${reason}`));
         setAutoJobs((prev) => [
-          { id: `fail-${Date.now().toString(36)}`, fileName: file.name, size: file.size, status: `Failed: ${reason}`, timestamp: new Date().toISOString() },
+          {
+            id: `fail-${Date.now().toString(36)}`, fileName: file.name, size: file.size,
+            status: `Failed: ${reason}`, timestamp: new Date().toISOString(),
+            sha256: fileHash, tier: 'insufficient', rowErrors: [], sessionId: null,
+            requestIds: [], custody, ext,
+          },
           ...prev,
         ]);
         try {
@@ -741,6 +901,8 @@ export default function IntakeWorkbench() {
       }
 
       // ── Schema gate ──
+      // Custody: parsing complete — rows/cols/sheet/delimiter on record.
+      custody.push(custodyEvent('Parsed', `${rows.length} data rows × ${cols.length} columns${detectedSheet ? ` (sheet "${detectedSheet}")` : ''}${detectedDelimiter ? ` (delimiter "${detectedDelimiter}")` : ''}`));
       const { mapping: autoMapping, fuzzy, matchedKeys } = autoMapColumns(cols);
       const { tier, missing } = classifySchema(matchedKeys);
 
@@ -769,6 +931,9 @@ export default function IntakeWorkbench() {
         sheetName: detectedSheet,
       };
 
+      // Custody: validation complete — tier + spot-check issues on record.
+      custody.push(custodyEvent('Validated', `${tier.toUpperCase()} tier; ${rowErrors.length} row-level issue(s) in first-50 spot check`));
+
       // ── Tracking ID route: validated, never blind (A4) ──
       // Auto-commit runs ONLY for ALL-tier files with a clean first-50 spot
       // check. Partial schemas and flagged rows stay in the manual flow with
@@ -776,7 +941,10 @@ export default function IntakeWorkbench() {
       const hasTrackingId = cols.some(c => normalizeHeader(c).includes('tracking') && normalizeHeader(c).includes('id'));
       if (hasTrackingId && tier !== 'insufficient') {
         if (tier === 'all' && rowErrors.length === 0) {
-          handleAutoIngestion('', cols, rows, file.name, file.size);
+          handleAutoIngestion('', cols, rows, file.name, file.size, {
+            sha256: fileHash, tier, rowErrors, sheetName: detectedSheet,
+            delimiter: detectedDelimiter, ext, custody,
+          });
           return;
         }
         setTrackingNotice(
@@ -799,7 +967,9 @@ export default function IntakeWorkbench() {
           fileName: file.name,
           size: file.size,
           status: `Failed: ${reason}`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          sha256: fileHash, tier: 'insufficient', rowErrors: [], sessionId: null,
+          requestIds: [], custody: [...custody, custodyEvent('Validated', `rejected: ${reason}`)], ext,
         };
         setAutoJobs(prev => [failedJob, ...prev]);
 
@@ -967,6 +1137,121 @@ export default function IntakeWorkbench() {
       }
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // ── Monitor review + custody download state ──
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [downloadingJobId, setDownloadingJobId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<Record<string, string>>({});
+
+  const copyText = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(key);
+      setTimeout(() => setCopiedId((cur) => (cur === key ? null : cur)), 1500);
+    } catch { /* clipboard unavailable — title attributes still expose full values */ }
+  };
+
+  // Reviewer sign-off: attestation only, never mutates requests.
+  const handleJobReview = async (job: any) => {
+    const by = getOperator();
+    const at = new Date().toISOString();
+    setAutoJobs((prev) => prev.map((j) => (j.id === job.id
+      ? { ...j, reviewedBy: by, reviewedAt: at, custody: [...(j.custody || []), { stage: 'Reviewed', at, by } as CustodyEvent] }
+      : j)));
+    try {
+      const { logEvent } = await import('../lib/logger');
+      logEvent('INTAKE_JOB_REVIEWED', 'Intake Workbench', `Job ${job.id} (${job.fileName}) reviewed; requests: ${((job.requestIds || []) as string[]).join(', ') || 'none'}`, by);
+    } catch { /* logger load failure non-fatal */ }
+  };
+
+  // Custody download: content refetched from the staged session and
+  // regenerated (reconstructed copy — see manifest note). Request IDs lead
+  // every line / the manifest so the file maps back without a lookup.
+  const handleJobDownload = async (job: any) => {
+    if (downloadingJobId) return;
+    setDownloadError((prev) => ({ ...prev, [job.id]: '' }));
+    if (!job.sessionId) {
+      setDownloadError((prev) => ({ ...prev, [job.id]: 'No staged session for this job (legacy entry or rejected file) — nothing to download.' }));
+      return;
+    }
+    setDownloadingJobId(job.id);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/intake/sessions?id=${encodeURIComponent(job.sessionId)}`, { credentials: 'same-origin' });
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Server returned an invalid response.');
+      }
+      if (!data.success || !data.session?.data || !Array.isArray(data.session.data.rows)) {
+        throw new Error('Staged session expired or unavailable — cannot reconstruct the file.');
+      }
+      const stagedRows: any[] = data.session.data.rows;
+      // Custody consistency gate: committed IDs must all be present staged.
+      const stagedIds = new Set(stagedRows.map((r: any) => r?.id));
+      const missing = ((job.requestIds || []) as string[]).filter((id) => !stagedIds.has(id));
+      if (missing.length > 0) {
+        throw new Error(`Custody break: session contents do not match the custody record (missing ${missing.join(', ')}). Refusing to generate the file.`);
+      }
+      const fileName = custodyFileName(job);
+      const ext = String(job.ext || 'csv');
+      const XLSX = await import('xlsx');
+      let downloadHash = 'unavailable';
+      if (ext === 'xlsx') {
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(flattenRequestsToLines(stagedRows));
+        ws['!cols'] = [14, 10, 18, 22, 26, 16, 18, 18, 10].map((wch) => ({ wch }));
+        XLSX.utils.book_append_sheet(wb, ws, 'Requests');
+        const manifest = XLSX.utils.aoa_to_sheet([
+          ['Netamps Custody Manifest — reconstructed copy (content matches staged records; not byte-identical to the upload)'],
+          ['Job ID', String(job.id)],
+          ['Source file', String(job.fileName)],
+          ['Upload SHA-256', String(job.sha256)],
+          ['Staged session', String(job.sessionId)],
+          ['Requests', ((job.requestIds || []) as string[]).join(', ') || 'none'],
+          [],
+          ['Stage', 'At', 'By', 'Note'],
+          ...((job.custody || []) as any[]).map((c: any) => [String(c.stage), String(c.at), String(c.by), String(c.note || '')]),
+        ]);
+        manifest['!cols'] = [{ wch: 24 }, { wch: 90 }];
+        XLSX.utils.book_append_sheet(wb, manifest, 'MANIFEST');
+        const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as Uint8Array;
+        downloadHash = await sha256Hex(new Blob([bytes as BlobPart]));
+        downloadBlob(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName, '');
+      } else if (ext === 'json') {
+        const payload = JSON.stringify({
+          manifest: {
+            note: 'Reconstructed copy — content matches staged records; not byte-identical to the upload.',
+            jobId: job.id, sourceFile: job.fileName, uploadSha256: job.sha256,
+            sessionId: job.sessionId, requestIds: job.requestIds || [], custody: job.custody || [],
+          },
+          requests: stagedRows,
+        }, null, 2);
+        downloadHash = await sha256Text(payload);
+        downloadBlob(payload, fileName, 'application/json');
+      } else {
+        const ws = XLSX.utils.aoa_to_sheet(flattenRequestsToLines(stagedRows));
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        downloadHash = await sha256Text(csv);
+        downloadBlob(csv, fileName, 'text/csv');
+      }
+      const at = new Date().toISOString();
+      const by = getOperator();
+      setAutoJobs((prev) => prev.map((j) => (j.id === job.id
+        ? { ...j, custody: [...(j.custody || []), { stage: 'Downloaded', at, by, note: `${fileName} (copy sha256 ${downloadHash.slice(0, 16)}…)` } as CustodyEvent] }
+        : j)));
+      try {
+        const { logEvent } = await import('../lib/logger');
+        logEvent('INTAKE_FILE_DOWNLOADED', 'Intake Workbench', `Job ${job.id}: ${fileName} downloaded; upload sha256 ${job.sha256}, copy sha256 ${downloadHash}`, by);
+      } catch { /* logger load failure non-fatal */ }
+    } catch (e: any) {
+      setDownloadError((prev) => ({ ...prev, [job.id]: e?.message || 'Download failed.' }));
+    } finally {
+      setDownloadingJobId(null);
     }
   };
 
@@ -1354,7 +1639,7 @@ export default function IntakeWorkbench() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-2">
                 <Activity className="w-5 h-5 text-indigo-400" /> Automated Tracking ID Ingestion Pipeline
               </h3>
-              <p className="text-sm text-slate-400 mb-6">Background tasks initiated by structured payloads with a valid Tracking ID. Failed file validations are also captured here.</p>
+              <p className="text-sm text-slate-400 mb-6">Background tasks initiated by structured payloads with a valid Tracking ID. Failed file validations are also captured here. Expand a job for validation, generated request IDs, chain of custody, reviewer sign-off, and request-mapped download.</p>
 
               {autoJobs.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-xl">
@@ -1365,6 +1650,7 @@ export default function IntakeWorkbench() {
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-800/50 text-slate-300">
                       <tr>
+                        <th className="px-4 py-3 font-medium w-8"></th>
                         <th className="px-4 py-3 font-medium">Job ID</th>
                         <th className="px-4 py-3 font-medium">File</th>
                         <th className="px-4 py-3 font-medium">Size</th>
@@ -1374,10 +1660,19 @@ export default function IntakeWorkbench() {
                     </thead>
                     <tbody className="divide-y divide-slate-800 bg-slate-900">
                       {autoJobs.map(job => (
-                        <tr key={job.id} className="hover:bg-slate-800/50">
+                        <React.Fragment key={job.id}>
+                        <tr className="hover:bg-slate-800/50 cursor-pointer" onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}>
+                          <td className="px-4 py-3 text-slate-500">
+                            {expandedJobId === job.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </td>
                           <td className="px-4 py-3 font-mono text-xs text-indigo-300">{job.id}</td>
-                          <td className="px-4 py-3 text-slate-300">{job.fileName}</td>
-                          <td className="px-4 py-3 text-slate-400">{(job.size / 1024).toFixed(1)} KB</td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {job.fileName}
+                            {(job.requestIds || []).length > 0 && (
+                              <span className="ml-2 text-[11px] font-mono text-emerald-400">{(job.requestIds || []).length} req</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-slate-400">{job.size > 1048576 ? `${(job.size / 1048576).toFixed(1)} MB` : `${(job.size / 1024).toFixed(1)} KB`}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
                               job.status === 'Done' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
@@ -1394,6 +1689,111 @@ export default function IntakeWorkbench() {
                             {new Date(job.timestamp).toLocaleTimeString()}
                           </td>
                         </tr>
+                        {expandedJobId === job.id && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-4 bg-[#020817]/60">
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                                {/* Validation + generated request IDs */}
+                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                                  <div>
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Validation</div>
+                                    {job.tier ? (
+                                      <div className="text-slate-300">
+                                        Tier <span className="font-mono font-bold text-indigo-300">{String(job.tier).toUpperCase()}</span>
+                                        {(job.rowErrors || []).length > 0 && <span className="text-amber-300"> · {(job.rowErrors || []).length} row issue(s)</span>}
+                                        {job.sheetName && <span className="text-slate-500"> · sheet &quot;{job.sheetName}&quot;</span>}
+                                        {job.delimiter && <span className="text-slate-500"> · delimiter &quot;{job.delimiter}&quot;</span>}
+                                      </div>
+                                    ) : (
+                                      <div className="text-slate-500">No validation on record (legacy entry).</div>
+                                    )}
+                                    {(job.rowErrors || []).length > 0 && (
+                                      <ul className="mt-2 space-y-1 text-amber-400/80 list-disc pl-4">
+                                        {(job.rowErrors || []).slice(0, 8).map((re: any, i: number) => (
+                                          <li key={i}>Row {re.rowIndex}: {(re.reasons || []).join('; ')}</li>
+                                        ))}
+                                        {(job.rowErrors || []).length > 8 && <li>…and {(job.rowErrors || []).length - 8} more</li>}
+                                      </ul>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Generated request IDs ({(job.requestIds || []).length})</div>
+                                    {(job.requestIds || []).length === 0 ? (
+                                      <div className="text-slate-500">None committed.</div>
+                                    ) : (
+                                      <ul className="space-y-1">
+                                        {(job.requestIds || []).map((id: string) => (
+                                          <li key={id} className="flex items-center gap-2 font-mono text-emerald-300">
+                                            <span className="truncate" title={id}>{id}</span>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); copyText(id, `${job.id}:${id}`); }}
+                                              className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
+                                            >
+                                              {copiedId === `${job.id}:${id}` ? 'Copied' : 'Copy'}
+                                            </button>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 font-mono break-all" title={job.sha256}>
+                                    Upload SHA-256: <span className="text-slate-400">{job.sha256 || 'legacy-unknown'}</span>
+                                  </div>
+                                </div>
+                                {/* Custody timeline + review + download */}
+                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                                  <div>
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Chain of custody ({(job.custody || []).length})</div>
+                                    {(job.custody || []).length === 0 ? (
+                                      <div className="text-slate-500">No custody events (legacy entry).</div>
+                                    ) : (
+                                      <ol className="space-y-1.5">
+                                        {(job.custody || []).map((c: any, i: number) => (
+                                          <li key={i} className="flex items-start gap-2 text-slate-300">
+                                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                            <div>
+                                              <span className="font-bold">{c.stage}</span>
+                                              <span className="text-slate-500 font-mono"> · {c.at ? new Date(c.at).toLocaleString() : ''} · {c.by}</span>
+                                              {c.note && <div className="text-slate-400 break-words">{c.note}</div>}
+                                            </div>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                                    {job.reviewedAt ? (
+                                      <span className="text-[11px] text-emerald-400">Reviewed by {job.reviewedBy} · {new Date(job.reviewedAt).toLocaleString()}</span>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleJobReview(job); }}
+                                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors"
+                                      >
+                                        Mark reviewed
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleJobDownload(job); }}
+                                      disabled={downloadingJobId === job.id || !job.sessionId}
+                                      title={job.sessionId ? `Download as ${custodyFileName(job)}` : 'No staged session — nothing to download'}
+                                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors disabled:opacity-50"
+                                    >
+                                      {downloadingJobId === job.id
+                                        ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        : <Download className="w-3.5 h-3.5" />}
+                                      Download file
+                                    </button>
+                                  </div>
+                                  {downloadError[job.id] && (
+                                    <div className="text-[11px] text-red-400">{downloadError[job.id]}</div>
+                                  )}
+                                  <div className="text-[11px] text-slate-600">Download regenerates from staged records with request IDs in the filename — a custody copy, not the original bytes.</div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
