@@ -672,7 +672,13 @@ export default function ReturnsPage() {
                 <div className="border-t border-slate-200 pt-6 mt-6">
                   <div className="flex justify-between items-center mb-4">
                     <h4 className="text-lg font-bold text-slate-900">Product Inventory</h4>
-                    <button type="button" onClick={addProduct} className="flex items-center gap-1 text-sm bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-colors">
+                    <button
+                      type="button"
+                      onClick={addProduct}
+                      aria-hidden={products.length >= 2}
+                      tabIndex={products.length >= 2 ? -1 : 0}
+                      className={`flex items-center gap-1 text-sm bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-colors ${products.length >= 2 ? 'invisible' : ''}`}
+                    >
                       <Plus className="w-4 h-4" /> Add Product
                     </button>
                   </div>
@@ -919,6 +925,23 @@ export default function ReturnsPage() {
                       resetSignal={uploadReset}
                     />
                   </div>
+                )}
+
+                {/* Floating Add-Product: takes over from Product #2 so long
+                    multi-product forms never require scrolling back up.
+                    Overlays content (no layout shift); the inline button above
+                    keeps its slot via visibility:hidden. Hidden while
+                    submitting; lives only in the sell/buy form branch. */}
+                {products.length >= 2 && !isSubmitting && (
+                  <button
+                    type="button"
+                    onClick={addProduct}
+                    aria-label="Add another product"
+                    title="Add another product"
+                    className="fixed z-40 bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white pl-4 pr-5 py-3.5 rounded-full font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 motion-reduce:transition-none motion-reduce:hover:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  >
+                    <Plus className="w-5 h-5" /> Add Product
+                  </button>
                 )}
 
                 {/* Submit */}
