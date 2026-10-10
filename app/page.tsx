@@ -86,7 +86,7 @@ const FlyoutLink = ({ children, href, FlyoutContent }: any) => {
           >
             <div className="absolute -top-6 left-0 right-0 h-6 bg-transparent" />
             <div className="absolute left-1/2 top-0 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-white border-l border-t border-slate-200" />
-            <div className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden w-48 relative z-10">
+            <div className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden w-56 relative z-10">
               <FlyoutContent />
             </div>
           </motion.div>
@@ -104,7 +104,7 @@ const EsgReturnsContent = () => {
       rel="noopener noreferrer"
       className="block px-4 py-3 text-sm font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
     >
-      Request a Return
+      Asset Disposition & Procurement
     </a>
   );
 };
@@ -233,7 +233,7 @@ export default function Home() {
                         onClick={() => setIsMobileMenuOpen(false)} 
                         className="block w-full text-left text-base font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-colors py-2 pl-4 border-b border-slate-100"
                       >
-                        ↳ Request a Return
+                        ↳ Asset Disposition & Procurement
                       </a>
                     )}
                   </div>
@@ -544,7 +544,7 @@ export default function Home() {
               </div>
               <div className="shrink-0 w-full lg:w-auto">
                 <a href="/returns" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
-                  Request a Return
+                  Asset Disposition & Procurement
                 </a>
               </div>
             </motion.div>
