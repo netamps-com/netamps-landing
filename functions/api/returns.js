@@ -2,6 +2,24 @@ export async function onRequestPost({ request, env }) {
   try {
     const returnReq = await request.json();
 
+    // Money contract: evaluated prices are paise integers (pricePaise).
+    // Legacy records carry rupee floats in `price` — converted once here,
+    // never mixed with paise values in the same sum.
+    const evalPaiseOf = (p) => {
+      if (p && Number.isInteger(p.pricePaise) && p.pricePaise >= 0) return p.pricePaise;
+      const legacy = Number(p && p.price);
+      if (!Number.isFinite(legacy) || legacy < 0) return 0;
+      return Math.round(legacy * 100);
+    };
+    const pricingBasis = returnReq.pricingBasis === 'lot' ? 'lot' : 'per_product';
+    const lotPaise = Number.isInteger(returnReq.lotConsiderationPaise) && returnReq.lotConsiderationPaise >= 0
+      ? returnReq.lotConsiderationPaise : null;
+
+    let totalAmount = 0;
+    (returnReq.products || []).forEach(p => {
+       totalAmount += evalPaiseOf(p) * (Number(p.quantity) || 1);
+    });
+
     if (env.DB) {
       await env.DB.prepare(`
         CREATE TABLE IF NOT EXISTS returns (
@@ -15,12 +33,21 @@ export async function onRequestPost({ request, env }) {
           attachedFiles TEXT,
           emailDeliveryStatus TEXT,
           date TEXT,
-          status TEXT
+          status TEXT,
+          totalAmount REAL,
+          manifest TEXT,
+          pricingBasis TEXT,
+          lotConsiderationPaise INTEGER
         )
       `).run();
       
+      try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN totalAmount REAL').run(); } catch(e){}
+      try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN manifest TEXT').run(); } catch(e){}
+      try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN pricingBasis TEXT').run(); } catch(e){}
+      try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN lotConsiderationPaise INTEGER').run(); } catch(e){}
+
       await env.DB.prepare(
-        'INSERT INTO returns (id, intent, name, company, email, phone, products, attachedFiles, emailDeliveryStatus, date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO returns (id, intent, name, company, email, phone, products, attachedFiles, emailDeliveryStatus, date, status, totalAmount, manifest, pricingBasis, lotConsiderationPaise) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).bind(
         returnReq.id, 
         returnReq.intent, 
@@ -32,7 +59,11 @@ export async function onRequestPost({ request, env }) {
         JSON.stringify(returnReq.attachedFiles || []), 
         returnReq.emailDeliveryStatus || '', 
         returnReq.date, 
-        returnReq.status
+        returnReq.status,
+        totalAmount,
+        returnReq.manifest ? JSON.stringify(returnReq.manifest) : null,
+        pricingBasis,
+        lotPaise
       ).run();
     } else if (env.DATABASE_URL) {
       const { Client } = await import('pg');
@@ -50,15 +81,28 @@ export async function onRequestPost({ request, env }) {
           attachedFiles TEXT,
           emailDeliveryStatus VARCHAR(50),
           date VARCHAR(100),
-          status VARCHAR(50)
+          status VARCHAR(50),
+          totalamount NUMERIC,
+          manifest TEXT,
+          pricingbasis TEXT,
+          lotconsiderationpaise NUMERIC
         )
       `);
+      try { await client.query('ALTER TABLE returns ADD COLUMN totalamount NUMERIC'); } catch(e){}
+      try { await client.query('ALTER TABLE returns ADD COLUMN manifest TEXT'); } catch(e){}
+      try { await client.query('ALTER TABLE returns ADD COLUMN pricingbasis TEXT'); } catch(e){}
+      try { await client.query('ALTER TABLE returns ADD COLUMN lotconsiderationpaise NUMERIC'); } catch(e){}
+
+      const pgPricingBasis = returnReq.pricingBasis === 'lot' ? 'lot' : 'per_product';
+      const pgLotPaise = Number.isInteger(returnReq.lotConsiderationPaise) && returnReq.lotConsiderationPaise >= 0
+        ? returnReq.lotConsiderationPaise : null;
       await client.query(
-        'INSERT INTO returns (id, intent, name, company, email, phone, products, attachedFiles, emailDeliveryStatus, date, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+        'INSERT INTO returns (id, intent, name, company, email, phone, products, attachedFiles, emailDeliveryStatus, date, status, totalamount, manifest, pricingbasis, lotconsiderationpaise) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)',
         [
           returnReq.id, returnReq.intent, returnReq.name, returnReq.company, returnReq.email, returnReq.phone,
           JSON.stringify(returnReq.products || []), JSON.stringify(returnReq.attachedFiles || []),
-          returnReq.emailDeliveryStatus || '', returnReq.date, returnReq.status
+          returnReq.emailDeliveryStatus || '', returnReq.date, returnReq.status, totalAmount,
+          returnReq.manifest ? JSON.stringify(returnReq.manifest) : null, pgPricingBasis, pgLotPaise
         ]
       );
       await client.end();
@@ -92,6 +136,10 @@ export async function onRequestGet({ env }) {
 
       const { results } = await env.DB.prepare('SELECT * FROM returns ORDER BY date DESC').all();
       
+      const parseManifest = (raw) => {
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
+      };
       const returns = results.map(row => ({
         id: row.id,
         intent: row.intent,
@@ -103,9 +151,13 @@ export async function onRequestGet({ env }) {
         attachedFiles: JSON.parse(row.attachedFiles || '[]'),
         emailDeliveryStatus: row.emailDeliveryStatus || undefined,
         date: row.date,
-        status: row.status
+        status: row.status,
+        totalAmount: Number(row.totalAmount || row.totalamount || 0),
+        pricingBasis: row.pricingBasis === 'lot' ? 'lot' : 'per_product',
+        lotConsiderationPaise: Number.isInteger(row.lotConsiderationPaise) ? row.lotConsiderationPaise : null,
+        manifest: parseManifest(row.manifest)
       }));
-      return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
     } else if (env.DATABASE_URL) {
       const { Client } = await import('pg');
       const client = new Client({ connectionString: env.DATABASE_URL });
@@ -127,6 +179,10 @@ export async function onRequestGet({ env }) {
       `);
       const { rows } = await client.query('SELECT * FROM returns ORDER BY date DESC');
       await client.end();
+      const parseManifestPg = (raw) => {
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
+      };
       const returns = rows.map(row => ({
         id: row.id,
         intent: row.intent,
@@ -135,14 +191,20 @@ export async function onRequestGet({ env }) {
         email: row.email,
         phone: row.phone,
         products: JSON.parse(row.products || '[]'),
-        attachedFiles: JSON.parse(row.attachedFiles || '[]'),
+        attachedFiles: JSON.parse(row.attachedfiles || row.attachedFiles || '[]'),
         emailDeliveryStatus: row.emaildeliverystatus || row.emailDeliveryStatus || undefined,
         date: row.date,
-        status: row.status
+        status: row.status,
+        totalAmount: Number(row.totalAmount || row.totalamount || 0),
+        pricingBasis: row.pricingbasis === 'lot' ? 'lot' : 'per_product',
+        lotConsiderationPaise: (row.lotconsiderationpaise === null || row.lotconsiderationpaise === undefined)
+          ? null
+          : (Number.isInteger(Number(row.lotconsiderationpaise)) ? Number(row.lotconsiderationpaise) : null),
+        manifest: parseManifestPg(row.manifest)
       }));
-      return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
     }
-    return new Response(JSON.stringify({ success: true, returns: [] }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: true, returns: [] }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
   } catch (err) {
     return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
@@ -159,12 +221,31 @@ export async function onRequestPut({ request, env }) {
       } else if (update.action === 'emailDelivery') {
         await env.DB.prepare('UPDATE returns SET emailDeliveryStatus = ? WHERE id = ?').bind(update.emailDeliveryStatus, update.id).run();
       } else if (update.action === 'price') {
-        // fetching existing products to update price
+        // fetching existing products to update price (paise-integer contract;
+        // legacy rupee-float `price` preserved untouched for old readers)
         const { results } = await env.DB.prepare('SELECT products FROM returns WHERE id = ?').bind(update.id).all();
         if (results.length > 0) {
           const products = JSON.parse(results[0].products || '[]');
-          const updatedProducts = products.map(p => p.id === update.productId ? { ...p, price: update.price } : p);
-          await env.DB.prepare('UPDATE returns SET products = ? WHERE id = ?').bind(JSON.stringify(updatedProducts), update.id).run();
+          const updatedProducts = products.map(p => {
+            if (p.id !== update.productId) return p;
+            const next = { ...p };
+            if (update.pricePaise === null || update.pricePaise === undefined) {
+              delete next.pricePaise;
+            } else if (Number.isInteger(update.pricePaise) && update.pricePaise >= 0) {
+              next.pricePaise = update.pricePaise;
+            }
+            return next;
+          });
+          const evalPaiseOf = (p) => {
+            if (Number.isInteger(p.pricePaise) && p.pricePaise >= 0) return p.pricePaise;
+            const legacy = Number(p.price);
+            if (!Number.isFinite(legacy) || legacy < 0) return 0;
+            return Math.round(legacy * 100);
+          };
+          let totalAmount = 0;
+          updatedProducts.forEach(p => { totalAmount += evalPaiseOf(p) * (Number(p.quantity) || 1); });
+          try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN totalAmount REAL').run(); } catch(e){}
+          await env.DB.prepare('UPDATE returns SET products = ?, totalAmount = ? WHERE id = ?').bind(JSON.stringify(updatedProducts), totalAmount, update.id).run();
         }
       }
     } else if (env.DATABASE_URL) {
@@ -179,8 +260,26 @@ export async function onRequestPut({ request, env }) {
         const { rows } = await client.query('SELECT products FROM returns WHERE id = $1', [update.id]);
         if (rows.length > 0) {
           const products = JSON.parse(rows[0].products || '[]');
-          const updatedProducts = products.map(p => p.id === update.productId ? { ...p, price: update.price } : p);
-          await client.query('UPDATE returns SET products = $1 WHERE id = $2', [JSON.stringify(updatedProducts), update.id]);
+          const updatedProducts = products.map(p => {
+            if (p.id !== update.productId) return p;
+            const next = { ...p };
+            if (update.pricePaise === null || update.pricePaise === undefined) {
+              delete next.pricePaise;
+            } else if (Number.isInteger(update.pricePaise) && update.pricePaise >= 0) {
+              next.pricePaise = update.pricePaise;
+            }
+            return next;
+          });
+          const evalPaiseOfPg = (p) => {
+            if (Number.isInteger(p.pricePaise) && p.pricePaise >= 0) return p.pricePaise;
+            const legacy = Number(p.price);
+            if (!Number.isFinite(legacy) || legacy < 0) return 0;
+            return Math.round(legacy * 100);
+          };
+          let totalAmount = 0;
+          updatedProducts.forEach(p => { totalAmount += evalPaiseOfPg(p) * (Number(p.quantity) || 1); });
+          try { await client.query('ALTER TABLE returns ADD COLUMN totalamount NUMERIC'); } catch(e){}
+          await client.query('UPDATE returns SET products = $1, totalamount = $2 WHERE id = $3', [JSON.stringify(updatedProducts), totalAmount, update.id]);
         }
       }
       await client.end();

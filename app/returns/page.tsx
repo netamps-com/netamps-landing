@@ -25,6 +25,37 @@ interface ProductItem {
   details: string;
   quantity: number;
   attachedFiles: string[];
+  // Visitor-stated consideration, raw editable string. Parsed to paise
+  // (integer) or null only at validation/submit — never stored as float.
+  lineConsideration: string;
+  lineConsiderationPaise?: number | null;
+}
+
+// ── Money contract: paise integers end-to-end, null = unstated (never 0) ──
+const MAX_CONSIDERATION_PAISE = 999999999900; // ₹99,99,99,999 cap
+
+function sanitizeMoneyInput(raw: string): string {
+  const cleaned = raw.replace(/[₹,\s]/g, '').replace(/[^0-9.]/g, '');
+  const dot = cleaned.indexOf('.');
+  if (dot === -1) return cleaned;
+  const int = cleaned.slice(0, dot);
+  const dec = cleaned.slice(dot + 1).replace(/\./g, '').slice(0, 2);
+  return `${int}.${dec}`;
+}
+
+function moneyStringToPaise(s: string): number | null {
+  const t = s.replace(/[₹,\s]/g, '').trim();
+  if (t === '' || t === '.') return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const paise = Math.round(n * 100);
+  if (!Number.isInteger(paise) || paise > MAX_CONSIDERATION_PAISE) return null;
+  return paise;
+}
+
+function formatPaise(paise: number | null | undefined): string {
+  if (paise === null || paise === undefined) return '—';
+  return '₹' + (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function ReturnsPage() {
@@ -44,10 +75,15 @@ export default function ReturnsPage() {
   const [trackingError, setTrackingError] = useState('');
 
   const [products, setProducts] = useState<ProductItem[]>([
-    { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }
+    { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '' }
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
+
+  // Consideration basis (visitor's choice, preserved across toggles — never cleared):
+  // 'per_product' = line total per product card; 'lot' = single whole-request total.
+  const [pricingBasis, setPricingBasis] = useState<'per_product' | 'lot'>('per_product');
+  const [lotConsideration, setLotConsideration] = useState('');
   
   // Secure File Upload State — the queue itself lives in the single global
   // SecureMediaUploader instance below; the page mirrors it for chips,
@@ -97,7 +133,7 @@ export default function ReturnsPage() {
   }, []);
 
   const addProduct = () => {
-    setProducts([...products, { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]);
+    setProducts([...products, { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '' }]);
   };
 
   const removeProduct = (id: string) => {
@@ -141,6 +177,23 @@ export default function ReturnsPage() {
 
       if (products.some(p => !p.category || !p.details.trim())) {
         setCaptchaError('Please ensure all product details are filled correctly.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Consideration validation: paise-integer contract (empty = unstated, never 0).
+      // The sanitizer makes invalid input nearly impossible; this is defense in depth.
+      if (pricingBasis === 'per_product') {
+        for (let i = 0; i < products.length; i++) {
+          const raw = (products[i].lineConsideration || '').trim();
+          if (raw !== '' && moneyStringToPaise(raw) === null) {
+            setCaptchaError(`PRODUCT #${i + 1}: consideration is not a valid amount (0 – ₹99,99,99,999, max 2 decimals).`);
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      } else if (lotConsideration.trim() !== '' && moneyStringToPaise(lotConsideration) === null) {
+        setCaptchaError('Lot consideration is not a valid amount (0 – ₹99,99,99,999, max 2 decimals).');
         setIsSubmitting(false);
         return;
       }
@@ -312,6 +365,10 @@ export default function ReturnsPage() {
       // Per-product evidence manifest: verified attachments grouped under
       // their owning product, with a SHA-256 over the canonical structure.
       // The flat attachedFiles list is retained for tracking-display compat.
+      // Consideration (v2 manifest): line totals in per-product mode, single
+      // lot total in lot mode — mutually exclusive, null = unstated (never 0).
+      const basis = pricingBasis;
+      const lotPaise = basis === 'lot' ? moneyStringToPaise(lotConsideration) : null;
       const manifestProducts = products.map((p) => {
         const mine = queueSnapshot
           .filter((f) => f.productId === p.id && f.status === 'verified' && f.objectKey)
@@ -330,13 +387,15 @@ export default function ReturnsPage() {
           category: p.category,
           details: p.details,
           quantity: p.quantity,
+          lineConsiderationPaise: basis === 'per_product' ? moneyStringToPaise(p.lineConsideration || '') : null,
           attachments: mine
         };
       });
-      const manifestHash = await sha256Json({ requestId: newId, products: manifestProducts });
-      const manifest = { requestId: newId, hash: manifestHash, generatedAt: new Date().toISOString() };
+      const manifestHash = await sha256Json({ requestId: newId, pricingBasis: basis, lotConsiderationPaise: lotPaise, products: manifestProducts });
+      const manifest = { requestId: newId, hash: manifestHash, generatedAt: new Date().toISOString(), version: 2 };
       const productsWithAttachments = products.map((p, i) => ({
         ...p,
+        lineConsiderationPaise: manifestProducts[i].lineConsiderationPaise,
         attachedFiles: manifestProducts[i].attachments.map((a) => a.objectKey)
       }));
 
@@ -352,6 +411,8 @@ export default function ReturnsPage() {
         phone: actualFormData.get('phone'),
         products: productsWithAttachments,
         attachedFiles: uploadedFileUrls,
+        pricingBasis: basis,
+        lotConsiderationPaise: lotPaise,
         manifest,
         date: new Date().toISOString(),
         status: 'Pending'
@@ -433,14 +494,14 @@ export default function ReturnsPage() {
               <div className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
                 <button 
                   type="button"
-                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]); }}
+                  onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '' }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   SELL Equipment
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]); }}
+                  onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '' }]); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   BUY Equipment
@@ -563,7 +624,7 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
-                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [] }]); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}>
+                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '' }]); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name *</label>
@@ -621,6 +682,52 @@ export default function ReturnsPage() {
                     <button type="button" onClick={addProduct} className="flex items-center gap-1 text-sm bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-colors">
                       <Plus className="w-4 h-4" /> Add Product
                     </button>
+                  </div>
+
+                  {/* Pricing basis — visitor chooses per-product or whole-request consideration.
+                      Inactive side's values are preserved, never cleared. */}
+                  <div className="mb-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0">Consideration Basis</span>
+                      <div className="flex bg-slate-100 p-1 rounded-xl flex-1">
+                        <button
+                          type="button"
+                          onClick={() => setPricingBasis('per_product')}
+                          className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${pricingBasis === 'per_product' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          Per Product
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPricingBasis('lot')}
+                          className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${pricingBasis === 'lot' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          Whole Request (Lot)
+                        </button>
+                      </div>
+                    </div>
+                    {pricingBasis === 'lot' ? (
+                      <div className="mt-3">
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Lot Consideration (₹) — single total for all {products.length} product{products.length > 1 ? 's' : ''}</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lotConsideration}
+                          onChange={(e) => setLotConsideration(sanitizeMoneyInput(e.target.value))}
+                          onBlur={(e) => {
+                            const raw = e.target.value;
+                            if (raw.trim() === '') { setLotConsideration(''); return; }
+                            const p = moneyStringToPaise(raw);
+                            if (p !== null) setLotConsideration((p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                          }}
+                          placeholder="e.g. 4,50,000"
+                          className="block w-full sm:max-w-xs px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
+                        />
+                        <p className="text-[11px] text-slate-500 mt-1">Per-product fields are hidden in lot mode; any values already entered there are preserved.</p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-500 mt-3">Enter a line total per product below (all units included). Switch to lot for a single request-wide total — per-product values are preserved.</p>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -693,7 +800,7 @@ export default function ReturnsPage() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-700 mb-1">Equipment Category *</label>
                             <select 
@@ -722,6 +829,25 @@ export default function ReturnsPage() {
                               className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm" 
                             />
                           </div>
+                          {pricingBasis === 'per_product' && (
+                            <div>
+                              <label className="block text-xs font-medium text-slate-700 mb-1">Line Consideration (₹)</label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={product.lineConsideration}
+                                onChange={(e) => updateProduct(product.id, 'lineConsideration', sanitizeMoneyInput(e.target.value))}
+                                onBlur={(e) => {
+                                  const raw = e.target.value;
+                                  if (raw.trim() === '') { updateProduct(product.id, 'lineConsideration', ''); return; }
+                                  const p = moneyStringToPaise(raw);
+                                  if (p !== null) updateProduct(product.id, 'lineConsideration', (p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                                }}
+                                placeholder="e.g. 1,25,000"
+                                className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
+                              />
+                            </div>
+                          )}
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-700 mb-1">Details & Specs *</label>

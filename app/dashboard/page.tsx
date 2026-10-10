@@ -16,6 +16,8 @@ interface ProductItem {
   details: string;
   quantity: number;
   price?: number;
+  pricePaise?: number; // canonical evaluated unit price, integer paise (null/undefined = unstated)
+  attachedFiles?: string[];
 }
 
 interface ReturnRequest {
@@ -152,13 +154,26 @@ export default function DashboardPage() {
 
   const handlePriceChange = async (reqId: string, productId: string, newPrice: string) => {
     if (userRole !== 'admin@netamps.com') return;
-    const price = parseFloat(newPrice);
+    // Paise-integer contract: parse the ₹ string once, store integer paise.
+    // Empty clears; invalid (negative/nonnumeric) clears like before — never NaN.
+    const cleaned = newPrice.replace(/[₹,\s]/g, '');
+    const n = Number(cleaned);
+    const paise = cleaned.trim() === '' ? null : (!Number.isFinite(n) || n < 0 ? null : Math.round(n * 100));
     
     const updatedReturns = returns.map(req => {
       if (req.id === reqId) {
         return {
           ...req,
-          products: req.products.map(p => p.id === productId ? { ...p, price: isNaN(price) ? undefined : price } : p)
+          products: req.products.map(p => {
+            if (p.id !== productId) return p;
+            const next = { ...p } as ProductItem & { pricePaise?: number };
+            if (paise === null) {
+              delete next.pricePaise;
+            } else {
+              next.pricePaise = paise;
+            }
+            return next;
+          })
         };
       }
       return req;
@@ -170,7 +185,7 @@ export default function DashboardPage() {
       await fetch(`${API_URL}/api/returns`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: reqId, action: 'price', productId, price: isNaN(price) ? null : price })
+        body: JSON.stringify({ id: reqId, action: 'price', productId, pricePaise: paise })
       });
       const { logEvent } = await import('../lib/logger');
       logEvent('PRICE_UPDATED', 'Dashboard Page', `Updated price for product ${productId} in request ${reqId}`, userRole);
@@ -334,7 +349,7 @@ export default function DashboardPage() {
             </Link>
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input type="text" placeholder="Search orders..." className="pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:outline-none focus:border-indigo-500 w-64" />
+              <input type="text" placeholder="Search orders..." className="pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 w-64" />
             </div>
             <button className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors">
               <Filter className="w-4 h-4 text-slate-300" />
@@ -446,11 +461,11 @@ export default function DashboardPage() {
                                               <div className="relative">
                                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
                                                 <input
-                                                  type="number"
-                                                  min="0"
+                                                  type="text"
+                                                  inputMode="decimal"
                                                   disabled={userRole !== 'admin@netamps.com'}
-                                                  value={product.price || ''}
-                                                  onChange={(e) => handlePriceChange(req.id, product.id, e.target.value)}
+                                                  value={(product.pricePaise ?? null) !== null ? String((product.pricePaise as number) / 100) : (product.price ?? '')}
+                                                  onChange={(e) => handlePriceChange(req.id, product.id, e.target.value.replace(/[^0-9.]/g, ''))}
                                                   placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
                                                   className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                                                 />
@@ -461,10 +476,41 @@ export default function DashboardPage() {
                                             </div>
                                           </div>
                                         </div>
+                                        {product.attachedFiles && product.attachedFiles.length > 0 && (
+                                          <div className="mt-4 pt-4 border-t border-slate-700/50">
+                                            <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Asset Photos ({product.attachedFiles.length})</h5>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                                              {product.attachedFiles.map((fileKey, fIdx) => {
+                                                const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn';
+                                                const isDataUri = fileKey.startsWith('data:');
+                                                const fileUrl = isDataUri ? fileKey : `${cdnUrl}/${fileKey}`;
+                                                const isVideo = isDataUri ? fileKey.startsWith('data:video') : (fileKey.endsWith('.mp4') || fileKey.endsWith('.webm'));
+                                                return (
+                                                  <a key={fIdx} href={fileUrl} target="_blank" rel="noopener noreferrer" className="relative group block aspect-square rounded-lg overflow-hidden border border-slate-700 bg-slate-800/50 flex items-center justify-center hover:border-indigo-500 transition-colors">
+                                                    {isVideo ? (
+                                                      <video src={fileUrl} controls preload="none" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                                    ) : (
+                                                      <img src={fileUrl} alt="Asset" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                                    )}
+                                                  </a>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     ))
                                   ) : (
                                     <div className="text-sm text-slate-500 italic">No products listed. (Legacy request)</div>
+                                  )}
+                                  
+                                  {req.products && req.products.length > 0 && (
+                                    <div className="mt-4 p-4 rounded-lg bg-slate-900 border border-slate-700 flex justify-between items-center">
+                                      <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">Total Evaluated Value</div>
+                                      <div className="text-2xl font-mono font-bold text-emerald-400">
+                                        ₹{req.products.reduce((acc, p) => acc + (Number(p.price) || 0) * (Number(p.quantity) || 1), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
                                 
