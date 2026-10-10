@@ -333,7 +333,14 @@ export default function DashboardPage() {
           email: req.email,
           requestId: req.id,
           products: req.products,
-          intent: req.intent
+          intent: req.intent,
+          consideration: {
+            pricingBasis: req.pricingBasis === 'lot' ? 'lot' : 'per_product',
+            lotConsiderationPaise: req.lotConsiderationPaise ?? null,
+            lines: (req.products || []).map(p => ({ productId: p.id, lineConsiderationPaise: p.lineConsiderationPaise ?? null }))
+          },
+          askTotalPaise: askTotalOf(req).total,
+          finalPrice: req.finalPrice ?? null
         })
       });
       let data;

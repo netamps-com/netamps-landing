@@ -40,50 +40,108 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Invalid request body' }, 400);
     }
 
-    const { email, requestId, products, intent } = body;
+    const { email, requestId, products, intent, consideration, askTotalPaise, finalPrice } = body;
     if (!email || typeof email !== 'string' || email.length > 254 || !EMAIL_RE.test(email) || !requestId) {
       return json({ success: false, message: 'Email and requestId required' }, 400);
     }
 
-    let totalValue = 0;
-    if (products && Array.isArray(products)) {
-      products.forEach((p) => {
-        totalValue += (Number(p.price) || 0) * (Number(p.quantity) || 1);
-      });
+    // ── Paise-integer money math (null = unstated, never 0) ──
+    const asPaiseOrNull = (v) => (Number.isInteger(v) && v >= 0 ? v : null);
+    const fmtPaise = (v) => (v === null || v === undefined)
+      ? '—'
+      : '₹' + (v / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const evalUnitOf = (p) => {
+      if (Number.isInteger(p.pricePaise) && p.pricePaise >= 0) return p.pricePaise;
+      const legacy = Number(p.price);
+      if (!Number.isFinite(legacy) || legacy < 0) return null;
+      return Math.round(legacy * 100);
+    };
+
+    // ── Ask total: re-derived server-side from the consideration block.
+    // A client-claimed askTotalPaise that disagrees is refused (fail-closed).
+    const cons = consideration && typeof consideration === 'object' ? consideration : null;
+    let askTotal = null;
+    let askPartial = false;
+    if (cons && cons.pricingBasis === 'lot') {
+      askTotal = asPaiseOrNull(cons.lotConsiderationPaise);
+    } else {
+      const byId = new Map();
+      if (cons && Array.isArray(cons.lines)) {
+        for (const l of cons.lines) {
+          if (l && typeof l.productId === 'string') byId.set(l.productId, asPaiseOrNull(l.lineConsiderationPaise));
+        }
+      }
+      const list = Array.isArray(products) ? products : [];
+      let sum = 0, anyStated = false, anyUnstated = false;
+      for (const p of list) {
+        const v = byId.has(p.id) ? byId.get(p.id) : asPaiseOrNull(p.lineConsiderationPaise);
+        if (v === null) { anyUnstated = true; } else { anyStated = true; sum += v; }
+      }
+      askTotal = anyStated ? sum : null;
+      askPartial = anyStated && anyUnstated;
+    }
+    if (askTotalPaise !== null && askTotalPaise !== undefined) {
+      if (!Number.isInteger(askTotalPaise) || askTotalPaise < 0 || askTotalPaise !== askTotal) {
+        console.error('[email] Ask-total mismatch: claimed', askTotalPaise, 'recomputed', askTotal);
+        return json({ success: false, message: 'Consideration figures do not reconcile. Email refused — please re-open the request and retry.' }, 422);
+      }
     }
 
-    const formattedTotal = new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR'
-    }).format(totalValue);
+    // ── Evaluated total (per-unit × qty, existing semantics, now paise) ──
+    const evalLines = (Array.isArray(products) ? products : []).map(p => {
+      const unit = evalUnitOf(p);
+      return unit === null ? null : unit * (Number(p.quantity) || 1);
+    });
+    const evalTotal = evalLines.every(v => v === null) ? null : evalLines.reduce((a, v) => a + (v ?? 0), 0);
+    const evalPartial = evalTotal !== null && evalLines.some(v => v === null);
+
+    // ── Final: the transmitted snapshot wins; never a live recompute ──
+    const fp = finalPrice && typeof finalPrice === 'object' &&
+      Number.isInteger(finalPrice.version) && finalPrice.version >= 1 &&
+      Number.isInteger(finalPrice.totalPaise) && finalPrice.totalPaise >= 0 &&
+      ['evaluated', 'consideration', 'negotiated'].includes(finalPrice.basis)
+      ? finalPrice : null;
 
     const safeRequestId = escapeHtml(requestId);
     const safeIntent = intent === 'sell' ? 'SELL' : 'BUY';
+    const askCellOf = (p) => {
+      if (cons && cons.pricingBasis === 'lot') return '—';
+      const byIdV = cons && Array.isArray(cons.lines)
+        ? (() => { const f = cons.lines.find(l => l && l.productId === p.id); return f ? asPaiseOrNull(f.lineConsiderationPaise) : undefined; })()
+        : undefined;
+      const v = byIdV !== undefined ? byIdV : asPaiseOrNull(p.lineConsiderationPaise);
+      return fmtPaise(v);
+    };
 
     const htmlContent = `
       <h3>Netamps Request Notification</h3>
       <p>Hello,</p>
       <p>Your ${safeIntent} request <strong>${safeRequestId}</strong> has been updated.</p>
+      ${cons && cons.pricingBasis === 'lot' ? `<p>Lot consideration (whole request): <strong>${fmtPaise(askTotal)}</strong></p>` : ''}
       <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 600px;">
         <thead>
           <tr style="background-color: #f8fafc;">
             <th>Product</th>
             <th>Qty</th>
-            <th>Price</th>
+            <th>Consideration</th>
+            <th>Evaluated Price</th>
           </tr>
         </thead>
         <tbody>
-          ${products?.map((p) => `
+          ${(Array.isArray(products) ? products : []).map((p) => `
             <tr>
               <td>${escapeHtml(p.category)} - ${escapeHtml(p.details)}</td>
               <td align="center">${escapeHtml(p.quantity)}</td>
-              <td align="right">${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(p.price) || 0)}</td>
+              <td align="right">${askCellOf(p)}</td>
+              <td align="right">${fmtPaise(evalUnitOf(p))}</td>
             </tr>
-          `).join('') || '<tr><td colspan="3">No products listed.</td></tr>'}
+          `).join('') || '<tr><td colspan="4">No products listed.</td></tr>'}
         </tbody>
       </table>
       <p style="font-size: 16px; margin-top: 15px;">
-        <strong>Total Value: ${formattedTotal}</strong>
+        <strong>Total Asked: ${fmtPaise(askTotal)}</strong>${askPartial ? ' (partial — some lines unstated)' : ''}<br/>
+        <strong>Total Evaluated: ${fmtPaise(evalTotal)}</strong>${evalPartial ? ' (partial — some lines unevaluated)' : ''}<br/>
+        <strong>Final Agreed Value: ${fp ? `${fmtPaise(fp.totalPaise)} (${escapeHtml(fp.basis)}, v${fp.version})` : '— (awaiting approval snapshot)'}</strong>
       </p>
       <p style="font-size: 12px; color: #64748b;">
         <em>* All prices and total values mentioned are exclusive of applicable GST rates.</em>
