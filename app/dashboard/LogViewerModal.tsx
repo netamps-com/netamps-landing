@@ -140,19 +140,19 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
                 placeholder="Search logs..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+                className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 text-slate-900 bg-white placeholder-slate-400"
               />
             </div>
             <input 
               type="date" 
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 bg-white"
             />
             <select 
               value={pageFilter}
               onChange={(e) => setPageFilter(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
             >
               <option value="">All Pages</option>
               {uniquePages.map(p => <option key={p} value={p}>{p}</option>)}
@@ -160,7 +160,7 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
             <select 
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value as 'asc'|'desc')}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
             >
               <option value="desc">Newest First</option>
               <option value="asc">Oldest First</option>
