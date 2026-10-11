@@ -49,6 +49,24 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Evidence storage is not attached.' }, 503);
     }
 
+    // Persist the deletion to the central trail (console alone is invisible
+    // to the audit viewer).
+    const persistDelete = async (actor) => {
+      try {
+        if (!env.DB || typeof env.DB.prepare !== 'function') return;
+        await env.DB.prepare(
+          'CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, timestamp TEXT, event_type TEXT, page TEXT, details TEXT, username TEXT, ip_address TEXT)'
+        ).run();
+        await env.DB.prepare(
+          'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+        ).bind(
+          crypto.randomUUID(), new Date().toISOString(), 'EVIDENCE_DELETED', 'Evidence Gallery',
+          JSON.stringify({ key, deleted }), actor.slice(0, 254),
+          request.headers.get('cf-connecting-ip') || 'unknown'
+        ).run();
+      } catch {}
+    };
+
     const deleted = {};
     for (const name of buckets) {
       try {
@@ -68,6 +86,7 @@ export async function onRequestPost({ request, env }) {
       } catch {}
       const ip = request.headers.get('cf-connecting-ip') || 'unknown';
       console.log(JSON.stringify({ siem: 'netamps-audit-v1', event: 'evidence.deleted', ts: new Date().toISOString(), actor, actor_ip: ip, object_key: key, deleted }));
+      await persistDelete(actor);
     } catch {}
 
     return json({ success: true, deleted });

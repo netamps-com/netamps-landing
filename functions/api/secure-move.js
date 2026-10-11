@@ -94,6 +94,29 @@ export async function onRequestPost({ request, env }) {
       console.log(JSON.stringify({ siem: 'netamps-audit-v1', event: 'evidence.moved', ts: new Date().toISOString(), old_key: oldKey, new_key: newKey }));
     } catch {}
 
+    // Persist the move to the central trail (console alone is invisible to
+    // the audit viewer).
+    try {
+      if (env.DB && typeof env.DB.prepare === 'function') {
+        await env.DB.prepare(
+          'CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, timestamp TEXT, event_type TEXT, page TEXT, details TEXT, username TEXT, ip_address TEXT)'
+        ).run();
+        let mover = 'anonymous';
+        try {
+          const { verifySession } = await import('./intake/auth.js');
+          const sessionUser = await verifySession(env, request);
+          if (sessionUser && sessionUser.email) mover = sessionUser.email;
+        } catch {}
+        await env.DB.prepare(
+          'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+        ).bind(
+          crypto.randomUUID(), new Date().toISOString(), 'EVIDENCE_MOVED', 'Evidence Gallery',
+          JSON.stringify({ oldKey, newKey }), mover.slice(0, 254),
+          request.headers.get('cf-connecting-ip') || 'unknown'
+        ).run();
+      }
+    } catch {}
+
     return json({ success: true, moved: true, newKey, assetUrl: `/api/cdn/${newKey}` });
   } catch (err) {
     console.error('[move] Internal error:', err);

@@ -43,6 +43,27 @@ export async function onRequestPost({ request, env }) {
     (t) => typeof t === 'string' && t !== '' && t !== 'undefined' && t.length <= 256
   );
 
+  // AUTH_LOGOUT is recorded server-side (client logging dies with the
+  // session being destroyed). Email resolved from the doomed row when
+  // possible, else 'unknown' — the revocation itself never depends on it.
+  const auditLogout = async (email) => {
+    try {
+      if (!env.DB || typeof env.DB.prepare !== 'function') return;
+      await env.DB.prepare(
+        'CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, timestamp TEXT, event_type TEXT, page TEXT, details TEXT, username TEXT, ip_address TEXT)'
+      ).run();
+      await env.DB.prepare(
+        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+      ).bind(
+        crypto.randomUUID(), new Date().toISOString(), 'AUTH_LOGOUT', 'Dashboard Page',
+        JSON.stringify({ revoked: tokens.length }), String(email || 'unknown').slice(0, 254),
+        request.headers.get('cf-connecting-ip') || 'unknown'
+      ).run();
+    } catch {}
+  };
+
+  let logoutEmail = String(cookies['user_role'] || 'unknown').slice(0, 254);
+
   try {
     if (tokens.length > 0 && env.DB && typeof env.DB.prepare === 'function') {
       try {
@@ -50,9 +71,12 @@ export async function onRequestPost({ request, env }) {
       } catch {}
       for (const token of tokens) {
         try {
+          const row = await env.DB.prepare('SELECT email FROM sessions WHERE token = ?').bind(token).first();
+          if (row && row.email) logoutEmail = String(row.email).slice(0, 254);
           await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
         } catch {}
       }
+      await auditLogout(logoutEmail);
     } else if (tokens.length > 0 && env.DATABASE_URL) {
       try {
         const { Client } = await import('pg');

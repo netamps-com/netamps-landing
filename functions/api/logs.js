@@ -99,9 +99,36 @@ export async function onRequestGet({ request, env }) {
       return json({ success: true, logs: [], store: 'none' });
     }
     await ensureTable(env);
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 5000'
-    ).all();
+    // Server-side range/search so the viewer never needs rewriting at
+    // volume. All inputs strictly shaped; anything else falls back to the
+    // default window rather than erroring the whole read.
+    let since = null;
+    let q = null;
+    let limit = 5000;
+    try {
+      const url = new URL(request.url);
+      const sinceRaw = url.searchParams.get('since');
+      if (sinceRaw && /^\d{4}-\d{2}-\d{2}/.test(sinceRaw)) since = sinceRaw.slice(0, 10);
+      const qRaw = (url.searchParams.get('q') || '').trim().slice(0, 120);
+      if (qRaw) q = `%${qRaw.replace(/[%_]/g, '')}%`;
+      const limRaw = parseInt(url.searchParams.get('limit') || '', 10);
+      if (Number.isInteger(limRaw) && limRaw > 0) limit = Math.min(limRaw, 5000);
+    } catch {}
+    let query = 'SELECT * FROM audit_logs';
+    const clauses = [];
+    const params = [];
+    if (since) {
+      clauses.push('timestamp >= ?');
+      params.push(since);
+    }
+    if (q) {
+      clauses.push('(event_type LIKE ? OR details LIKE ? OR username LIKE ? OR page LIKE ?)');
+      params.push(q, q, q, q);
+    }
+    if (clauses.length > 0) query += ' WHERE ' + clauses.join(' AND ');
+    query += ' ORDER BY timestamp DESC LIMIT ?';
+    params.push(limit);
+    const { results } = await env.DB.prepare(query).bind(...params).all();
     const formattedLogs = (results || []).map((row) => ({
       id: row.id,
       timestamp: row.timestamp,
@@ -128,8 +155,24 @@ export async function onRequestDelete({ request, env }) {
     if (!env.DB || typeof env.DB.prepare !== 'function') {
       return json({ success: false, message: 'DB not connected' }, 500);
     }
+    let reason = '';
+    try {
+      const body = await request.json().catch(() => ({}));
+      if (body && typeof body.reason === 'string') reason = body.reason.slice(0, 280);
+    } catch {}
     await ensureTable(env);
     await env.DB.prepare('DELETE FROM audit_logs').run();
+    // Tombstone: the destruction is itself recorded, or clearing deletes
+    // the evidence of clearing.
+    try {
+      await env.DB.prepare(
+        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+      ).bind(
+        crypto.randomUUID(), new Date().toISOString(), 'LOGS_CLEARED', 'Dashboard Page',
+        JSON.stringify({ reason: reason || 'not stated' }), String(user.email || 'unknown').slice(0, 254),
+        request.headers.get('cf-connecting-ip') || 'unknown'
+      ).run();
+    } catch {}
     return json({ success: true, message: 'Logs cleared successfully' });
   } catch (err) {
     console.error('[logs] DELETE error:', err);

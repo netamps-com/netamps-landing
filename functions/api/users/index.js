@@ -103,6 +103,24 @@ async function verifySecret(stored, clientHashHex) {
 }
 const needsUpgrade = (stored) => typeof stored === 'string' && !stored.startsWith('$argon2id$');
 
+// Server-side auth audit (the trail must not depend on client logging).
+// Login-gated paths call this for failures; successes log inline.
+async function auditAuth(env, request, event, email) {
+  try {
+    if (!env.DB || typeof env.DB.prepare !== 'function') return;
+    await env.DB.prepare(
+      'CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, timestamp TEXT, event_type TEXT, page TEXT, details TEXT, username TEXT, ip_address TEXT)'
+    ).run();
+    await env.DB.prepare(
+      'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+    ).bind(
+      crypto.randomUUID(), new Date().toISOString(), event, 'Login Page',
+      JSON.stringify({}), String(email || 'unknown').slice(0, 254),
+      request.headers.get('cf-connecting-ip') || 'unknown'
+    ).run();
+  } catch {}
+}
+
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
@@ -137,6 +155,7 @@ export async function onRequestPost({ request, env }) {
           (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown';
         const emailKey = typeof email === 'string' ? email.toLowerCase() : '';
         if (loginRateLimited('ip', ip) || loginRateLimited('email', emailKey)) {
+          await auditAuth(env, request, 'AUTH_LOGIN_THROTTLED', email);
           return new Response(JSON.stringify({ success: false, message: 'Too many attempts. Try again shortly.' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
         }
         // Bot gate: a Turnstile token is required whenever the secret is
@@ -146,6 +165,7 @@ export async function onRequestPost({ request, env }) {
           const loginToken = typeof body.turnstileToken === 'string' ? body.turnstileToken : '';
           const chk = loginToken ? await verifyTurnstileToken(env, loginToken, ip, 'login') : { ok: false };
           if (!chk.ok) {
+            await auditAuth(env, request, 'AUTH_LOGIN_BOT_BLOCKED', email);
             return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
           }
         }
@@ -174,6 +194,21 @@ export async function onRequestPost({ request, env }) {
           const expiresAt = new Date(Date.now() + ttlMs).toISOString();
           await env.DB.prepare('INSERT INTO sessions (token, email, role, expires_at) VALUES (?, ?, ?, ?)').bind(sessionId, email, results[0].role, expiresAt).run();
 
+          // Server-side login record: client AUTH_SUCCESS dies with the
+          // browser — the trail must not depend on it.
+          try {
+            await env.DB.prepare(
+              'CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, timestamp TEXT, event_type TEXT, page TEXT, details TEXT, username TEXT, ip_address TEXT)'
+            ).run();
+            await env.DB.prepare(
+              'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+            ).bind(
+              crypto.randomUUID(), new Date().toISOString(), 'AUTH_LOGIN', 'Login Page',
+              JSON.stringify({ remember: body.remember === true }), email,
+              request.headers.get('cf-connecting-ip') || 'unknown'
+            ).run();
+          } catch {}
+
           // Dashboard session cookie value: server-signed token.exp.sig so the
           // verifySession fallback can reject forgeries (unsigned legacy
           // cookies keep working only while DEMO_SESSION_SECRET is unset).
@@ -196,6 +231,7 @@ export async function onRequestPost({ request, env }) {
             headers: outHeaders
           });
         }
+        await auditAuth(env, request, 'AUTH_LOGIN_FAILED', email);
         return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
 
@@ -249,6 +285,7 @@ export async function onRequestPost({ request, env }) {
           (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown';
         const pgEmailKey = typeof email === 'string' ? email.toLowerCase() : '';
         if (loginRateLimited('ip', pgIp) || loginRateLimited('email', pgEmailKey)) {
+          await auditAuth(env, request, 'AUTH_LOGIN_THROTTLED', email);
           await client.end();
           return new Response(JSON.stringify({ success: false, message: 'Too many attempts. Try again shortly.' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
         }
@@ -256,6 +293,7 @@ export async function onRequestPost({ request, env }) {
           const pgToken = typeof body.turnstileToken === 'string' ? body.turnstileToken : '';
           const pgChk = pgToken ? await verifyTurnstileToken(env, pgToken, pgIp, 'login') : { ok: false };
           if (!pgChk.ok) {
+            await auditAuth(env, request, 'AUTH_LOGIN_BOT_BLOCKED', email);
             await client.end();
             return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
           }
@@ -280,6 +318,7 @@ export async function onRequestPost({ request, env }) {
           await client.end();
           return new Response(JSON.stringify({ success: true, role: res.rows[0].role, sessionId: pgDashboard }), { headers: pgHeaders });
         }
+        await auditAuth(env, request, 'AUTH_LOGIN_FAILED', email);
         await client.end();
         return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }

@@ -6,6 +6,55 @@ interface LogViewerModalProps {
   onClose: () => void;
 }
 
+// Explicit severity (never substring-sniffed: REQUEST_DELETED and
+// TURNSTILE_BLOCKED used to render neutral). Unknown types default to info.
+type Severity = 'critical' | 'security' | 'success' | 'info';
+const SEVERITY_MAP: Record<string, Severity> = {
+  REQUEST_DELETED: 'critical',
+  LOGS_CLEARED: 'critical',
+  EVIDENCE_PRUNED: 'critical',
+  AUTH_LOGIN_FAILED: 'security',
+  AUTH_LOGIN_THROTTLED: 'security',
+  AUTH_LOGIN_BOT_BLOCKED: 'security',
+  TURNSTILE_BLOCKED: 'security',
+  OTP_FAILED: 'security',
+  OTP_INVALID: 'security',
+  OTP_ERROR: 'security',
+  INTAKE_FILE_REJECTED: 'security',
+  MATCH_ESCALATE_FAILED: 'security',
+  EMAIL_PUSH_FAILED: 'security',
+  AUTH_SUCCESS: 'success',
+  INTAKE_AUTO_COMMITTED: 'success',
+  EMAIL_PUSH_SENT: 'success',
+  MATCH_ESCALATED: 'success',
+  INTAKE_JOB_REVIEWED: 'success',
+  REQUESTS_EXPORTED: 'success',
+};
+
+function severityOf(eventType?: string): Severity {
+  if (!eventType) return 'info';
+  if (SEVERITY_MAP[eventType]) return SEVERITY_MAP[eventType];
+  if (/(FAILED|ERROR|BLOCKED|DELETED|CLEARED|PRUNED)/.test(eventType)) return 'security';
+  if (/(SUCCESS|COMMITTED|SENT|APPROVED|REVIEWED|ESCALATED|EXPORTED)/.test(eventType)) return 'success';
+  return 'info';
+}
+
+const SEVERITY_STYLES: Record<Severity, string> = {
+  critical: 'bg-red-100 text-red-800',
+  security: 'bg-amber-100 text-amber-800',
+  success: 'bg-emerald-100 text-emerald-800',
+  info: 'bg-indigo-100 text-indigo-800',
+};
+
+// CSV-injection guard (shared rule with intake/dashboard exports): a cell
+// opening with = + - @ (after whitespace) is neutralized — exported audit
+// details open inert in Excel.
+function sanitizeCsvCell(v: unknown): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  const safe = /^\s*[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
 export default function LogViewerModal({ onClose }: LogViewerModalProps) {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,12 +62,30 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
   const [pageFilter, setPageFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc'|'asc'>('desc');
   const [storeState, setStoreState] = useState<'d1' | 'none' | 'local'>('d1');
+  const [eventTypeFilter, setEventTypeFilter] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Clear flow: idle → confirm (auto-exported first) → clearing. Typed CLEAR
+  // + server tombstone replace the old one-click window.confirm.
+  const [clearStage, setClearStage] = useState<'idle' | 'confirm' | 'clearing'>('idle');
+  const [clearText, setClearText] = useState('');
+  const [clearReason, setClearReason] = useState('');
+  const [clearError, setClearError] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 400);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   useEffect(() => {
     const fetchLogs = async () => {
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-        const res = await fetch(`${API_URL}/api/logs`);
+        const params = new URLSearchParams();
+        if (dateFilter) params.set('since', dateFilter);
+        if (debouncedSearch) params.set('q', debouncedSearch);
+        const qs = params.toString();
+        const res = await fetch(`${API_URL}/api/logs${qs ? `?${qs}` : ''}`);
         const data = await res.json();
         if (data.success && data.logs) {
           setStoreState(data.store === 'none' ? 'none' : 'd1');
@@ -51,22 +118,24 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
       }
     };
     fetchLogs();
-  }, []);
+  }, [refreshKey, dateFilter, debouncedSearch]);
 
   const filteredLogs = useMemo(() => {
     return logs
       .filter(log => 
         (searchTerm === '' || log.eventType?.toLowerCase().includes(searchTerm.toLowerCase()) || log.details?.toLowerCase().includes(searchTerm.toLowerCase()) || log.user?.toLowerCase().includes(searchTerm.toLowerCase())) &&
         (dateFilter === '' || log.timestamp?.startsWith(dateFilter)) &&
-        (pageFilter === '' || log.page === pageFilter)
+        (pageFilter === '' || log.page === pageFilter) &&
+        (eventTypeFilter === '' || log.eventType === eventTypeFilter)
       )
       .sort((a, b) => sortOrder === 'desc' 
         ? new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
         : new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
       );
-  }, [logs, searchTerm, dateFilter, pageFilter, sortOrder]);
+  }, [logs, searchTerm, dateFilter, pageFilter, eventTypeFilter, sortOrder]);
 
   const uniquePages = Array.from(new Set(logs.map(l => l.page)));
+  const uniqueEventTypes = Array.from(new Set(logs.map(l => l.eventType).filter(Boolean))).sort();
 
   const exportJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filteredLogs, null, 2));
@@ -79,11 +148,11 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
   };
 
   const exportCSV = () => {
-    const headers = ['ID', 'Timestamp', 'Event Type', 'Page', 'User', 'IP Address', 'Details'];
+    const headers = ['ID', 'Timestamp', 'Event Type', 'Severity', 'Page', 'User', 'IP Address', 'Details'];
     const rows = filteredLogs.map(l => [
-      l.id, l.timestamp, l.eventType, l.page, l.user || '', l.ipAddress || '', `"${l.details.replace(/"/g, '""')}"`
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join("\n");
+      l.id, l.timestamp, l.eventType, severityOf(l.eventType), l.page, l.user || '', l.ipAddress || '', l.details
+    ].map(sanitizeCsvCell).join(','));
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join("\n");
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", encodeURI(csvContent));
     downloadAnchorNode.setAttribute("download", "security_audit_logs.csv");
@@ -91,16 +160,38 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
     downloadAnchorNode.remove();
   };
 
-  const clearLogs = async () => {
-    if (window.confirm('Are you sure you want to permanently clear all audit logs? This cannot be undone.')) {
-      try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-        await fetch(`${API_URL}/api/logs`, { method: 'DELETE' });
-        localStorage.setItem('netamps_audit_logs', '[]');
-        setLogs([]);
-      } catch (err) {
-        console.error('Failed to clear logs', err);
+  const requestClear = () => {
+    exportJSON(); // export-first: the pre-clear snapshot downloads on this click gesture
+    setClearStage('confirm');
+    setClearText('');
+    setClearReason('');
+    setClearError('');
+  };
+
+  const confirmClear = async () => {
+    if (clearText.trim() !== 'CLEAR') {
+      setClearError('Type CLEAR exactly to confirm.');
+      return;
+    }
+    setClearStage('clearing');
+    setClearError('');
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/logs`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: clearReason })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || 'Clear refused by server.');
       }
+      localStorage.setItem('netamps_audit_logs', '[]');
+      setClearStage('idle');
+      setRefreshKey((k) => k + 1); // refetch — the LOGS_CLEARED tombstone appears
+    } catch (err: any) {
+      setClearError(err?.message || 'Clear failed.');
+      setClearStage('confirm');
     }
   };
 
@@ -157,6 +248,15 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
               <option value="">All Pages</option>
               {uniquePages.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
+            <select
+              value={eventTypeFilter}
+              onChange={(e) => setEventTypeFilter(e.target.value)}
+              aria-label="Filter by event type"
+              className="px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900 max-w-[220px]"
+            >
+              <option value="">All Event Types</option>
+              {uniqueEventTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
             <select 
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value as 'asc'|'desc')}
@@ -173,11 +273,52 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
             <button onClick={exportJSON} className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-sm font-semibold hover:bg-slate-100 transition-colors">
               <FileText className="w-4 h-4" /> Export JSON
             </button>
-            <button onClick={clearLogs} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors">
+            <button onClick={requestClear} disabled={clearStage !== 'idle'} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50">
               <X className="w-4 h-4" /> Clear Logs
             </button>
           </div>
         </div>
+
+        {clearStage !== 'idle' && (
+          <div className="px-4 py-3 border-b border-red-200 bg-red-50/60 flex flex-wrap items-center gap-3" role="alert">
+            <p className="text-xs text-red-800 font-medium flex-1 min-w-[220px]">
+              Clearing is permanent and recorded as a tombstone. A pre-clear export just downloaded — type <span className="font-mono font-bold">CLEAR</span> to confirm.
+            </p>
+            <input
+              type="text"
+              value={clearReason}
+              onChange={(e) => setClearReason(e.target.value)}
+              placeholder="Reason (recorded)"
+              maxLength={280}
+              disabled={clearStage === 'clearing'}
+              className="px-3 py-2 border border-red-200 rounded-lg text-xs bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 w-48"
+            />
+            <input
+              type="text"
+              value={clearText}
+              onChange={(e) => setClearText(e.target.value)}
+              placeholder="Type CLEAR"
+              disabled={clearStage === 'clearing'}
+              aria-label="Type CLEAR to confirm log deletion"
+              className="px-3 py-2 border border-red-200 rounded-lg text-xs font-mono bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 w-32"
+            />
+            <button
+              onClick={confirmClear}
+              disabled={clearStage === 'clearing'}
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+            >
+              {clearStage === 'clearing' ? 'Clearing…' : 'Confirm clear'}
+            </button>
+            <button
+              onClick={() => { setClearStage('idle'); setClearError(''); }}
+              disabled={clearStage === 'clearing'}
+              className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            {clearError && <span className="text-xs font-bold text-red-700 w-full">{clearError}</span>}
+          </div>
+        )}
 
         {/* Data Table */}
         <div className="flex-1 overflow-auto bg-slate-50/50">
@@ -205,10 +346,7 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
                       {new Date(log.timestamp).toLocaleString()}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold
-                        ${log.eventType.includes('SUCCESS') ? 'bg-emerald-100 text-emerald-800' : 
-                          log.eventType.includes('FAILED') || log.eventType.includes('ERROR') ? 'bg-red-100 text-red-800' : 
-                          'bg-indigo-100 text-indigo-800'}`}>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${SEVERITY_STYLES[severityOf(log.eventType)]}`}>
                         {log.eventType}
                       </span>
                     </td>
