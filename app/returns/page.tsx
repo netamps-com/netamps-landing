@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
+import { Turnstile } from '@marsidev/react-turnstile';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2 } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
@@ -59,6 +60,18 @@ export default function ReturnsPage() {
   ]);
   const [generatedId, setGeneratedId] = useState('');
   const [captchaError, setCaptchaError] = useState('');
+  // Upload bot gate (dormant without the site key, same contract as login).
+  // Verified server-side per submit before any OTP is issued (tokens single-use).
+  const retSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+  const [retToken, setRetToken] = useState('');
+  const [retKey, setRetKey] = useState(0);
+  const resetRetToken = () => {
+    setRetToken('');
+    setRetKey((k) => k + 1);
+  };
+  // Inline product-removal confirmation (keyed by product id; index derived
+  // at render so intent-toggle resets can never show a stale number).
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; count: number } | null>(null);
 
   // Consideration basis (visitor's choice, preserved across toggles — never cleared):
   // 'per_product' = line total per product card; 'lot' = single whole-request total.
@@ -118,16 +131,19 @@ export default function ReturnsPage() {
 
   const removeProduct = (id: string) => {
     if (products.length <= 1) return;
-    const index = products.findIndex((p) => p.id === id);
     const mapped = queueSnapshot.filter((f) => f.productId === id);
     if (mapped.length > 0) {
-      const ok = window.confirm(
-        `PRODUCT #${index + 1} holds ${mapped.length} attached file${mapped.length > 1 ? 's' : ''} — remove the product and discard its files?`
-      );
-      if (!ok) return;
-      uploaderRef.current?.purgeByProduct(id);
+      setPendingDelete({ id, count: mapped.length });
+      return;
     }
     setProducts(products.filter(p => p.id !== id));
+  };
+
+  const confirmRemoveProduct = () => {
+    if (!pendingDelete) return;
+    uploaderRef.current?.purgeByProduct(pendingDelete.id);
+    setProducts(products.filter(p => p.id !== pendingDelete.id));
+    setPendingDelete(null);
   };
 
   const updateProduct = (id: string, field: keyof ProductItem, value: any) => {
@@ -163,7 +179,7 @@ export default function ReturnsPage() {
 
       // Consideration validation: paise-integer contract (empty = unstated, never 0).
       // The sanitizer makes invalid input nearly impossible; this is defense in depth.
-      // Lot mode additionally validates per-line base prices for the breakdown ledger.
+      // Base prices live on per-product lines only; lot mode takes no base input.
       if (pricingBasis === 'per_product') {
         for (let i = 0; i < products.length; i++) {
           const raw = (products[i].lineConsideration || '').trim();
@@ -172,21 +188,17 @@ export default function ReturnsPage() {
             setIsSubmitting(false);
             return;
           }
-        }
-      } else {
-        if (lotConsideration.trim() !== '' && moneyStringToPaise(lotConsideration) === null) {
-          setCaptchaError('Lot consideration is not a valid amount (0 – ₹99,99,99,999, max 2 decimals).');
-          setIsSubmitting(false);
-          return;
-        }
-        for (let i = 0; i < products.length; i++) {
-          const raw = (products[i].basePrice || '').trim();
-          if (raw !== '' && moneyStringToPaise(raw) === null) {
+          const baseRaw = (products[i].basePrice || '').trim();
+          if (baseRaw !== '' && moneyStringToPaise(baseRaw) === null) {
             setCaptchaError(`PRODUCT #${i + 1}: base price is not a valid amount (0 – ₹99,99,99,999, max 2 decimals).`);
             setIsSubmitting(false);
             return;
           }
         }
+      } else if (lotConsideration.trim() !== '' && moneyStringToPaise(lotConsideration) === null) {
+        setCaptchaError('Lot consideration is not a valid amount (0 – ₹99,99,99,999, max 2 decimals).');
+        setIsSubmitting(false);
+        return;
       }
 
       // Custody gating (SELL only): every staged file must be verified and
@@ -212,6 +224,40 @@ export default function ReturnsPage() {
         }
       }
 
+      // Bot challenge first: verified server-side before any OTP is issued
+      // (OTP email is the abuse vector on this anonymous form).
+      if (retSiteKey) {
+        if (!retToken) {
+          setCaptchaError('Complete the human verification challenge before continuing.');
+          setIsSubmitting(false);
+          return;
+        }
+        try {
+          const API_URL_TS = process.env.NEXT_PUBLIC_API_URL || '';
+          const vRes = await fetch(`${API_URL_TS}/api/verify-turnstile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: retToken, action: 'returns-submit' })
+          });
+          const vData = await vRes.json().catch(() => null);
+          if (!vData || !vData.success) {
+            try {
+              const { logEvent } = await import('../lib/logger');
+              logEvent('TURNSTILE_BLOCKED', 'Returns Page', 'Upload verification failed or expired', email);
+            } catch(e) {}
+            resetRetToken();
+            setCaptchaError('Verification failed or expired. Complete the challenge and retry.');
+            setIsSubmitting(false);
+            return;
+          }
+        } catch {
+          setCaptchaError('Verification service unavailable. Try again shortly.');
+          setIsSubmitting(false);
+          return;
+        }
+        resetRetToken();
+      }
+
       // Generate OTP
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${API_URL}/api/otp/generate`, {
@@ -229,10 +275,6 @@ export default function ReturnsPage() {
           logEvent('OTP_FAILED', 'Returns Page', `Failed to generate OTP: ${data.message || 'Unknown error'}${ref}`, email);
         } catch(e) {}
         return;
-      }
-      
-      if (data.message && data.message.includes('OTP is')) {
-        alert(data.message);
       }
 
       setFormDataCache(formData);
@@ -295,55 +337,47 @@ export default function ReturnsPage() {
   const handleTrackSubmit = async () => {
     setTrackingError('');
     setTrackingResult(null);
-    if (!trackingId.trim()) {
+    const clean = trackingId.trim().toUpperCase();
+    if (!clean) {
       setTrackingError('Please enter a Tracking ID');
       return;
     }
-    
+    // Typo filter (server re-validates fail-closed): S-/B- prefix, safe charset.
+    if (!/^[SB]-[A-Z0-9-]{3,64}$/.test(clean)) {
+      setTrackingError('That does not look like a Netamps tracking ID (format S-… or B-…).');
+      return;
+    }
+
+    // Scoped server lookup: exactly one record (or 404). The full table is
+    // never downloaded — earlier revisions exposed every client's data here.
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/returns`);
-      const data = await res.json();
-      const returns = data.success && data.returns.length > 0 ? data.returns : JSON.parse(localStorage.getItem('netamps_returns') || '[]');
-      const found = returns.find((r: any) => r.id === trackingId.trim());
-      if (found) {
-        setTrackingResult(found);
-      } else {
-        setTrackingError('Request not found. Please check your Tracking ID.');
+      const res = await fetch(`${API_URL}/api/returns?id=${encodeURIComponent(clean)}`);
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Server returned an invalid response.');
       }
-    } catch (e) {
-      const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
-      const found = existingReturns.find((r: any) => r.id === trackingId.trim());
-      if (found) setTrackingResult(found);
-      else setTrackingError('Request not found.');
+      if (res.ok && data && data.success && data.return) {
+        setTrackingResult(data.return);
+      } else {
+        setTrackingError(data && data.message ? data.message : 'Request not found. Please check your Tracking ID.');
+      }
+    } catch (e: any) {
+      setTrackingError(e?.message || 'Lookup failed. Check your connection and retry.');
     }
   };
 
-  // Generate Masked Snowflake ID
-  const generateMaskedSnowflake = (intentType: 'buy' | 'sell' | 'track'): string => {
+  // Tracking IDs: CSPRNG hex with an S-/B- intent prefix. Unordered and
+  // unguessable by design (lookup is exact-match, server-side) — no fake
+  // bit-layout arithmetic, no decorative checksums.
+  const generateTrackingId = (intentType: 'sell' | 'buy' | 'track'): string => {
     const prefix = intentType === 'sell' ? 'S' : 'B';
-    
-    // Get timestamp in milliseconds (41 bits equivalent)
-    const timestamp = Date.now();
-    
-    // Generate random component for uniqueness (19 bits equivalent)
-    const random = Math.floor(Math.random() * 524288);
-    
-    // Generate sequence number (12 bits)
-    const sequence = Math.floor(Math.random() * 4096);
-    
-    // Combine into a single number (simulating Snowflake structure)
-    const snowflake = (timestamp * 1000000) + (random * 10000) + sequence;
-    
-    // Convert to base36 for shorter, masked representation
-    const masked = snowflake.toString(36).toUpperCase();
-    
-    // Add checksum digit for validation
-    const checksum = masked.split('').reduce((acc, char, idx) => {
-      return acc + char.charCodeAt(0) * (idx + 1);
-    }, 0) % 10;
-    
-    return `${prefix}-${masked}${checksum}`;
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+    const rand = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return `${prefix}-${rand}`;
   };
 
   const processReturnSubmit = async (formData?: FormData) => {
@@ -351,7 +385,7 @@ export default function ReturnsPage() {
       const actualFormData = formData || formDataCache;
       if (!actualFormData) return;
       setIsUploading(true);
-      const newId = generateMaskedSnowflake(intent);
+      const newId = generateTrackingId(intent);
 
       // Per-product evidence manifest: verified attachments grouped under
       // their owning product, with a SHA-256 over the canonical structure.
@@ -414,11 +448,22 @@ export default function ReturnsPage() {
       };
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      await fetch(`${API_URL}/api/returns`, {
+      const res = await fetch(`${API_URL}/api/returns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(returnReq)
       });
+      // Success is declared by the server, never assumed: a refused submit
+      // (e.g. schema gate 422) must not show success, cache, or audit.
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Server returned an invalid response. Nothing was recorded — retry.');
+      }
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || 'Server refused the request. Nothing was recorded — fix and retry.');
+      }
       
       // Keep local copy for immediate fallback viewing
       const existingReturns = JSON.parse(localStorage.getItem('netamps_returns') || '[]');
@@ -509,7 +554,7 @@ export default function ReturnsPage() {
                   onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}
                   className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  TRACK Request
+                  Track Request
                 </button>
               </div>
 
@@ -606,7 +651,7 @@ export default function ReturnsPage() {
                   </div>
                   <h3 className="text-xl font-bold text-slate-900">Email Verification Required</h3>
                   <p className="text-sm text-slate-500">
-                    For security purposes, we've sent a one-time passcode to your email. Please check the console output (simulated) and enter the OTP below.
+                    For security, we emailed a 6-digit passcode to your address — it expires in 5 minutes. Enter it below.
                   </p>
                   <div>
                     <input 
@@ -632,7 +677,7 @@ export default function ReturnsPage() {
                       </div>
                     ) : `Verify & Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`}
                   </button>
-                  <button type="button" onClick={() => setShowOtp(false)} className="text-sm text-indigo-600 hover:underline">
+                  <button type="button" onClick={() => { setShowOtp(false); resetRetToken(); }} className="text-sm text-indigo-600 hover:underline">
                     Cancel and return to form
                   </button>
                 </div>
@@ -756,6 +801,19 @@ export default function ReturnsPage() {
                   </div>
 
                   <div className="space-y-4">
+                    {pendingDelete && (
+                      <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm flex flex-wrap items-center gap-3">
+                        <p className="text-red-700 flex-1 min-w-[200px]">
+                          Remove PRODUCT #{products.findIndex((p) => p.id === pendingDelete.id) + 1} and discard its {pendingDelete.count} attached file{pendingDelete.count > 1 ? 's' : ''}?
+                        </p>
+                        <button type="button" onClick={confirmRemoveProduct} className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors">
+                          Remove
+                        </button>
+                        <button type="button" onClick={() => setPendingDelete(null)} className="px-4 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors">
+                          Keep
+                        </button>
+                      </div>
+                    )}
                     {products.map((product, index) => (
                       <div
                         key={product.id}
@@ -856,24 +914,6 @@ export default function ReturnsPage() {
                           </div>
                           {pricingBasis === 'per_product' ? (
                             <div>
-                              <label className="block text-xs font-medium text-slate-700 mb-1">Line Consideration (₹)</label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={product.lineConsideration}
-                                onChange={(e) => updateProduct(product.id, 'lineConsideration', sanitizeMoneyInput(e.target.value))}
-                                onBlur={(e) => {
-                                  const raw = e.target.value;
-                                  if (raw.trim() === '') { updateProduct(product.id, 'lineConsideration', ''); return; }
-                                  const p = moneyStringToPaise(raw);
-                                  if (p !== null) updateProduct(product.id, 'lineConsideration', (p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-                                }}
-                                placeholder="e.g. 1,25,000"
-                                className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
-                              />
-                            </div>
-                          ) : (
-                            <div>
                               <label className="block text-xs font-medium text-slate-700 mb-1">Base Price (₹/unit)</label>
                               <input
                                 type="text"
@@ -889,8 +929,35 @@ export default function ReturnsPage() {
                                 placeholder="e.g. 18,000"
                                 className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
                               />
+                              <label className="block text-xs font-medium text-slate-700 mb-1 mt-2">Line Consideration (₹)</label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={product.lineConsideration}
+                                onChange={(e) => updateProduct(product.id, 'lineConsideration', sanitizeMoneyInput(e.target.value))}
+                                onBlur={(e) => {
+                                  const raw = e.target.value;
+                                  if (raw.trim() === '') { updateProduct(product.id, 'lineConsideration', ''); return; }
+                                  const p = moneyStringToPaise(raw);
+                                  if (p !== null) updateProduct(product.id, 'lineConsideration', (p / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                                }}
+                                placeholder="e.g. 1,25,000"
+                                className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
+                              />
+                              {(() => {
+                                const base = moneyStringToPaise(product.basePrice || '');
+                                if (base === null) return null;
+                                const qty = Number(product.quantity) || 1;
+                                const total = qty * base;
+                                if (!Number.isSafeInteger(total)) return null;
+                                return (
+                                  <p className="text-[11px] font-mono text-slate-600 mt-1.5">
+                                    Line Final: {qty} × {formatPaise(base)} = {formatPaise(total)}
+                                  </p>
+                                );
+                              })()}
                             </div>
-                          )}
+                          ) : null}
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-700 mb-1">Details & Specs *</label>
@@ -994,6 +1061,18 @@ export default function ReturnsPage() {
                   {captchaError && (
                     <p className="text-xs text-center text-red-400 mt-2 mb-4">{captchaError}</p>
                   )}
+                  {retSiteKey && (
+                    <div className="flex justify-center mb-4">
+                      <Turnstile
+                        key={retKey}
+                        siteKey={retSiteKey}
+                        options={{ theme: 'light', action: 'returns-submit' }}
+                        onSuccess={(token) => setRetToken(token)}
+                        onExpire={() => setRetToken('')}
+                        onError={() => setRetToken('')}
+                      />
+                    </div>
+                  )}
                   <div className="flex gap-4">
                     <button
                       type="submit"
@@ -1020,21 +1099,28 @@ export default function ReturnsPage() {
           )}
         </motion.div>
 
-        {/* Compliance & handling trust strip */}
+        {/* Compliance & handling trust strip — every claim traceable to code:
+            TLS/HSTS headers, owner-or-admin CDN RBAC, quarantine-scan upload
+            pipeline, D1 audit trail. No attestation badges without a CPA letter. */}
         <div className="mt-8 flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-500 relative z-10 pb-8">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-indigo-600" />
-            <span>SOC 2 Type II</span>
+            <Lock className="w-5 h-5 text-indigo-600" />
+            <span>TLS 1.3 Enforced</span>
           </div>
           <span className="hidden sm:inline text-slate-300">|</span>
           <div className="flex items-center gap-2">
-            <Lock className="w-5 h-5 text-indigo-600" />
-            <span>TLS 1.3/AES-256</span>
+            <ShieldCheck className="w-5 h-5 text-indigo-600" />
+            <span>Role-Gated Evidence Access</span>
           </div>
           <span className="hidden sm:inline text-slate-300">|</span>
           <div className="flex items-center gap-2">
             <Archive className="w-5 h-5 text-indigo-600" />
-            <span>Zero-Access R2</span>
+            <span>Quarantine-Scanned Uploads</span>
+          </div>
+          <span className="hidden sm:inline text-slate-300">|</span>
+          <div className="flex items-center gap-2">
+            <FileCheck className="w-5 h-5 text-indigo-600" />
+            <span>Full Audit Trail</span>
           </div>
         </div>
       </div>

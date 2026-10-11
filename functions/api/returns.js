@@ -154,8 +154,24 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
   try {
+    // Scoped tracking lookup: ?id=S-…/B-… returns exactly one record (or
+    // fail-closed 400/404) so public tracking never downloads the whole
+    // table. Full list only when no id is given (staff surfaces).
+    let lookupId = null;
+    try {
+      const q = new URL(request.url).searchParams.get('id');
+      if (q !== null) {
+        const id = String(q).trim().toUpperCase();
+        if (id === '' || !/^[SB]-[A-Z0-9-]{3,64}$/.test(id)) {
+          return new Response(JSON.stringify({ success: false, message: 'Invalid tracking ID format.' }), { status: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+        }
+        lookupId = id;
+      }
+    } catch {
+      lookupId = null;
+    }
     if (env.DB) {
       // create table if not exists just in case it's empty
       await env.DB.prepare(`
@@ -174,7 +190,9 @@ export async function onRequestGet({ env }) {
         )
       `).run();
 
-      const { results } = await env.DB.prepare('SELECT * FROM returns ORDER BY date DESC').all();
+      const { results } = lookupId
+        ? await env.DB.prepare('SELECT * FROM returns WHERE id = ?').bind(lookupId).all()
+        : await env.DB.prepare('SELECT * FROM returns ORDER BY date DESC').all();
       
       const parseManifest = (raw) => {
         if (!raw) return null;
@@ -206,6 +224,13 @@ export async function onRequestGet({ env }) {
         manifest: parseManifest(row.manifest),
         finalPrice: parseFinalPrice(row.finalPrice)
       }));
+      if (lookupId) {
+        const hit = returns.find((r) => String(r.id).toUpperCase() === lookupId);
+        if (!hit) {
+          return new Response(JSON.stringify({ success: false, message: 'Request not found.' }), { status: 404, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
+        }
+        return new Response(JSON.stringify({ success: true, return: hit }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
+      }
       return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
     } else if (env.DATABASE_URL) {
       const { Client } = await import('pg');
@@ -226,7 +251,9 @@ export async function onRequestGet({ env }) {
           status VARCHAR(50)
         )
       `);
-      const { rows } = await client.query('SELECT * FROM returns ORDER BY date DESC');
+      const { rows } = lookupId
+        ? await client.query('SELECT * FROM returns WHERE id = $1', [lookupId])
+        : await client.query('SELECT * FROM returns ORDER BY date DESC');
       await client.end();
       const parseManifestPg = (raw) => {
         if (!raw) return null;
@@ -260,7 +287,16 @@ export async function onRequestGet({ env }) {
         manifest: parseManifestPg(row.manifest),
         finalPrice: parseFinalPricePg(row.finalprice)
       }));
+      if (lookupId) {
+        const hit = returns.find((r) => String(r.id).toUpperCase() === lookupId);
+        if (!hit) {
+          return new Response(JSON.stringify({ success: false, message: 'Request not found.' }), { status: 404, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
+        }
+        return new Response(JSON.stringify({ success: true, return: hit }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
+      }
       return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
+    }
+    return new Response(JSON.stringify({ success: true, returns: [] }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
     }
     return new Response(JSON.stringify({ success: true, returns: [] }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
   } catch (err) {

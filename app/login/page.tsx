@@ -436,7 +436,7 @@ export default function LoginPage() {
         
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Protected by Enterprise TLS 1.3 & SOC2 Compliance</span>
+          <span>Protected by TLS 1.3 · Verified sessions · Full audit trail</span>
         </div>
       </div>
     </div>
