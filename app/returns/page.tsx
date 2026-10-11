@@ -1128,7 +1128,7 @@ export default function ReturnsPage() {
           <span className="hidden sm:inline text-slate-300">|</span>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-indigo-600" />
-            <span>Role-Gated Evidence Access</span>
+            <span>Role-Gated Access</span>
           </div>
           <span className="hidden sm:inline text-slate-300">|</span>
           <div className="flex items-center gap-2">

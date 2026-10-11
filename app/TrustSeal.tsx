@@ -3,6 +3,12 @@
 import { ShieldCheck, Lock, Shield, Award } from 'lucide-react';
 import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+
+// Trust chrome belongs on pre-auth/public surfaces. Inside the app
+// (dashboard, intake) and on login (dedicated strip present) it is
+// viewport tax — hidden there, rendered everywhere else.
+const HIDDEN_PREFIXES = ['/dashboard', '/intake', '/login'];
 
 const seals = [
   {
@@ -44,12 +50,14 @@ export default function TrustSeal() {
   const fadeOpacity = useTransform(scrollY, [0, 150], [1, 0.15]);
   const [isMounted, setIsMounted] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   if (!isMounted) return null;
+  if (HIDDEN_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
 
   return (
     <motion.div
