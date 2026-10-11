@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, UploadCloud, FileJson, CheckCircle, AlertTriangle, Play, Database, FileSpreadsheet, Send, Activity, ListChecks, ChevronDown, ChevronUp, Clock, Package, Download, XCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import { moneyStringToPaise, formatPaise } from '../lib/money';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 // ── Schema-gated ingestion contract (ALL / PARTIAL / INSUFFICIENT) ──
 // Headers are normalized (trim, lowercase, BOM stripped) before matching.
@@ -88,17 +89,18 @@ function classifySchema(matchedKeys: string[]): { tier: 'all' | 'partial' | 'ins
   return { tier: 'insufficient', missing };
 }
 
-// ── Row-level validation (first 50 rows spot-checked on ingest; all rows on commit) ──
+// ── Row-level validation: full-file pass (chunked), errors capped at 200 stored ──
 function validateImportRow(row: Record<string, string>): string[] {
   const reasons: string[] = [];
   const email = (row.email || '').trim();
   if (email === '') reasons.push('missing email');
   else if (!EMAIL_RE_INGEST.test(email)) reasons.push(`invalid email "${row.email}"`);
-  // Strict integer gate: /^\d+$/ else flagged, never coerced
+  // Strict integer gate: /^\d+$/ else flagged, never coerced. Range beyond
+  // Number.MAX_SAFE_INTEGER is flagged too (parseInt would silently corrupt).
   const qty = (row.quantity || '').trim();
   if (qty === '') reasons.push('missing quantity');
   else if (!/^\d+$/.test(qty)) reasons.push(`quantity "${row.quantity}" is not a positive integer`);
-  else if (parseInt(qty, 10) === 0) reasons.push('quantity is zero');
+  else if (!Number.isSafeInteger(Number(qty)) || Number(qty) <= 0) reasons.push(`quantity "${row.quantity}" is not a safe positive integer`);
   const intent = (row.intent || '').trim();
   if (intent !== '' && !/^(sell|buy)$/i.test(intent)) reasons.push(`intent "${row.intent}" must be sell or buy`);
   const hasProduct = (row.category || '').trim() || (row.details || '').trim() || (row.quantity || '').trim();
@@ -195,10 +197,18 @@ function findDuplicateHeaders(headers: string[]): string[] {
   return dupes;
 }
 
-// ── Delimiter sniffer for CSV ──
-function sniffDelimiter(firstLine: string): string {
-  const commas = (firstLine.match(/,/g) || []).length;
-  const semicolons = (firstLine.match(/;/g) || []).length;
+// ── Delimiter sniffer for CSV: quote-aware across the first 3 non-empty
+// lines. A naive first-line count misfires on "Acme; Ltd",… cells.
+function sniffDelimiter(sample: string): string {
+  const lines = sample.split('\n').filter((l) => l.trim() !== '').slice(0, 3);
+  const stripQuoted = (l: string) => l.replace(/"[^"]*"/g, '');
+  let commas = 0;
+  let semicolons = 0;
+  for (const l of lines) {
+    const s = stripQuoted(l);
+    commas += (s.match(/,/g) || []).length;
+    semicolons += (s.match(/;/g) || []).length;
+  }
   return semicolons > commas ? ';' : ',';
 }
 
@@ -322,7 +332,10 @@ function custodyFileName(job: any): string {
 
 // Flatten grouped requests to review lines. Request ID leads every line —
 // the download maps file ↔ requests without a separate lookup.
+// Cells are CSV-injection sanitized: a leading = + - @ (after whitespace)
+// is neutralized with a quote prefix so spreadsheet apps never execute them.
 function flattenRequestsToLines(reqs: any[]): string[][] {
+  const sanitizeCell = (v: string): string => (/^\s*[=+\-@\t\r]/.test(v) ? `'${v}` : v);
   const lines: string[][] = [['Request ID', 'Intent', 'Client Name', 'Company', 'Email', 'Phone', 'Product Name', 'Model Number', 'Quantity']];
   for (const r of reqs || []) {
     for (const p of r?.products || []) {
@@ -330,7 +343,7 @@ function flattenRequestsToLines(reqs: any[]): string[][] {
         String(r.id ?? ''), String(r.intent ?? ''), String(r.name ?? ''),
         String(r.company ?? ''), String(r.email ?? ''), String(r.phone ?? ''),
         String(p.category ?? ''), String(p.details ?? ''), String(p.quantity ?? ''),
-      ]);
+      ].map(sanitizeCell));
     }
   }
   return lines;
@@ -353,6 +366,7 @@ interface SchemaValidationResult {
   tier: 'all' | 'partial' | 'insufficient';
   missing: string[];
   rowErrors: Array<{ rowIndex: number; reasons: string[] }>;
+  totalFailedRows: number;
   totalRows: number;
   validRows: number;
   fuzzyMappings: Record<string, boolean>;
@@ -387,6 +401,18 @@ export default function IntakeWorkbench() {
   const [commitReport, setCommitReport] = useState<{ okIds: string[]; failed: { id: string; error: string }[] } | null>(null);
   // Drag-drop hover state for the step-1 dropzone
   const [dragging, setDragging] = useState(false);
+  // Parse/validation progress for large files (null when idle)
+  const [parseProgress, setParseProgress] = useState<{ phase: string; done: number; total: number } | null>(null);
+  // Duplicate-file guard: exact byte match against an already-committed job
+  const [dupNotice, setDupNotice] = useState<{ jobId: string; requestIds: string[] } | null>(null);
+  const [dupAck, setDupAck] = useState(false);
+  // Inline override confirmation (replaces window.confirm for flagged commits)
+  const [overrideNeeded, setOverrideNeeded] = useState(false);
+  const [overrideAck, setOverrideAck] = useState(false);
+  // Upload bot gate (dormant without the site key, same contract as login)
+  const uploadSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+  const [upToken, setUpToken] = useState('');
+  const [upKey, setUpKey] = useState(0);
   // Commit scope: when row-level issues exist, exclude flagged rows by default.
   // Unchecking requires explicit confirmation at commit time.
   const [excludeInvalidRows, setExcludeInvalidRows] = useState(true);
@@ -565,7 +591,11 @@ export default function IntakeWorkbench() {
         rowData[schema.key] = sourceCol ? row[sourceCol] : '';
       });
 
-      const key = `${rowData.email}-${rowData.intent}`;
+      // Grouping key: email lowercased (A@x.com == a@x.com); blank emails get
+      // a per-row key so unrelated email-less rows never fuse into one phantom.
+      const emailKey = (rowData.email || '').trim().toLowerCase();
+      const intentKey = (rowData.intent || 'sell').trim().toLowerCase();
+      const key = emailKey ? `${emailKey}|||${intentKey}` : `__norow-${idx}|||${intentKey}`;
       if (!grouped.has(key)) {
         grouped.set(key, {
           id: `req-auto-${Date.now().toString(36)}-${idx}`,
@@ -585,11 +615,13 @@ export default function IntakeWorkbench() {
 
       const req = grouped.get(key);
       if (rowData.category || rowData.details || rowData.quantity) {
-        // Strict integer gate: /^\d+$/ and >0 pass; anything else is recorded
-        // as invalid and never coerced to 1 (commit-valid-only excludes it).
+        // Strict integer gate: /^\d+$/ and safe-integer and >0 pass; anything
+        // else is recorded as invalid and never coerced to 1 (commit-valid-only
+        // excludes it; the server gate refuses qty 0 on override commits).
         const qtyStr = (rowData.quantity || '').trim();
-        const qtyValid = /^\d+$/.test(qtyStr) && parseInt(qtyStr, 10) > 0;
-        const qty = qtyValid ? parseInt(qtyStr, 10) : 0;
+        const qtyNum = Number(qtyStr);
+        const qtyValid = /^\d+$/.test(qtyStr) && Number.isSafeInteger(qtyNum) && qtyNum > 0;
+        const qty = qtyValid ? qtyNum : 0;
         req.products.push({
           id: `prod-auto-${Date.now().toString(36)}-${idx}`,
           category: rowData.category || 'other',
@@ -712,6 +744,10 @@ export default function IntakeWorkbench() {
     setValidationResult(null);
     setTrackingNotice(null);
     setCommitReport(null);
+    setDupNotice(null);
+    setDupAck(false);
+    setOverrideNeeded(false);
+    setOverrideAck(false);
 
     // File-type scope: only .json/.csv/.xlsx enter this pipeline
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -731,7 +767,16 @@ export default function IntakeWorkbench() {
     try {
       // Custody anchor: hash the raw upload before any parsing. secure-context
       // only — degrades to 'unavailable', never fatal.
+      setParseProgress({ phase: 'Hashing upload', done: 0, total: 0 });
       const fileHash = await sha256Hex(file);
+      // Duplicate guard: byte-identical file already committed → hold for
+      // review instead of silently duplicating every request.
+      const prior = fileHash !== 'unavailable'
+        ? autoJobs.find((j) => j.sha256 === fileHash && j.status === 'Done' && ((j.requestIds as string[]) || []).length > 0)
+        : undefined;
+      if (prior) {
+        setDupNotice({ jobId: prior.id, requestIds: prior.requestIds });
+      }
       const custody: CustodyEvent[] = [
         custodyEvent('Uploaded', `${file.name} (${file.size} bytes, sha256 ${fileHash.slice(0, 16)}…)`),
       ];
@@ -757,6 +802,7 @@ export default function IntakeWorkbench() {
           tier: 'insufficient',
           missing: rmiss,
           rowErrors: [],
+          totalFailedRows: 0,
           totalRows: extra.totalRows ?? 0,
           validRows: 0,
           fuzzyMappings: rf,
@@ -820,8 +866,7 @@ export default function IntakeWorkbench() {
         // ── CSV path: SheetJS handles quoting, delimiter sniffing ──
         const text = await file.text();
         setRawText(text);
-        const firstLine = text.split('\n')[0] || '';
-        detectedDelimiter = sniffDelimiter(firstLine);
+        detectedDelimiter = sniffDelimiter(text.slice(0, 4096));
         // Pre-parse row cap: count lines before SheetJS materializes DOM rows
         const approxLines = (text.match(/\n/g) || []).length + 1;
         if (approxLines - 1 > MAX_IMPORT_ROWS) {
@@ -906,41 +951,55 @@ export default function IntakeWorkbench() {
       const { mapping: autoMapping, fuzzy, matchedKeys } = autoMapColumns(cols);
       const { tier, missing } = classifySchema(matchedKeys);
 
-      // Row-level spot check (first 50 rows)
-      const spotCheckRows = rows.slice(0, 50);
+      // Row-level validation over the FULL file (chunked to keep the tab
+      // responsive; progress reported). Errors capped at 200 stored with an
+      // exact failed count — spot-checking only the first 50 shipped rot.
+      setParseProgress({ phase: 'Validating rows', done: 0, total: rows.length });
       const rowErrors: Array<{ rowIndex: number; reasons: string[] }> = [];
-      spotCheckRows.forEach((row, idx) => {
-        const mapped: Record<string, string> = {};
-        for (const field of SCHEMA_FIELDS) {
-          const srcCol = autoMapping[field.key];
-          mapped[field.key] = srcCol ? String(row[srcCol] ?? '') : '';
-        }
-        const reasons = validateImportRow(mapped);
-        if (reasons.length > 0) rowErrors.push({ rowIndex: idx + 2, reasons }); // +2 for 1-indexed + header
-      });
+      let totalFailedRows = 0;
+      const CHUNK = 500;
+      for (let base = 0; base < rows.length; base += CHUNK) {
+        const slice = rows.slice(base, base + CHUNK);
+        slice.forEach((row, k) => {
+          const idx = base + k;
+          const mapped: Record<string, string> = {};
+          for (const field of SCHEMA_FIELDS) {
+            const srcCol = autoMapping[field.key];
+            mapped[field.key] = srcCol ? String(row[srcCol] ?? '') : '';
+          }
+          const reasons = validateImportRow(mapped);
+          if (reasons.length > 0) {
+            totalFailedRows++;
+            if (rowErrors.length < 200) rowErrors.push({ rowIndex: idx + 2, reasons }); // +2 for 1-indexed + header
+          }
+        });
+        setParseProgress({ phase: 'Validating rows', done: Math.min(base + CHUNK, rows.length), total: rows.length });
+        await new Promise((r) => setTimeout(r, 0)); // yield to the event loop
+      }
 
       const result: SchemaValidationResult = {
         tier,
         missing,
         rowErrors,
+        totalFailedRows,
         totalRows: rows.length,
-        validRows: rows.length - rowErrors.length,
+        validRows: rows.length - totalFailedRows,
         fuzzyMappings: fuzzy,
         duplicateHeaders: dupes,
         delimiter: detectedDelimiter,
         sheetName: detectedSheet,
       };
 
-      // Custody: validation complete — tier + spot-check issues on record.
-      custody.push(custodyEvent('Validated', `${tier.toUpperCase()} tier; ${rowErrors.length} row-level issue(s) in first-50 spot check`));
+      // Custody: validation complete — tier + full-file issues on record.
+      custody.push(custodyEvent('Validated', `${tier.toUpperCase()} tier; ${totalFailedRows} invalid row(s) of ${rows.length} checked`));
 
       // ── Tracking ID route: validated, never blind (A4) ──
-      // Auto-commit runs ONLY for ALL-tier files with a clean first-50 spot
-      // check. Partial schemas and flagged rows stay in the manual flow with
-      // an explanatory notice — a tracking column is not a validity proof.
+      // Auto-commit runs ONLY for ALL-tier files with zero invalid rows
+      // file-wide that are not byte-duplicates of a committed job.
+      // A tracking column is not a validity proof.
       const hasTrackingId = cols.some(c => normalizeHeader(c).includes('tracking') && normalizeHeader(c).includes('id'));
       if (hasTrackingId && tier !== 'insufficient') {
-        if (tier === 'all' && rowErrors.length === 0) {
+        if (tier === 'all' && totalFailedRows === 0 && !prior) {
           handleAutoIngestion('', cols, rows, file.name, file.size, {
             sha256: fileHash, tier, rowErrors, sheetName: detectedSheet,
             delimiter: detectedDelimiter, ext, custody,
@@ -1011,23 +1070,64 @@ export default function IntakeWorkbench() {
 
     } catch (err: any) {
       setErrorMsg(`Failed to parse file: ${err.message || 'Unknown error'}. Ensure the file is not corrupted.`);
+    } finally {
+      setParseProgress(null);
     }
-  }, []);
+  }, [autoJobs]);
+
+  // ── Upload entry gate: Turnstile challenge (dormant without the site key).
+  // Verifies server-side per file (tokens are single-use) before parsing.
+  const resetUpToken = () => {
+    setUpToken('');
+    setUpKey((k) => k + 1);
+  };
+
+  const startUpload = async (file: File) => {
+    if (uploadSiteKey) {
+      if (!upToken) {
+        setErrorMsg('Complete the human verification challenge before uploading.');
+        return;
+      }
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const vRes = await fetch(`${API_URL}/api/verify-turnstile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: upToken, action: 'intake-upload' })
+        });
+        const vData = await vRes.json().catch(() => null);
+        if (!vData || !vData.success) {
+          try {
+            const { logEvent } = await import('../lib/logger');
+            logEvent('TURNSTILE_BLOCKED', 'Intake Workbench', 'Upload verification failed or expired', getOperator());
+          } catch { /* non-fatal */ }
+          resetUpToken();
+          setErrorMsg('Upload verification failed or expired. Complete the challenge and retry.');
+          return;
+        }
+      } catch {
+        setErrorMsg('Verification service unavailable. Try again shortly.');
+        return;
+      }
+      resetUpToken();
+    }
+    await processFile(file);
+  };
 
   // ── Browse entry (A2: input reset so re-selecting the same file re-fires change) ──
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (file) void processFile(file);
-  }, [processFile]);
+    if (file) void startUpload(file);
+  }, [processFile, upToken, uploadSiteKey]);
 
   // ── Drop entry (A1: the "Drop files here" copy is now a real drop target) ──
   const handleFileDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) void processFile(file);
-  }, [processFile]);
+    if (file) void startUpload(file);
+  }, [processFile, upToken, uploadSiteKey]);
 
   // Row-validity check against the current mapping (commit-valid-only scope)
   const isMappedRowValid = (row: any, localMapping: Record<string, string>): boolean => {
@@ -1044,14 +1144,44 @@ export default function IntakeWorkbench() {
     const autoPreview = generateAutoPreview(source, mapping);
     setPreviewData(autoPreview);
     setCommitReport(null);
+    setOverrideNeeded(false);
+    setOverrideAck(false);
     setStep(3);
   };
 
-  // ── Per-item commit (A5): each request posts independently; failures are
+  // ── Per-item commit (A5): bulk-first (one round trip, per-item results),
+  // sequential fallback when the bulk route is unavailable. Failures are
   // collected, never silent. No rollback is offered (server has no bulk
   // delete) — the report states exactly what shipped and what did not.
   const commitRequests = async (reqs: any[]) => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    try {
+      const bRes = await fetch(`${API_URL}/api/returns/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: reqs })
+      });
+      if (bRes.status !== 404) {
+        let bData: any;
+        try {
+          bData = await bRes.json();
+        } catch {
+          throw new Error('Server returned an invalid response.');
+        }
+        if (bData && bData.success && Array.isArray(bData.okIds)) {
+          return {
+            okIds: bData.okIds as string[],
+            failed: ((bData.failed || []) as { id: string; error: string }[]),
+          };
+        }
+        throw new Error((bData && bData.message) || 'Bulk commit refused by server.');
+      }
+    } catch (e: any) {
+      // 404 route or unreachable network → sequential fallback below.
+      // Any other error (refusal, corrupt response) is fail-closed.
+      const isFallback = (e && e.message === 'Server returned an invalid response.') || e instanceof TypeError;
+      if (!isFallback) throw e;
+    }
     const okIds: string[] = [];
     const failed: { id: string; error: string }[] = [];
     for (const req of reqs) {
@@ -1077,12 +1207,17 @@ export default function IntakeWorkbench() {
   };
 
   const submitBatch = async () => {
-    // Explicit confirmation is required to commit flagged rows.
-    if (validationResult && validationResult.rowErrors.length > 0 && !excludeInvalidRows) {
-      const ok = typeof window !== 'undefined'
-        ? window.confirm(`This file has ${validationResult.rowErrors.length} flagged row-level issues (first-50 spot check). Commit ALL rows including flagged ones?`)
-        : true;
-      if (!ok) return;
+    // Duplicate-file guard: committing an exact byte-duplicate of a committed
+    // job needs explicit acknowledgement (inline, never window.confirm).
+    if (dupNotice && !dupAck) {
+      setErrorMsg(`This exact file was already processed as job ${dupNotice.jobId} (${dupNotice.requestIds.length} request(s)). Acknowledge below to commit it again.`);
+      return;
+    }
+    // Explicit inline confirmation is required to commit flagged rows.
+    if (validationResult && validationResult.totalFailedRows > 0 && !excludeInvalidRows && !overrideAck) {
+      setOverrideNeeded(true);
+      setErrorMsg(`This file has ${validationResult.totalFailedRows} invalid row(s) and "valid only" is off. Review below to commit all rows including invalid ones.`);
+      return;
     }
     setIsProcessing(true);
     setCommitReport(null);
@@ -1394,14 +1529,14 @@ export default function IntakeWorkbench() {
                 </p>
               </div>
             </div>
-            {validationResult.rowErrors.length > 0 && (
+            {validationResult.totalFailedRows > 0 && (
               <details className="text-xs text-amber-400/60">
-                <summary className="cursor-pointer font-bold text-amber-300/80">{validationResult.rowErrors.length} row-level issues in first 50 rows</summary>
+                <summary className="cursor-pointer font-bold text-amber-300/80">{validationResult.totalFailedRows} invalid row(s) — all {validationResult.totalRows} rows checked</summary>
                 <ul className="mt-2 space-y-1 pl-4 list-disc">
                   {validationResult.rowErrors.slice(0, 10).map((re, i) => (
                     <li key={i}>Row {re.rowIndex}: {re.reasons.join('; ')}</li>
                   ))}
-                  {validationResult.rowErrors.length > 10 && <li>…and {validationResult.rowErrors.length - 10} more</li>}
+                  {validationResult.totalFailedRows > 10 && <li>…and {validationResult.totalFailedRows - 10} more</li>}
                 </ul>
               </details>
             )}
@@ -1409,17 +1544,33 @@ export default function IntakeWorkbench() {
         )}
 
         {/* ── ALL tier info banner (row-level issues only, if any) ── */}
-        {validationResult && validationResult.tier === 'all' && step === 3 && activeTab === 'manual' && validationResult.rowErrors.length > 0 && (
+        {validationResult && validationResult.tier === 'all' && step === 3 && activeTab === 'manual' && validationResult.totalFailedRows > 0 && (
           <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
             <details className="text-xs text-amber-400/70">
-              <summary className="cursor-pointer font-bold text-amber-300 text-sm">{validationResult.rowErrors.length} row-level issues detected (spot check)</summary>
+              <summary className="cursor-pointer font-bold text-amber-300 text-sm">{validationResult.totalFailedRows} invalid row(s) detected (all {validationResult.totalRows} rows checked)</summary>
               <ul className="mt-2 space-y-1 pl-4 list-disc">
                 {validationResult.rowErrors.slice(0, 15).map((re, i) => (
                   <li key={i}>Row {re.rowIndex}: {re.reasons.join('; ')}</li>
                 ))}
-                {validationResult.rowErrors.length > 15 && <li>…and {validationResult.rowErrors.length - 15} more</li>}
+                {validationResult.totalFailedRows > 15 && <li>…and {validationResult.totalFailedRows - 15} more</li>}
               </ul>
             </details>
+          </div>
+        )}
+
+        {/* ── Duplicate-file notice (byte-identical to an already-committed job) ── */}
+        {dupNotice && !dupAck && activeTab === 'manual' && step !== 1 && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/40 rounded-2xl p-5 flex flex-wrap items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <p className="text-sm text-amber-300 flex-1 min-w-[200px]">
+              This exact file was already processed as job <span className="font-mono">{dupNotice.jobId}</span> ({dupNotice.requestIds.length} request(s): {dupNotice.requestIds.slice(0, 3).join(', ')}{dupNotice.requestIds.length > 3 ? '…' : ''}). Committing again will duplicate every request.
+            </p>
+            <button
+              onClick={() => setDupAck(true)}
+              className="text-xs px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold transition-colors"
+            >
+              Commit anyway
+            </button>
           </div>
         )}
 
@@ -1457,6 +1608,33 @@ export default function IntakeWorkbench() {
                   <UploadCloud className="w-5 h-5" /> Browse Files
                   <input type="file" className="hidden" accept=".csv,.json,.xlsx" onChange={handleFileUpload} />
                 </label>
+                {uploadSiteKey && (
+                  <div className="mt-4 flex justify-center">
+                    <Turnstile
+                      key={upKey}
+                      siteKey={uploadSiteKey}
+                      options={{ theme: 'dark', action: 'intake-upload' }}
+                      onSuccess={(token) => setUpToken(token)}
+                      onExpire={() => setUpToken('')}
+                      onError={() => setUpToken('')}
+                    />
+                  </div>
+                )}
+                {parseProgress && (
+                  <div className="mt-4 w-full max-w-md">
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-1.5">
+                      <span>{parseProgress.phase}</span>
+                      {parseProgress.total > 0 && <span className="font-mono">{parseProgress.done.toLocaleString()} / {parseProgress.total.toLocaleString()}</span>}
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      {parseProgress.total > 0 ? (
+                        <div className="h-full bg-indigo-500 transition-all" style={{ width: `${Math.round((parseProgress.done / parseProgress.total) * 100)}%` }} />
+                      ) : (
+                        <div className="h-full w-1/3 bg-indigo-500 rounded-full animate-pulse" />
+                      )}
+                    </div>
+                  </div>
+                )}
                 <p className="mt-4 text-xs text-slate-500 flex items-center gap-1">
                   <CheckCircle className="w-3 h-3 text-emerald-500" /> Secure pipeline: Max 300 MB · 10,000 rows · CSV/JSON/XLSX
                 </p>
@@ -1567,8 +1745,8 @@ export default function IntakeWorkbench() {
                     </div>
                   </div>
 
-                  {/* Commit scope: flagged rows are excluded by default; including them needs explicit confirmation */}
-                  {validationResult && validationResult.rowErrors.length > 0 && (
+                  {/* Commit scope: invalid rows are excluded by default; including them needs explicit inline confirmation */}
+                  {validationResult && validationResult.totalFailedRows > 0 && (
                     <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
                       <label className="flex items-center gap-2 text-xs text-amber-200 font-medium cursor-pointer">
                         <input
@@ -1577,7 +1755,7 @@ export default function IntakeWorkbench() {
                           onChange={(e) => setExcludeInvalidRows(e.target.checked)}
                           className="w-4 h-4 accent-amber-500"
                         />
-                        Commit valid rows only (exclude {validationResult.rowErrors.length} flagged in first-50 spot check)
+                        Commit valid rows only (exclude {validationResult.totalFailedRows} invalid row(s))
                       </label>
                       <button
                         onClick={() => generatePreview()}
@@ -1586,8 +1764,29 @@ export default function IntakeWorkbench() {
                         Rebuild preview
                       </button>
                       {!excludeInvalidRows && (
-                        <span className="text-[11px] text-red-300">Including flagged rows will ask for confirmation at commit.</span>
+                        <span className="text-[11px] text-red-300">Including invalid rows will ask for confirmation at commit.</span>
                       )}
+                    </div>
+                  )}
+                  {/* Inline override confirmation (no blocking dialogs) */}
+                  {overrideNeeded && !overrideAck && (
+                    <div className="mb-4 flex flex-wrap items-center gap-3 bg-red-500/10 border border-red-500/40 rounded-xl px-4 py-3">
+                      <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                      <p className="text-xs text-red-300 flex-1 min-w-[200px]">
+                        {validationResult?.totalFailedRows} invalid row(s) will be committed as quantity-0 lines and the server will refuse them per item. This is recorded, not recommended.
+                      </p>
+                      <button
+                        onClick={() => { setOverrideAck(true); setOverrideNeeded(false); void submitBatch(); }}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition-colors"
+                      >
+                        Commit anyway
+                      </button>
+                      <button
+                        onClick={() => { setOverrideNeeded(false); setExcludeInvalidRows(true); generatePreview(true); }}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                      >
+                        Keep valid-only
+                      </button>
                     </div>
                   )}
 

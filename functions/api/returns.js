@@ -2,6 +2,46 @@ export async function onRequestPost({ request, env }) {
   try {
     const returnReq = await request.json();
 
+    // ── Schema gate (mirrors the intake workbench validator — keep the logic
+    // identical; this file cannot import TS. Fail-closed 422, never coercion.
+    // The returns form always submits numeric qty ≥ 1 + OTP-verified email, so
+    // legitimate flows pass; bulk override-commits surface per-item 422s. ──
+    const badRequest = (message) => new Response(JSON.stringify({ success: false, message }), {
+      status: 422, headers: { 'Content-Type': 'application/json' }
+    });
+    const EMAIL_RE_RETURNS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!returnReq || typeof returnReq !== 'object') return badRequest('Invalid request body.');
+    if (typeof returnReq.id !== 'string' || returnReq.id.trim() === '' || returnReq.id.length > 128) {
+      return badRequest('Request id is required.');
+    }
+    if (typeof returnReq.intent !== 'string' || !/^(sell|buy)$/i.test(returnReq.intent.trim())) {
+      return badRequest('Intent must be sell or buy.');
+    }
+    if (typeof returnReq.email !== 'string' || !EMAIL_RE_RETURNS.test(returnReq.email.trim())) {
+      return badRequest('A valid email is required.');
+    }
+    if (typeof returnReq.name !== 'string' || returnReq.name.trim() === '') {
+      return badRequest('Client name is required.');
+    }
+    if (!Array.isArray(returnReq.products) || returnReq.products.length === 0) {
+      return badRequest('At least one product line is required.');
+    }
+    if (returnReq.products.length > 10000) {
+      return badRequest('Too many product lines.');
+    }
+    for (let i = 0; i < returnReq.products.length; i++) {
+      const p = returnReq.products[i];
+      if (!p || typeof p !== 'object') return badRequest(`Product line ${i + 1} is malformed.`);
+      if (!Number.isInteger(p.quantity) || p.quantity <= 0 || !Number.isSafeInteger(p.quantity)) {
+        return badRequest(`Product line ${i + 1}: quantity must be a positive safe integer.`);
+      }
+    }
+    if (returnReq.pricingBasis === 'lot' && returnReq.lotConsiderationPaise !== null && returnReq.lotConsiderationPaise !== undefined) {
+      if (!Number.isInteger(returnReq.lotConsiderationPaise) || returnReq.lotConsiderationPaise < 0) {
+        return badRequest('Lot consideration must be integer paise or null.');
+      }
+    }
+
     // Money contract: evaluated prices are paise integers (pricePaise).
     // Legacy records carry rupee floats in `price` — converted once here,
     // never mixed with paise values in the same sum.
