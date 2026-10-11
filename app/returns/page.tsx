@@ -19,19 +19,19 @@ async function sha256Json(value: unknown): Promise<string> {
   return hexOfBytes(new Uint8Array(digest));
 }
 
-// Line Consideration helper text: the example is derived from the card's own
-// qty/base so it can never disagree with the Line Final strip. Whole-line
-// semantics stated explicitly; SELL ask vs BUY budget worded per intent.
-// Never a default — the field still submits empty (null = undecided).
+// Line Consideration helper text. The placeholder stays under ~20 visible
+// chars (the field column truncates sentences mid-word); the microcopy below
+// the field carries the meaning. Whole-line semantics explicit; SELL total vs
+// BUY budget in one trailing word. Never a default — submits empty.
 function considerationHint(qtyRaw: unknown, baseRaw: string, intent: 'sell' | 'buy'): { placeholder: string; scope: string } {
   const n = Number(qtyRaw);
   const qty = Number.isInteger(n) && n > 0 ? n : 1;
-  const scope = qty === 1 ? 'the unit' : `all ${qty} units`;
-  const askWord = intent === 'sell' ? 'your ask for' : 'your budget for';
+  const scope = qty === 1 ? 'this line' : `all ${qty} units`;
+  const askWord = intent === 'sell' ? 'total' : 'budget';
   const base = moneyStringToPaise(baseRaw || '');
   const examplePaise = base !== null && Number.isSafeInteger(qty * base) ? qty * base : 12500000;
   const example = (examplePaise / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 });
-  return { placeholder: `e.g. ${example} — ${askWord} ${scope}`, scope };
+  return { placeholder: `e.g. ${example} ${askWord}`, scope };
 }
 
 interface ProductItem {
@@ -960,7 +960,7 @@ export default function ReturnsPage() {
                                 className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
                               />
                               <p className="text-[11px] text-slate-500 mt-1.5">
-                                Optional — your total for {considerationHint(product.quantity, product.basePrice, intent).scope}. Leave blank for us to evaluate.
+                                Optional — your total for {considerationHint(product.quantity, product.basePrice, intent).scope}, not per-unit. Leave blank for us to evaluate.
                               </p>
                               {(() => {
                                 const base = moneyStringToPaise(product.basePrice || '');
