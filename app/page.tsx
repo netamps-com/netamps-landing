@@ -43,7 +43,7 @@ const expertiseAreas = [
   { title: "AI-Augmented Surveillance & Behavioral Analytics", desc: "Deployment of intelligent optical networks utilizing AI telemetry for physical security and real-time anomaly detection.", color: "border-purple-200 bg-purple-100 text-purple-600", icon: Cctv, bgImage: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&q=80&w=600" },
   { title: "IoT Security & Edge Network Protection", desc: "Hardening and administering vast interconnected device ecosystems to mitigate edge-compute vulnerabilities and endpoint compromises.", color: "border-rose-200 bg-rose-100 text-rose-600", icon: Cpu, bgImage: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=600" },
   { title: "Enterprise Hardware & SIEM Procurement", desc: "Strategic acquisition, provisioning, and lifecycle management of enterprise-grade hardware, SIEM platforms, and tactical tools.", color: "border-teal-200 bg-teal-100 text-teal-600", icon: ShoppingCart, bgImage: "https://images.unsplash.com/photo-1591405351990-4726e331f141?auto=format&fit=crop&q=80&w=600" },
-  { title: "Secure IT Asset Disposition (ITAD) & Reverse Logistics", desc: "Cryptographic data erasure, compliant e-waste decommissioning, and secure hardware extraction adhering to DoD standards.", color: "border-amber-200 bg-amber-100 text-amber-600", icon: Repeat, bgImage: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&q=80&w=600" },
+  { title: "Secure IT Asset Disposition (ITAD) & Reverse Logistics", desc: "Cryptographic data erasure, compliant e-waste decommissioning, and secure hardware extraction following NIST SP 800-88 media sanitization guidelines.", color: "border-amber-200 bg-amber-100 text-amber-600", icon: Repeat, bgImage: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&q=80&w=600" },
   { title: "Vulnerability Assessment & Penetration Testing (VAPT)", desc: "Full-scope adversarial simulations, red teaming, and continuous attack surface management across dynamic environments.", color: "border-cyan-200 bg-cyan-100 text-cyan-600", icon: Target, bgImage: "https://images.unsplash.com/photo-1510511459019-5d01a80c9e65?auto=format&fit=crop&q=80&w=600" },
   { title: "Smart Enterprise & EdTech Infrastructure", desc: "Engineering next-generation collaborative environments integrated with secure network connectivity and unified communications.", color: "border-orange-200 bg-orange-100 text-orange-600", icon: BookOpen, bgImage: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&q=80&w=600" },
   { title: "Managed Cloud Architecture Services (MSP)", desc: "End-to-end cloud lifecycle administration, workload migration, and FinOps resource optimization across distributed infrastructures.", color: "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-600", icon: Server, bgImage: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600" }
@@ -311,7 +311,7 @@ export default function Home() {
               {[
                 { name: 'AWS', domain: 'aws.amazon.com' },
                 { name: 'Google Cloud', domain: 'cloud.google.com' },
-                { name: 'Intel', domain: 'intel.com', extra: 'Gold Partner' },
+                { name: 'Intel', domain: 'intel.com' },
                 { name: 'HPE Aruba', domain: 'arubanetworks.com' },
                 { name: 'Seagate', domain: 'seagate.com' },
                 { name: 'Microsoft', domain: 'microsoft.com' },
@@ -345,7 +345,6 @@ export default function Home() {
                   />
                   <div className="flex flex-col text-left">
                     <span className="font-bold text-base text-slate-800 tracking-tight leading-none">{partner.name}</span>
-                    {partner.extra && <span className="text-[9px] uppercase text-primary font-bold tracking-widest mt-1">{partner.extra}</span>}
                   </div>
                 </motion.div>
               ))}
@@ -375,7 +374,7 @@ export default function Home() {
                 Advanced Cyber Defense Operations
               </motion.h2>
               <motion.p variants={fadeInUp} className="text-lg text-slate-600 font-medium">
-                Delivering military-grade cyber defense infrastructure, continuous adversarial simulation, and sovereign data governance to preempt and neutralize advanced persistent threats.
+                Delivering enterprise-grade cyber defense infrastructure, continuous adversarial simulation, and sovereign data governance to preempt and neutralize advanced persistent threats.
               </motion.p>
             </motion.div>
             
@@ -586,6 +585,24 @@ export default function Home() {
               </div>
             </div>
 
+          </div>
+
+          {/* Security Compliance Bar */}
+          <div className="mt-8 pt-6 border-t border-slate-200/50">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Security Standards</span>
+              {[
+                { label: 'FIPS 140-3 Validated', icon: '🛡️' },
+                { label: 'DoD Standards', icon: '⚔️' },
+                { label: 'Military-Grade Encryption', icon: '🔐' },
+                { label: 'Verified 256-Bit SSL', icon: '🔒' },
+              ].map((badge) => (
+                <div key={badge.label} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/60 backdrop-blur-sm border border-slate-200 px-2.5 py-1 rounded-full shadow-sm">
+                  <span>{badge.icon}</span>
+                  <span>{badge.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </footer>
