@@ -1,5 +1,6 @@
 import { signDemoSession } from '../intake/auth';
 import { verifyTurnstileToken } from '../verify-turnstile';
+import { argon2id, argon2Verify } from 'hash-wasm';
 
 // Login rate limiting (isolate-local, same posture as verify-turnstile:
 // slows single-origin stuffing; distributed botnets need KV-backed limits).
@@ -21,10 +22,16 @@ function loginRateLimited(kind, key) {
   return record.count > (kind === 'email' ? LOGIN_RL_PER_EMAIL : LOGIN_RL_PER_IP);
 }
 
-// Password storage: PBKDF2-SHA256 over the client-supplied SHA-256 (raw
-// passwords never cross the wire AND never rest on the server).
-// Format: pbkdf2$<iterations>$<b64salt>$<b64dk>. Legacy rows hold bare
-// 64-hex SHA-256 and transparently upgrade on next successful login.
+// Password storage: Argon2id over the client-supplied SHA-256 (raw passwords
+// never cross the wire AND never rest on the server). Stored value is the
+// self-describing encoded form ($argon2id$v=19$m=19456,t=3,p=1$…).
+// Migration chain (verify-only downward, upgrade upward on success):
+//   $argon2id$ (current) → pbkdf2$… (previous) → 64-hex SHA-256 (original).
+// argon2id params: m=19 MiB, t=3, p=1 (~190 ms — safe inside Worker CPU
+// limits; logins are rare). If WASM instantiation ever fails, new secrets
+// fall back to PBKDF2 (loudly logged) rather than locking users out;
+// argon2 rows that cannot verify fail closed (deny).
+const ARGON_OPTS = { parallelism: 1, iterations: 3, memorySize: 19456, hashLength: 32 };
 const KDF_ITERATIONS = 120000;
 const KDF_SALT_LEN = 16;
 const KDF_DK_LEN = 32;
@@ -53,12 +60,30 @@ async function deriveKdf(clientHashHex, saltB64, iterations) {
   return b64encode(new Uint8Array(bits));
 }
 async function hashNewSecret(clientHashHex) {
-  const saltB64 = b64encode(crypto.getRandomValues(new Uint8Array(KDF_SALT_LEN)));
-  const dk = await deriveKdf(clientHashHex, saltB64, KDF_ITERATIONS);
-  return `pbkdf2$${KDF_ITERATIONS}$${saltB64}$${dk}`;
+  const material = String(clientHashHex);
+  try {
+    return await argon2id({
+      password: material,
+      salt: crypto.getRandomValues(new Uint8Array(16)),
+      ...ARGON_OPTS,
+      outputType: 'encoded'
+    });
+  } catch (err) {
+    console.error('[auth] argon2id unavailable, PBKDF2 fallback (temporary, still salted):', err);
+    const saltB64 = b64encode(crypto.getRandomValues(new Uint8Array(KDF_SALT_LEN)));
+    const dk = await deriveKdf(material, saltB64, KDF_ITERATIONS);
+    return `pbkdf2$${KDF_ITERATIONS}$${saltB64}$${dk}`;
+  }
 }
 async function verifySecret(stored, clientHashHex) {
   if (typeof stored !== 'string' || typeof clientHashHex !== 'string') return false;
+  if (stored.startsWith('$argon2id$')) {
+    try {
+      return await argon2Verify({ password: clientHashHex, hash: stored });
+    } catch {
+      return false;
+    }
+  }
   if (stored.startsWith('pbkdf2$')) {
     const parts = stored.split('$');
     if (parts.length !== 4) return false;
@@ -76,7 +101,7 @@ async function verifySecret(stored, clientHashHex) {
   }
   return false;
 }
-const isLegacyHash = (stored) => typeof stored === 'string' && /^[0-9a-f]{64}$/i.test(stored);
+const needsUpgrade = (stored) => typeof stored === 'string' && !stored.startsWith('$argon2id$');
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -127,9 +152,10 @@ export async function onRequestPost({ request, env }) {
         const { results } = await env.DB.prepare('SELECT hash, role FROM users WHERE email = ?').bind(email).all();
         const stored = results.length > 0 ? results[0].hash : null;
         if (results.length > 0 && await verifySecret(stored, passwordHash)) {
-          // Transparent KDF upgrade: legacy bare-SHA-256 rows become salted
-          // PBKDF2 on first successful login (covers the hardcoded defaults).
-          if (isLegacyHash(stored)) {
+          // Transparent KDF upgrade: any non-Argon2id row becomes Argon2id on
+          // first successful login (covers legacy hex and PBKDF2 rows,
+          // including the hardcoded defaults).
+          if (needsUpgrade(stored)) {
             try {
               await env.DB.prepare('UPDATE users SET hash = ? WHERE email = ?').bind(await hashNewSecret(passwordHash), email).run();
             } catch {}
@@ -237,7 +263,7 @@ export async function onRequestPost({ request, env }) {
         const res = await client.query('SELECT hash, role FROM users WHERE email = $1', [email]);
         const pgStored = res.rows.length > 0 ? res.rows[0].hash : null;
         if (res.rows.length > 0 && await verifySecret(pgStored, passwordHash)) {
-          if (isLegacyHash(pgStored)) {
+          if (needsUpgrade(pgStored)) {
             try {
               await client.query('UPDATE users SET hash = $1 WHERE email = $2', [await hashNewSecret(passwordHash), email]);
             } catch {}
