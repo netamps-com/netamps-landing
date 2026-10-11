@@ -23,6 +23,38 @@ function getClientIp(request) {
   );
 }
 
+// Shared siteverify core (imported by the login handler so bots cannot
+// bypass the widget by POSTing directly). Returns { ok } — callers map
+// failures to their own generic messages to avoid account oracles.
+export async function verifyTurnstileToken(env, token, ip, action) {
+  const secret = env.TURNSTILE_SECRET_KEY;
+  if (!secret) return { configured: false, ok: false };
+  try {
+    const formData = new FormData();
+    formData.append('secret', secret);
+    formData.append('response', token);
+    if (ip && ip !== 'unknown') formData.append('remoteip', ip);
+
+    const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData
+    });
+    const outcome = await verifyRes.json();
+
+    if (!outcome.success) return { configured: true, ok: false };
+    if (action && outcome.action && outcome.action !== action) return { configured: true, ok: false };
+
+    const allowedHostname = env.TURNSTILE_ALLOWED_HOSTNAME;
+    if (allowedHostname && outcome.hostname && outcome.hostname !== allowedHostname) {
+      return { configured: true, ok: false };
+    }
+    return { configured: true, ok: true };
+  } catch (err) {
+    console.error('[verify-turnstile] siteverify request failed:', err);
+    return { configured: true, ok: false, unavailable: true };
+  }
+}
+
 function isRateLimited(ip) {
   const now = Date.now();
   const record = rateLimitMap.get(ip);
@@ -83,39 +115,12 @@ export async function onRequest(context) {
   }
 
   try {
-    const formData = new FormData();
-    formData.append('secret', secret);
-    formData.append('response', token);
-    if (ip !== 'unknown') formData.append('remoteip', ip);
-
-    const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: formData
-    });
-    const outcome = await verifyRes.json();
-
-    if (!outcome.success) {
+    const check = await verifyTurnstileToken(env, token, ip, action || undefined);
+    if (!check.ok) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Verification failed', codes: outcome['error-codes'] || [] }),
+        JSON.stringify({ success: false, error: 'Verification failed' }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
-    }
-
-    // Pin the token to the expected action when the client declares one
-    if (action && outcome.action && outcome.action !== action) {
-      return new Response(JSON.stringify({ success: false, error: 'Verification failed' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Pin the token hostname when an allowlist is configured
-    const allowedHostname = env.TURNSTILE_ALLOWED_HOSTNAME;
-    if (allowedHostname && outcome.hostname && outcome.hostname !== allowedHostname) {
-      return new Response(JSON.stringify({ success: false, error: 'Verification failed' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
     }
 
     return new Response(JSON.stringify({ success: true }), {

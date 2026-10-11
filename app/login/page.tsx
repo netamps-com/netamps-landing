@@ -229,7 +229,9 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg('');
 
-    // Bot gate first: no token, no login attempt (fail-closed when configured).
+    // Bot gate: token presence checked here; the single siteverify happens
+    // server-side inside /api/users (tokens are single-use — verifying twice
+    // burns the token and every login would fail).
     if (turnstileSiteKey && !turnstileToken) {
       setErrorMsg('Complete the human verification challenge before signing in.');
       return;
@@ -238,30 +240,6 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      if (turnstileSiteKey) {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-        const verifyRes = await fetch(`${API_URL}/api/verify-turnstile`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: turnstileToken, action: 'login' })
-        });
-        let verifyData: any = null;
-        try {
-          verifyData = await verifyRes.json();
-        } catch {
-          throw new Error('Verification service returned an invalid response.');
-        }
-        if (!verifyData.success) {
-          try {
-            const { logEvent } = await import('../lib/logger');
-            logEvent('TURNSTILE_BLOCKED', 'Login Page', 'Bot verification failed or expired', email);
-          } catch(e) {}
-          resetTurnstile();
-          setErrorMsg('Verification failed or expired. Complete the challenge again.');
-          setIsSubmitting(false);
-          return;
-        }
-      }
       await processLogin(turnstileSiteKey ? turnstileToken : 'no_captcha');
     } catch (err) {
       setErrorMsg('Encryption error occurred.');
@@ -277,16 +255,16 @@ export default function LoginPage() {
       const res = await fetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', email, passwordHash: hashedPassword, remember: rememberMe })
+        body: JSON.stringify({ action: 'login', email, passwordHash: hashedPassword, remember: rememberMe, turnstileToken: captchaToken === 'no_captcha' ? undefined : captchaToken })
       });
       const data = await res.json();
 
       if (data.success) {
         // Remember-me decides persistence: checked → 30-day cookies,
-        // unchecked → session cookies that die with the tab. Previously the
-        // checkbox was decorative and every login persisted 8h regardless.
-        // The session_id value is server-issued (signed); only store it when
-        // present — never the literal string "undefined".
+        // unchecked → session cookies that die with the tab.
+        // session_id carries the server-signed value (forgery-dead); it stays
+        // JS-writable until the dashboard presence check moves off
+        // document.cookie (coordinated cutover — see deploy notes).
         const age = rememberMe ? '; max-age=2592000' : '';
         if (data.sessionId) {
           document.cookie = `session_id=${data.sessionId}; path=/${age}; SameSite=Strict; Secure`;
