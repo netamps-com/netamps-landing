@@ -194,6 +194,7 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState('');
 
   const [showStatus, setShowStatus] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   useEffect(() => {
     document.title = 'Netamps Connect';
@@ -281,9 +282,13 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
+        // Remember-me decides persistence: checked → 30-day cookies,
+        // unchecked → session cookies that die with the tab. Previously the
+        // checkbox was decorative and every login persisted 8h regardless.
+        const age = rememberMe ? '; max-age=2592000' : '';
         // Note: `Secure` cookies require HTTPS. Localhost HTTP will drop them. Use Pages preview URLs.
-        document.cookie = `session_id=${data.sessionId}; path=/; max-age=28800; SameSite=Strict; Secure`;
-        document.cookie = `user_role=${email}; path=/; max-age=28800; SameSite=Strict; Secure`;
+        document.cookie = `session_id=${data.sessionId}; path=/${age}; SameSite=Strict; Secure`;
+        document.cookie = `user_role=${email}; path=/${age}; SameSite=Strict; Secure`;
         
         try {
           const { logEvent } = await import('../lib/logger');
@@ -324,7 +329,7 @@ export default function LoginPage() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-8">
-          <Link href="/" className="scale-125 transform origin-center transition-transform hover:scale-110">
+          <Link href="/" className="scale-125 transform origin-center transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg">
             <NetampsLogo />
           </Link>
         </div>
@@ -394,6 +399,8 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-500">

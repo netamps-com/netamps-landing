@@ -510,7 +510,7 @@ export default function ReturnsPage() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl relative z-10">
         <div className="flex justify-center mb-8">
-          <Link href="/" className="scale-125 transform origin-center transition-transform hover:scale-110">
+          <Link href="/" className="scale-125 transform origin-center transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl">
             <NetampsLogo />
           </Link>
         </div>
@@ -549,25 +549,31 @@ export default function ReturnsPage() {
             <div className="p-8 sm:p-10">
               
               {/* Intent Toggle */}
-              <div className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
+              <div role="radiogroup" aria-label="Request type" className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
                 <button 
                   type="button"
+                  role="radio"
+                  aria-checked={intent === 'sell'}
                   onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
-                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   SELL Equipment
                 </button>
                 <button 
                   type="button"
+                  role="radio"
+                  aria-checked={intent === 'buy'}
                   onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
-                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   BUY Equipment
                 </button>
                 <button 
                   type="button"
+                  role="radio"
+                  aria-checked={intent === 'track'}
                   onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}
-                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Track Request
                 </button>
@@ -584,7 +590,7 @@ export default function ReturnsPage() {
                       <input type="text" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
                     </div>
                   </div>
-                  <button type="button" onClick={handleTrackSubmit} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors">
+                  <button type="button" onClick={handleTrackSubmit} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900">
                     Track Request
                   </button>
                   {trackingError && <p className="text-red-500 text-center text-sm">{trackingError}</p>}
@@ -683,7 +689,7 @@ export default function ReturnsPage() {
                     type="button"
                     onClick={handleOtpVerify}
                     disabled={isSubmitting || isUploading}
-                    className="w-full max-w-xs mx-auto flex justify-center items-center py-4 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md transition-colors disabled:opacity-70"
+                    className="w-full max-w-xs mx-auto flex justify-center items-center py-4 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-md transition-colors disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
                   >
                     {isSubmitting || isUploading ? (
                       <div className="flex items-center gap-2">
@@ -692,12 +698,12 @@ export default function ReturnsPage() {
                       </div>
                     ) : `Verify & Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`}
                   </button>
-                  <button type="button" onClick={() => { setShowOtp(false); resetRetToken(); }} className="text-sm text-indigo-600 hover:underline">
+                  <button type="button" onClick={() => { setShowOtp(false); resetRetToken(); }} className="text-sm text-indigo-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded">
                     Cancel and return to form
                   </button>
                 </div>
               ) : (
-                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}>
+                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setPendingDelete(null); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name *</label>
@@ -843,7 +849,7 @@ export default function ReturnsPage() {
                         className={`p-4 bg-slate-50/50 border rounded-xl flex flex-col gap-4 relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)] transition-all ${dragOverCard === product.id ? 'border-indigo-500 ring-2 ring-indigo-500/40 bg-indigo-50/40' : 'border-slate-200/80'}`}
                       >
                         {products.length > 1 && (
-                          <button type="button" onClick={() => removeProduct(product.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors">
+                          <button type="button" onClick={() => removeProduct(product.id)} aria-label={`Remove product ${index + 1}`} className="absolute top-2 right-2 p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
@@ -853,18 +859,22 @@ export default function ReturnsPage() {
                           <div className="space-y-4 mb-2">
                             <div>
                               <label className="block text-xs font-medium text-slate-700 mb-2">Strategic Recovery Target *</label>
-                              <div className="flex bg-slate-100 p-1 rounded-xl">
+                              <div role="radiogroup" aria-label="Strategic recovery target" className="flex bg-slate-100 p-1 rounded-xl">
                                 <button
                                   type="button"
+                                  role="radio"
+                                  aria-checked={product.strategicTarget === 'resale'}
                                   onClick={() => updateProduct(product.id, 'strategicTarget', 'resale')}
-                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${product.strategicTarget === 'resale' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${product.strategicTarget === 'resale' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
                                 >
                                   Resale Value Optimization
                                 </button>
                                 <button
                                   type="button"
+                                  role="radio"
+                                  aria-checked={product.strategicTarget === 'compliance'}
                                   onClick={() => updateProduct(product.id, 'strategicTarget', 'compliance')}
-                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${product.strategicTarget === 'compliance' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${product.strategicTarget === 'compliance' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
                                 >
                                   Compliance Recycling
                                 </button>
@@ -1021,7 +1031,7 @@ export default function ReturnsPage() {
                                         type="button"
                                         title={`Copy asset URL: ${f.assetUrl}`}
                                         onClick={() => { try { navigator.clipboard.writeText(new URL(f.assetUrl as string, window.location.origin).toString()); } catch {} }}
-                                        className="flex items-center gap-0.5 hover:underline"
+                                        className="flex items-center gap-0.5 hover:underline p-1.5 -m-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                       >
                                         <Link2 className="w-3 h-3" />
                                       </button>
@@ -1095,7 +1105,7 @@ export default function ReturnsPage() {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className={`flex-1 flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-xl shadow-lg text-base font-bold text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed ${intent === 'sell' ? 'bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500'}`}
+                      className={`flex-1 flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-xl shadow-lg text-base font-bold text-white transition-all disabled:opacity-70 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${intent === 'sell' ? 'bg-indigo-600 hover:bg-indigo-500 focus-visible:ring-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500 focus-visible:ring-emerald-500'}`}
                     >
                       {isSubmitting ? (
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -1105,7 +1115,8 @@ export default function ReturnsPage() {
                     </button>
                     <button
                       type="reset"
-                      className="px-6 py-4 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors"
+                      title="Reset form fields (staged files are kept)"
+                      className="px-6 py-4 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     >
                       Clear
                     </button>

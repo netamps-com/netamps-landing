@@ -623,7 +623,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                           type="button"
                           onClick={() => copyAssetUrl(qFile.id, qFile.assetUrl)}
                           title="Copy asset URL"
-                          className="ml-auto flex items-center gap-1 text-emerald-300 hover:text-white shrink-0"
+                          className="ml-auto flex items-center gap-1 p-2 -m-1 rounded text-emerald-300 hover:text-white shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                         >
                           {copiedId === qFile.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
@@ -654,12 +654,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                     </button>
                   )}
                   {qFile.state === 'ERROR' && (
-                    <button type="button" onClick={() => retryUpload(qFile)} title="Retry upload from the start" aria-label={`Retry upload of ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-indigo-300 hover:bg-slate-900 rounded-lg transition-colors">
+                    <button type="button" onClick={() => retryUpload(qFile)} title="Retry upload from the start" aria-label={`Retry upload of ${qFile.file.name}`} className="p-3 text-slate-500 hover:text-indigo-300 hover:bg-slate-900 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
                       <RotateCcw className="w-4 h-4" />
                     </button>
                   )}
                   {qFile.state !== 'UPLOADING' && (
-                    <button type="button" onClick={() => removeFile(qFile.id)} title="Remove file" aria-label={`Remove ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors">
+                    <button type="button" onClick={() => removeFile(qFile.id)} title="Remove file" aria-label={`Remove ${qFile.file.name}`} className="p-3 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
