@@ -1,7 +1,13 @@
+import { signDemoSession } from '../intake/auth';
+
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
     const { action, email, passwordHash, role, currentPasswordHash } = body;
+    // Remember-me extends every lifetime consistently (DB row, HttpOnly
+    // cookie, signed dashboard value): 30 days checked, 8 hours otherwise.
+    const ttlMs = body.remember === true ? 30 * 24 * 3600 * 1000 : 8 * 3600 * 1000;
+    const ttlSec = Math.floor(ttlMs / 1000);
 
     if (env.DB) {
       await env.DB.prepare(`
@@ -37,13 +43,23 @@ export async function onRequestPost({ request, env }) {
             )
           `).run();
           
-          const expiresAt = new Date(Date.now() + 8 * 3600 * 1000).toISOString();
+          const expiresAt = new Date(Date.now() + ttlMs).toISOString();
           await env.DB.prepare('INSERT INTO sessions (token, email, role, expires_at) VALUES (?, ?, ?, ?)').bind(sessionId, email, results[0].role, expiresAt).run();
 
+          // Dashboard session cookie value: server-signed token.exp.sig so the
+          // verifySession fallback can reject forgeries (unsigned legacy
+          // cookies keep working only while DEMO_SESSION_SECRET is unset).
+          let dashboardSession = sessionId;
+          if (env.DEMO_SESSION_SECRET) {
+            try {
+              dashboardSession = await signDemoSession(env.DEMO_SESSION_SECRET, sessionId, Date.now() + ttlMs);
+            } catch {}
+          }
+
           // Note: `Secure` cookies require HTTPS. Localhost HTTP will drop them. Use Pages preview URLs.
-          const cookie = `session_token=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=28800`;
+          const cookie = `session_token=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${ttlSec}`;
           
-          return new Response(JSON.stringify({ success: true, role: results[0].role }), { 
+          return new Response(JSON.stringify({ success: true, role: results[0].role, sessionId: dashboardSession }), { 
             headers: { 
               'Content-Type': 'application/json',
               'Set-Cookie': cookie 

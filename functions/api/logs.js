@@ -1,3 +1,5 @@
+import { verifySession } from './intake/auth';
+
 /**
  * /api/logs — website audit-log store and reader.
  *
@@ -6,6 +8,15 @@
  * is an optional cold archive. Postgres-over-TCP and SigV4 helper libraries
  * are IMPOSSIBLE here (no TCP, and unlisted deps break `npm ci` bundling) —
  * do not re-add them.
+ *
+ * Auth posture (deliberate split):
+ *  - POST stays open: public pages (returns OTP flow) emit audit events
+ *    fire-and-forget; gating it would silently drop their trail. Payload is
+ *    length-capped and append-only — the worst abuse is log spam, which the
+ *    admin viewer + retention prune absorbs.
+ *  - GET requires any authenticated session: rows carry usernames, IPs and
+ *    details that must never serve the open internet.
+ *  - DELETE requires admin: wiping the audit trail is irreversible.
  *
  * Required binding (Pages → Settings → Functions):
  *   DB  D1 database binding (same database the OTP module uses is fine)
@@ -78,8 +89,12 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
   try {
+    const user = await verifySession(env, request);
+    if (!user) {
+      return json({ success: false, message: 'Unauthorized' }, 401);
+    }
     if (!env.DB || typeof env.DB.prepare !== 'function') {
       return json({ success: true, logs: [], store: 'none' });
     }
@@ -103,8 +118,13 @@ export async function onRequestGet({ env }) {
   }
 }
 
-export async function onRequestDelete({ env }) {
+export async function onRequestDelete({ request, env }) {
   try {
+    const user = await verifySession(env, request);
+    const isAdmin = user && (user.role === 'admin' || user.email === 'admin@netamps.com');
+    if (!isAdmin) {
+      return json({ success: false, message: 'Forbidden' }, 403);
+    }
     if (!env.DB || typeof env.DB.prepare !== 'function') {
       return json({ success: false, message: 'DB not connected' }, 500);
     }

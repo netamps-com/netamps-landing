@@ -277,7 +277,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', email, passwordHash: hashedPassword })
+        body: JSON.stringify({ action: 'login', email, passwordHash: hashedPassword, remember: rememberMe })
       });
       const data = await res.json();
 
@@ -285,9 +285,12 @@ export default function LoginPage() {
         // Remember-me decides persistence: checked → 30-day cookies,
         // unchecked → session cookies that die with the tab. Previously the
         // checkbox was decorative and every login persisted 8h regardless.
+        // The session_id value is server-issued (signed); only store it when
+        // present — never the literal string "undefined".
         const age = rememberMe ? '; max-age=2592000' : '';
-        // Note: `Secure` cookies require HTTPS. Localhost HTTP will drop them. Use Pages preview URLs.
-        document.cookie = `session_id=${data.sessionId}; path=/${age}; SameSite=Strict; Secure`;
+        if (data.sessionId) {
+          document.cookie = `session_id=${data.sessionId}; path=/${age}; SameSite=Strict; Secure`;
+        }
         document.cookie = `user_role=${email}; path=/${age}; SameSite=Strict; Secure`;
         
         try {

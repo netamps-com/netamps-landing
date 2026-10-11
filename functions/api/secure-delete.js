@@ -1,3 +1,5 @@
+import { verifySession } from './intake/auth';
+
 /**
  * POST /api/secure-delete
  *
@@ -5,6 +7,13 @@
  * R2 never accumulates orphaned uploads. Idempotent: missing keys still
  * return success. Keys are strictly validated — only evidence namespaces
  * (requests/…, evidence/…) can be deleted, never anything else.
+ *
+ * Auth posture: capability-URL model, deliberate. Staged keys are 128-bit
+ * UUIDs, and the anonymous public form must be able to retract its own
+ * uploads pre-authentication — so knowledge of the key IS the authority,
+ * exactly like the CDN read path for anonymous-tagged objects. Every
+ * deletion is attributed (session email when present, else anonymous + IP)
+ * to the SIEM/audit trail below.
  *
  * Body: { key }
  */
@@ -52,7 +61,13 @@ export async function onRequestPost({ request, env }) {
     }
 
     try {
-      console.log(JSON.stringify({ siem: 'netamps-audit-v1', event: 'evidence.deleted', ts: new Date().toISOString(), object_key: key }));
+      let actor = 'anonymous';
+      try {
+        const sessionUser = await verifySession(env, request);
+        if (sessionUser && sessionUser.email) actor = sessionUser.email;
+      } catch {}
+      const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+      console.log(JSON.stringify({ siem: 'netamps-audit-v1', event: 'evidence.deleted', ts: new Date().toISOString(), actor, actor_ip: ip, object_key: key, deleted }));
     } catch {}
 
     return json({ success: true, deleted });

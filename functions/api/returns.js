@@ -1,3 +1,5 @@
+import { verifySession } from './intake/auth';
+
 export async function onRequestPost({ request, env }) {
   try {
     const returnReq = await request.json();
@@ -171,6 +173,16 @@ export async function onRequestGet({ request, env }) {
       }
     } catch {
       lookupId = null;
+    }
+    // List mode serves the full customer table (names, emails, phones,
+    // prices) — authenticated sessions only, never the open internet.
+    // Scoped ?id= lookup stays public: IDs are unguessable with fail-closed
+    // format gating, and buyers track without logging in.
+    if (!lookupId) {
+      const user = await verifySession(env, request);
+      if (!user) {
+        return new Response(JSON.stringify({ success: false, message: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+      }
     }
     if (env.DB) {
       // create table if not exists just in case it's empty
