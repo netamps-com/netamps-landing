@@ -49,19 +49,28 @@ const expertiseAreas = [
   { title: "Managed Cloud Architecture Services (MSP)", desc: "End-to-end cloud lifecycle administration, workload migration, and FinOps resource optimization across distributed infrastructures.", color: "border-fuchsia-200 bg-fuchsia-100 text-fuchsia-600", icon: Server, bgImage: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600" }
 ];
 
-const FlyoutLink = ({ children, href, FlyoutContent }: any) => {
+const FlyoutLink = ({ children, href, FlyoutContent, active }: any) => {
   const [open, setOpen] = useState(false);
   const showFlyout = FlyoutContent && open;
 
   return (
     <div
-      onMouseEnter={() => setOpen(true)}
+      onMouseEnter={() => FlyoutContent && setOpen(true)}
       onMouseLeave={() => setOpen(false)}
+      onFocus={() => FlyoutContent && setOpen(true)}
+      onBlur={(e) => {
+        // Keep open while focus moves inside (e.g. into the panel link)
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false);
+      }}
       className="relative w-fit h-fit flex flex-col items-center"
     >
       <a 
         href={href} 
-        className="rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm block group overflow-hidden"
+        aria-current={active ? 'true' : undefined}
+        className="flyout-anchor rainbow-btn relative px-4 py-2 text-sm font-bold text-slate-800 bg-white/50 backdrop-blur-sm border border-slate-200 rounded-full hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-primary shadow-sm block group overflow-hidden"
       >
         <span className="relative z-10 group-hover:text-white transition-colors flex items-center gap-1">
           {children}
@@ -71,7 +80,8 @@ const FlyoutLink = ({ children, href, FlyoutContent }: any) => {
         </span>
       </a>
       <span
-        style={{ transform: showFlyout ? "scaleX(1)" : "scaleX(0)" }}
+        style={{ transform: showFlyout || active ? "scaleX(1)" : "scaleX(0)" }}
+        aria-hidden
         className="absolute -bottom-2 left-2 right-2 h-1 origin-left scale-x-0 rounded-full bg-indigo-500 transition-transform duration-300 ease-out z-20"
       />
       <AnimatePresence>
@@ -114,6 +124,33 @@ export default function Home() {
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [currentTimeIST, setCurrentTimeIST] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Scroll-spy: current section for nav indication (keyboard + sighted users).
+  const [activeSection, setActiveSection] = useState<string>('home');
+
+  useEffect(() => {
+    const ids = ['services', 'solutions', 'csr'];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        }
+      },
+      { rootMargin: '-40% 0px -55% 0px' }
+    );
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    const onScroll = () => {
+      if (window.scrollY < 300) setActiveSection('home');
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {
@@ -151,6 +188,13 @@ export default function Home() {
   return (
 
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col overflow-x-hidden pt-[80px] relative">
+      {/* Skip link: first tab stop, visible on focus */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-indigo-600 focus:text-white focus:text-sm focus:font-bold"
+      >
+        Skip to content
+      </a>
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-indigo-200/50 blur-[100px] mix-blend-multiply animate-blob"></div>
@@ -182,14 +226,14 @@ export default function Home() {
                 {currentTimeIST}
               </div>
             )}
-              <nav className="hidden lg:flex items-center gap-4">
+              <nav className="hidden lg:flex items-center gap-4" aria-label="Primary">
               {[
-                { name: 'Home', href: '#' },
-                { name: 'Services', href: '#services' },
-                { name: 'Solutions', href: '#solutions' },
-                { name: 'ESG Initiatives', href: '#csr', content: EsgReturnsContent }
+                { id: 'home', name: 'Home', href: '#' },
+                { id: 'services', name: 'Services', href: '#services' },
+                { id: 'solutions', name: 'Solutions', href: '#solutions' },
+                { id: 'csr', name: 'ESG Initiatives', href: '#csr', content: EsgReturnsContent }
               ].map((item) => (
-                <FlyoutLink key={item.name} href={item.href} FlyoutContent={item.content}>
+                <FlyoutLink key={item.name} href={item.href} FlyoutContent={item.content} active={activeSection === item.id}>
                   {item.name}
                 </FlyoutLink>
               ))}
@@ -212,16 +256,17 @@ export default function Home() {
             >
               <div className="container mx-auto px-6 py-6 flex flex-col gap-4">
                 {[
-                  { name: 'Home', href: '#' },
-                  { name: 'Services', href: '#services' },
-                  { name: 'Solutions', href: '#solutions' },
-                  { name: 'ESG Initiatives', href: '#csr', hasDropdown: true }
+                  { id: 'home', name: 'Home', href: '#' },
+                  { id: 'services', name: 'Services', href: '#services' },
+                  { id: 'solutions', name: 'Solutions', href: '#solutions' },
+                  { id: 'csr', name: 'ESG Initiatives', href: '#csr', hasDropdown: true }
                 ].map((item) => (
                   <div key={item.name}>
                     <a 
                       href={item.href}
+                      aria-current={activeSection === item.id ? 'true' : undefined}
                       onClick={() => !item.hasDropdown && setIsMobileMenuOpen(false)} 
-                      className="block w-full text-left text-lg font-bold text-slate-800 hover:text-primary transition-colors py-2 border-b border-slate-100 flex justify-between items-center"
+                      className={`block w-full text-left text-lg font-bold transition-colors py-2 border-b border-slate-100 flex justify-between items-center ${activeSection === item.id ? 'text-indigo-700' : 'text-slate-800 hover:text-primary'}`}
                     >
                       {item.name}
                     </a>
@@ -249,7 +294,7 @@ export default function Home() {
 
 
 
-      <main className="flex-grow">
+      <main id="main-content" className="flex-grow">
         
         {/* SECTION: FIRM OVERVIEW */}
         <section className="py-16 lg:py-20 bg-transparent relative border-b border-white/20">

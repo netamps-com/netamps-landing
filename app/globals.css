@@ -65,6 +65,14 @@ h1, h2, h3, h4, h5, h6 {
   border-color: transparent !important;
 }
 
+/* Visible keyboard focus for nav pills (the flyout underline also follows
+   focus because focus opens the panel). Scoped — no global outline side
+   effects on existing focus-ring controls. */
+.flyout-anchor:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 4px;
+}
+
 .rainbow-text-hover:hover {
   background: linear-gradient(90deg, #4f46e5, #7c3aed, #2563eb, #4f46e5);
   background-size: 300% 300%;

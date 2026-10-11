@@ -13,6 +13,9 @@ export default function SecureLoginButton() {
       className="relative"
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setIsOpen(false);
+      }}
     >
       <button
         type="button"
