@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, UploadCloud, FileJson, CheckCircle, AlertTriangle, Play, Database, FileSpreadsheet, Send, Activity, ListChecks, ChevronDown, ChevronUp, Clock, Package, Download, XCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import { moneyStringToPaise, formatPaise } from '../lib/money';
+import { downloadIntakeTemplate } from '../lib/intake-template';
 import { Turnstile } from '@marsidev/react-turnstile';
 
 // ── Schema-gated ingestion contract (ALL / PARTIAL / INSUFFICIENT) ──
@@ -112,48 +113,8 @@ function missingLabel(key: string): string {
   return SCHEMA_FIELDS.find((f) => f.key === key)?.label || key;
 }
 
-// ── XLSX template generator ──
-// Sheet 1 "Requests": header row with 10 canonical columns + one valid SELL
-// example in row 2. Row 2 is the flagged EXAMPLE (README line 2 + UI copy
-// say so); it is kept valid so re-uploading the template passes validation
-// (round-trip proof). Sheet 2 "README": instructions.
-// No styling claims — SheetJS Community supports values, widths, and frozen panes only.
-async function downloadIntakeTemplate(): Promise<void> {
-  const XLSX = await import('xlsx');
-  const headers = SCHEMA_FIELDS.map((f) => f.label);
-  const example = [
-    'sell',
-    'Priya Sharma',
-    'Acme Technologies Pvt. Ltd.',
-    'procurement@example.com',
-    '+91 98765 43210',
-    'Laptops',
-    'Latitude 7420',
-    '25',
-    'resale',
-    'Current Generation (1-3 Years)',
-  ];
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-  ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 6, 20) }));
-  // Freeze header row (SheetJS freeze-pane form)
-  ws['!freeze'] = { xSplit: '0', ySplit: '1', topLeft: 'A2', activePane: 'bottomRight', state: 'frozen' };
-  XLSX.utils.book_append_sheet(wb, ws, 'Requests');
-
-  const readme = XLSX.utils.aoa_to_sheet([
-    ['Netamps Intake Template — Instructions'],
-    ['1. Row 2 is an EXAMPLE row — delete it before importing, or overwrite it with your first record.'],
-    ['2. Keep the header row exact (letter case does not matter). Required: Intent, Client Name, Company, Email, Phone, Product Name, Model Number, Quantity.'],
-    ['3. Intent must be "sell" or "buy". Quantity must be a positive whole number.'],
-    ['4. Limits: 300 MB file, 10,000 rows. Larger datasets: split across files.'],
-    ['5. Re-upload the finished file here to validate and preview before committing.'],
-  ]);
-  readme['!cols'] = [{ wch: 100 }];
-  XLSX.utils.book_append_sheet(wb, readme, 'README');
-
-  const stamp = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `netamps-intake-template-${stamp}.xlsx`);
-}
+// XLSX template download: canonical generator in ../lib/intake-template
+// (shared with the returns visitor button — one workbook, no drift).
 
 // Fixed sales-escalation mailbox (UI label only — the server hardcodes the
 // recipient and accepts no client-supplied address).
@@ -1638,12 +1599,7 @@ export default function IntakeWorkbench() {
                 <p className="mt-4 text-xs text-slate-500 flex items-center gap-1">
                   <CheckCircle className="w-3 h-3 text-emerald-500" /> Secure pipeline: Max 300 MB · 10,000 rows · CSV/JSON/XLSX
                 </p>
-                <button
-                  onClick={() => downloadIntakeTemplate()}
-                  className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" /> Download blank XLSX template
-                </button>
+
               </div>
             )}
 

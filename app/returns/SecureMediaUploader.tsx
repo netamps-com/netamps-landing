@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { downloadIntakeTemplate } from '../lib/intake-template';
 import { UploadCloud, CheckCircle, AlertTriangle, Trash2, Film, Image as ImageIcon, FileText, RotateCcw, OctagonX, Link2, Copy, Check, Download } from 'lucide-react';
 
 const MAX_SESSION_BYTES = 300 * 1024 * 1024; // 300MB per request (global)
@@ -13,40 +14,8 @@ const ALLOWED_EXTENSIONS = new Set([
   'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'csv', 'json', 'xlsx'
 ]);
 
-// ── XLSX intake template generator (self-contained) ──
-// Generates a blank template with canonical intake columns + example row.
-async function downloadIntakeTemplate(): Promise<void> {
-  const XLSX = await import('xlsx');
-  const headers = [
-    'Intent (sell/buy)', 'Client Name', 'Company', 'Email', 'Phone',
-    'Product Name', 'Model Number', 'Quantity', 'Strategic Recovery Target',
-    'Hardware Lifecycle Batch Age',
-  ];
-  const example = [
-    'sell', 'Priya Sharma', 'Acme Technologies Pvt. Ltd.', 'procurement@example.com',
-    '+91 98765 43210', 'Laptops', 'Latitude 7420', '25', 'resale',
-    'Current Generation (1-3 Years)',
-  ];
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-  ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 6, 20) }));
-  ws['!freeze'] = { xSplit: '0', ySplit: '1', topLeft: 'A2', activePane: 'bottomRight', state: 'frozen' };
-  XLSX.utils.book_append_sheet(wb, ws, 'Requests');
-
-  const readme = XLSX.utils.aoa_to_sheet([
-    ['Netamps Intake Template — Instructions'],
-    ['1. Row 2 is an EXAMPLE row — delete it before importing, or overwrite it with your first record.'],
-    ['2. Keep the header row exact (letter case does not matter). Required: Intent, Client Name, Company, Email, Phone, Product Name, Model Number, Quantity.'],
-    ['3. Intent must be "sell" or "buy". Quantity must be a positive whole number.'],
-    ['4. Limits: 300 MB file, 10,000 rows. Larger datasets: split across files.'],
-    ['5. Re-upload the finished file here to validate and preview before committing.'],
-  ]);
-  readme['!cols'] = [{ wch: 100 }];
-  XLSX.utils.book_append_sheet(wb, readme, 'README');
-
-  const stamp = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `netamps-intake-template-${stamp}.xlsx`);
-}
+// ── XLSX intake template: canonical generator in ../lib/intake-template ──
+// (shared with the staff workbench recovery flow — one workbook, no drift).
 
 type FileState = 'QUEUED' | 'HASHING' | 'UPLOADING' | 'SUCCESS' | 'ERROR';
 
