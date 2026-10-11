@@ -1,14 +1,54 @@
 import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { UploadCloud, CheckCircle, AlertTriangle, Trash2, Film, Image as ImageIcon, FileText, RotateCcw, OctagonX, Link2, Copy, Check } from 'lucide-react';
+import { UploadCloud, CheckCircle, AlertTriangle, Trash2, Film, Image as ImageIcon, FileText, RotateCcw, OctagonX, Link2, Copy, Check, Download } from 'lucide-react';
 
 const MAX_SESSION_BYTES = 300 * 1024 * 1024; // 300MB per request (global)
+
+// Heavy-payload discipline: at most 3 concurrent uploads. Uncapped parallel
+// uploads contend for bandwidth (and each XHR holds its payload in flight),
+// so anything beyond this waits its turn — see pumpUploads.
+const MAX_CONCURRENT_UPLOADS = 3;
 
 const ALLOWED_EXTENSIONS = new Set([
   'png', 'jpg', 'jpeg', 'webp', 'gif', 'tiff', 'tif', 'heic', 'heif',
   'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'csv', 'json', 'xlsx'
 ]);
 
-type FileState = 'QUEUED' | 'UPLOADING' | 'SUCCESS' | 'ERROR';
+// ── XLSX intake template generator (self-contained) ──
+// Generates a blank template with canonical intake columns + example row.
+async function downloadIntakeTemplate(): Promise<void> {
+  const XLSX = await import('xlsx');
+  const headers = [
+    'Intent (sell/buy)', 'Client Name', 'Company', 'Email', 'Phone',
+    'Product Name', 'Model Number', 'Quantity', 'Strategic Recovery Target',
+    'Hardware Lifecycle Batch Age',
+  ];
+  const example = [
+    'sell', 'Priya Sharma', 'Acme Technologies Pvt. Ltd.', 'procurement@example.com',
+    '+91 98765 43210', 'Laptops', 'Latitude 7420', '25', 'resale',
+    'Current Generation (1-3 Years)',
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 6, 20) }));
+  ws['!freeze'] = { xSplit: '0', ySplit: '1', topLeft: 'A2', activePane: 'bottomRight', state: 'frozen' };
+  XLSX.utils.book_append_sheet(wb, ws, 'Requests');
+
+  const readme = XLSX.utils.aoa_to_sheet([
+    ['Netamps Intake Template — Instructions'],
+    ['1. Row 2 is an EXAMPLE row — delete it before importing, or overwrite it with your first record.'],
+    ['2. Keep the header row exact (letter case does not matter). Required: Intent, Client Name, Company, Email, Phone, Product Name, Model Number, Quantity.'],
+    ['3. Intent must be "sell" or "buy". Quantity must be a positive whole number.'],
+    ['4. Limits: 300 MB file, 10,000 rows. Larger datasets: split across files.'],
+    ['5. Re-upload the finished file here to validate and preview before committing.'],
+  ]);
+  readme['!cols'] = [{ wch: 100 }];
+  XLSX.utils.book_append_sheet(wb, readme, 'README');
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `netamps-intake-template-${stamp}.xlsx`);
+}
+
+type FileState = 'QUEUED' | 'HASHING' | 'UPLOADING' | 'SUCCESS' | 'ERROR';
 
 export interface AttachmentSnapshot {
   attachmentId: string;
@@ -29,6 +69,9 @@ interface QueuedFile {
   previewUrl?: string;
   state: FileState;
   progress: number; // 0-100, real bytes when UPLOADING
+  loadedBytes?: number; // XHR-loaded bytes (throughput + ETA telemetry)
+  speedBps?: number; // cumulative-average bytes/sec while UPLOADING
+  startedAt?: number; // upload start timestamp (ms)
   errorMessage?: string;
   r2Key?: string;
   assetUrl?: string;
@@ -100,7 +143,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         sizeBytes: f.file.size,
         mimeType: f.file.type,
         sha256: f.hash || null,
-        status: f.state === 'QUEUED' ? 'staged' : f.state === 'UPLOADING' ? 'uploading' : f.state === 'SUCCESS' ? 'verified' : 'error',
+        status: f.state === 'QUEUED' ? 'staged' : f.state === 'HASHING' || f.state === 'UPLOADING' ? 'uploading' : f.state === 'SUCCESS' ? 'verified' : 'error',
         objectKey: f.r2Key,
         assetUrl: f.assetUrl,
         error: f.errorMessage
@@ -123,12 +166,18 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
     const xhr = new XMLHttpRequest();
     xhrRefs.current.set(qFile.id, xhr);
 
-    setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, state: 'UPLOADING', progress: 0, errorMessage: undefined } : f)));
+    setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, state: 'UPLOADING', progress: 0, errorMessage: undefined, startedAt: Date.now(), loadedBytes: 0, speedBps: 0 } : f)));
 
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return;
       const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
-      setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, progress: pct } : f)));
+      const now = Date.now();
+      setQueuedFiles((prev) => prev.map((f) => {
+        if (f.id !== qFile.id) return f;
+        const started = f.startedAt || now;
+        const elapsed = Math.max(0.5, (now - started) / 1000);
+        return { ...f, progress: pct, loadedBytes: e.loaded, speedBps: Math.round(e.loaded / elapsed) };
+      }));
     };
 
     xhr.onload = () => {
@@ -153,6 +202,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
           )
         );
       }
+      pumpUploads();
     };
 
     xhr.onerror = () => {
@@ -160,6 +210,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
       setQueuedFiles((prev) =>
         prev.map((f) => (f.id === qFile.id ? { ...f, state: 'ERROR', progress: 0, errorMessage: 'Network error during upload. Check your connection and retry.' } : f))
       );
+      pumpUploads();
     };
 
     xhr.onabort = () => {
@@ -175,6 +226,23 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
     xhr.open('POST', `${API_URL}/api/secure-upload`);
     xhr.send(formData);
   }, [onUploadSuccess]);
+
+  // Scheduler: refill free upload slots up to the concurrency cap.
+  // xhrRefs membership is the synchronous guard (queueRef lags one render).
+  // Plain function (not memoized): every consumer below only touches refs
+  // and functional setState, so any render's copy is correct.
+  const pumpUploads = () => {
+    const free = MAX_CONCURRENT_UPLOADS - xhrRefs.current.size;
+    if (free <= 0) return;
+    const waiting = queueRef.current.filter((f) => f.state === 'QUEUED' && f.hash && !xhrRefs.current.has(f.id));
+    waiting.slice(0, free).forEach((f) => uploadFile(f, f.productId));
+  };
+
+  // Backstop scheduler: every committed queue transition refills free slots.
+  // Self-terminating — starting a file flips it out of QUEUED.
+  useEffect(() => {
+    pumpUploads();
+  });
 
   const stageFiles = useCallback(async (incoming: File[], productId: string | null = null) => {
     if (incoming.length === 0) return;
@@ -223,9 +291,11 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
     if (next.length === 0) return;
     setQueuedFiles((prev) => [...prev, ...next]);
 
-    // Hash (dedup identity) then upload, per accepted file.
+    // Hash (dedup identity) then hand to the scheduler — never upload inline,
+    // or every staged file would contend from the first byte.
     for (const row of next) {
       if (row.state !== 'QUEUED') continue;
+      setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'HASHING' } : f)));
       try {
         const hash = await sha256Of(row.file);
         let isDup = seenInBatch.has(hash);
@@ -238,8 +308,8 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
           setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', errorMessage: 'Already attached: an identical file (same content hash) is already staged.' } : f)));
           continue;
         }
-        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash } : f)));
-        uploadFile({ ...row, hash }, row.productId);
+        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash, state: 'QUEUED' } : f)));
+        pumpUploads();
       } catch {
         setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', errorMessage: 'Could not read file for integrity hashing.' } : f)));
       }
@@ -367,13 +437,14 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
   };
 
   const retryUpload = (qFile: QueuedFile) => {
-    // Retry re-hashes (cheap, already read once) and re-sends under the same attachmentId.
+    // Retry re-hashes and returns the file to the scheduler under the same
+    // attachmentId. Retries restart from byte zero — the UI states this.
     void (async () => {
-      setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, state: 'QUEUED', progress: 0, errorMessage: undefined } : f)));
+      setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, state: 'HASHING', progress: 0, loadedBytes: 0, speedBps: 0, errorMessage: undefined } : f)));
       try {
         const hash = await sha256Of(qFile.file);
-        setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, hash } : f)));
-        uploadFile({ ...qFile, hash }, qFile.productId);
+        setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, hash, state: 'QUEUED' } : f)));
+        pumpUploads();
       } catch {
         setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, state: 'ERROR', errorMessage: 'Could not read file for integrity hashing.' } : f)));
       }
@@ -388,6 +459,24 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const formatDuration = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds < 0) return '—';
+    const s = Math.ceil(seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    return `${m}m ${s % 60}s`;
+  };
+
+  // Per-file throughput line: cumulative-average speed + ETA from telemetry.
+  // Null when unknowable (never guessed) — the row falls back to % + size.
+  const throughputOf = (qFile: QueuedFile): string | null => {
+    if (qFile.state !== 'UPLOADING') return null;
+    const speed = qFile.speedBps || 0;
+    if (speed < 1024) return null;
+    const remaining = Math.max(0, qFile.file.size - (qFile.loadedBytes || 0));
+    return `${formatBytes(speed)}/s · ETA ${formatDuration(remaining / speed)}`;
+  };
+
   const totalBytes = queuedFiles.reduce((acc, f) => acc + f.file.size, 0);
   const uploadedBytes = queuedFiles.reduce((acc, f) => acc + (f.state === 'SUCCESS' ? f.file.size : Math.round((f.file.size * f.progress) / 100)), 0);
   const sessionPercent = totalBytes === 0 ? 0 : Math.min(100, Math.round((uploadedBytes / MAX_SESSION_BYTES) * 100));
@@ -398,7 +487,13 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-bold text-white">Attach asset details of any type below</h3>
-          <p className="text-xs text-slate-400 mt-1">Accepted Payloads: Data (CSV, JSON, XLSX) • Video (MP4, MOV, WEBM, MKV) • Image (PNG, JPEG, WEBP, GIF, TIFF, HEIC) | Max Size: 300 MB per request</p>
+          <p className="text-xs text-slate-400 mt-1">Accepted Payloads: Data (CSV, JSON, XLSX) • Video (MP4, MOV, WEBM, MKV) • Image (PNG, JPEG, WEBP, GIF, TIFF, HEIC) | Max 300 MB per file · 300 MB session quota</p>
+          <button
+            onClick={() => downloadIntakeTemplate()}
+            className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" /> Download blank XLSX template
+          </button>
         </div>
         {queuedFiles.length > 0 && (
           <span className="shrink-0 text-xs font-mono text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
@@ -436,7 +531,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         <p className="mb-1 text-sm text-slate-300">
           <span className="font-bold text-white">{isDragging ? 'Drop to start uploading' : 'Click to upload'}</span> or drag and drop
         </p>
-        <p className="text-xs text-slate-500">Files start uploading immediately · magic-byte verified server-side</p>
+        <p className="text-xs text-slate-500">Files start uploading immediately · up to 3 at a time with speed & ETA · magic-byte verified server-side</p>
         <input
           ref={inputRef}
           type="file"
@@ -483,7 +578,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                   <div className="flex justify-between items-baseline gap-2 mb-1">
                     <p className="text-sm font-semibold text-white truncate">{qFile.file.name}</p>
                     <span className="text-xs font-mono text-slate-500 shrink-0">
-                      {qFile.state === 'UPLOADING' ? `${qFile.progress}% · ` : ''}{formatBytes(qFile.file.size)}
+                      {qFile.state === 'UPLOADING' ? `${qFile.progress}%${throughputOf(qFile) ? ` · ${throughputOf(qFile)}` : ''} · ` : ''}{formatBytes(qFile.file.size)}
                     </span>
                   </div>
                   {/* Product linkage — the custody mapping. Required before submit. */}
@@ -543,7 +638,13 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                     </div>
                   )}
                   {qFile.state === 'QUEUED' && (
-                    <p className="text-xs text-slate-500">Queued…</p>
+                    <p className="text-xs text-slate-500">Queued — starts automatically ({MAX_CONCURRENT_UPLOADS} at a time)…</p>
+                  )}
+                  {qFile.state === 'HASHING' && (
+                    <p className="text-xs text-indigo-300 flex items-center gap-1.5">
+                      <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                      Hashing for integrity…
+                    </p>
                   )}
                 </div>
                 <div className="shrink-0 flex items-center gap-1">
@@ -553,7 +654,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                     </button>
                   )}
                   {qFile.state === 'ERROR' && (
-                    <button type="button" onClick={() => retryUpload(qFile)} title="Retry upload" aria-label={`Retry upload of ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-indigo-300 hover:bg-slate-900 rounded-lg transition-colors">
+                    <button type="button" onClick={() => retryUpload(qFile)} title="Retry upload from the start" aria-label={`Retry upload of ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-indigo-300 hover:bg-slate-900 rounded-lg transition-colors">
                       <RotateCcw className="w-4 h-4" />
                     </button>
                   )}
