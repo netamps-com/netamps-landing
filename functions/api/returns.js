@@ -297,8 +297,6 @@ export async function onRequestGet({ request, env }) {
       return new Response(JSON.stringify({ success: true, returns }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
     }
     return new Response(JSON.stringify({ success: true, returns: [] }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
-    }
-    return new Response(JSON.stringify({ success: true, returns: [] }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } });
   } catch (err) {
     return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
