@@ -434,9 +434,18 @@ export default function LoginPage() {
           
           </motion.div>
         
-        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Protected by TLS 1.3 · Verified sessions · Full audit trail</span>
+        <div className="mt-8 flex flex-col items-center gap-3 text-xs text-slate-500 font-medium">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>TLS 1.3 · Verified Sessions · Full Audit Trail</span>
+          </div>
+          <div className="flex items-center gap-4 text-[10px] text-slate-400 uppercase tracking-wider font-bold">
+            <span className="flex items-center gap-1"><Lock className="w-2.5 h-2.5" /> TLS 1.3</span>
+            <span>·</span>
+            <span>Role-Gated Access</span>
+            <span>·</span>
+            <span>Full Audit Trail</span>
+          </div>
         </div>
       </div>
     </div>

@@ -6,32 +6,32 @@ import { useState, useEffect } from 'react';
 
 const seals = [
   {
-    label: 'FIPS 140-3',
-    sublabel: 'Validated',
+    label: 'TLS 1.3',
+    sublabel: 'Encrypted',
     icon: ShieldCheck,
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/20',
     ping: 'bg-emerald-500',
   },
   {
-    label: 'DoD',
-    sublabel: 'Standards',
+    label: 'Role-Gated',
+    sublabel: 'Access',
     icon: Shield,
     color: 'text-blue-400',
     bg: 'bg-blue-500/20',
     ping: 'bg-blue-500',
   },
   {
-    label: 'Military-Grade',
-    sublabel: 'Encryption',
+    label: 'Scanned',
+    sublabel: 'Uploads',
     icon: Lock,
     color: 'text-amber-400',
     bg: 'bg-amber-500/20',
     ping: 'bg-amber-500',
   },
   {
-    label: '256-Bit SSL',
-    sublabel: 'Verified',
+    label: 'Audit',
+    sublabel: 'Trail',
     icon: Award,
     color: 'text-indigo-400',
     bg: 'bg-indigo-500/20',
@@ -100,8 +100,8 @@ export default function TrustSeal() {
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 relative z-10" />
         </div>
         <div className="flex flex-col">
-          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-tight">FIPS 140-3 · DoD</span>
-          <span className="text-[10px] font-bold text-white flex items-center gap-1 leading-tight"><Lock className="w-2 h-2" /> 256-Bit SSL Verified</span>
+          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-tight">TLS 1.3 · Secured</span>
+          <span className="text-[10px] font-bold text-white flex items-center gap-1 leading-tight"><Lock className="w-2 h-2" /> TLS Encrypted</span>
         </div>
       </div>
     </motion.div>

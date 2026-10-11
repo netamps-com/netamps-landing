@@ -399,7 +399,7 @@ export default function Home() {
                   title: "Data Security Posture Management (DSPM)", 
                   gradient: "from-emerald-400 to-teal-500", 
                   desc: "Comprehensive data lifecycle governance ensuring strict compliance with global mandates like GDPR, CCPA, and HIPAA. We enforce cryptographic controls, granular role-based access (RBAC), and endpoint protections to maintain sovereign data integrity.", 
-                  items: ['FIPS 140-3 Validated Cryptography', 'Regulatory Compliance Mapping', 'Data Loss Prevention (DLP) Policies', 'Identity-First Security (IAM/MFA)'] 
+                  items: ['FIPS-Aligned Cryptography', 'Regulatory Compliance Mapping', 'Data Loss Prevention (DLP) Policies', 'Identity-First Security (IAM/MFA)'] 
                 }
               ].map((svc, i) => (
                 <motion.div key={i} variants={fadeInUp} className="group relative p-[1px] rounded-[2rem] bg-gradient-to-b from-white/60 to-white/10 hover:from-primary/30 hover:to-transparent transition-all duration-700 overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-2">
@@ -592,10 +592,10 @@ export default function Home() {
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Security Standards</span>
               {[
-                { label: 'FIPS 140-3 Validated', icon: '🛡️' },
-                { label: 'DoD Standards', icon: '⚔️' },
-                { label: 'Military-Grade Encryption', icon: '🔐' },
-                { label: 'Verified 256-Bit SSL', icon: '🔒' },
+                { label: 'TLS 1.3 Enforced', icon: '🔒' },
+                { label: 'Role-Gated Access', icon: '🛡️' },
+                { label: 'Quarantine-Scanned Uploads', icon: '🔍' },
+                { label: 'Full Audit Trail', icon: '📋' },
               ].map((badge) => (
                 <div key={badge.label} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/60 backdrop-blur-sm border border-slate-200 px-2.5 py-1 rounded-full shadow-sm">
                   <span>{badge.icon}</span>
