@@ -103,19 +103,34 @@ function scanMalware(headBytes, fileName) {
 }
 
 async function scanVirustotal(sha256, apiKey) {
-  if (!apiKey) return false;
+  // Verdicts: 'malicious' | 'suspicious' | 'clean' | 'unknown'.
+  // 'unknown' covers no-key, network error, timeout, non-200 AND hash-never-
+  // seen (404): a hash lookup is not a file scan, so absence of VT knowledge
+  // is no verdict either way — fail OPEN by design. The deterministic local
+  // gates (magic bytes, executable/masquerade scan, EICAR) run regardless.
+  // Callers must record the verdict, never treat 'unknown' as a verdict.
+  if (!apiKey) return 'unknown';
   try {
-    const res = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
-      headers: { 'x-apikey': apiKey }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const malicious = data.data?.attributes?.last_analysis_stats?.malicious || 0;
-      if (malicious > 0) return true;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000); // never hang an upload on VT
+    let res;
+    try {
+      res = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
+        headers: { 'x-apikey': apiKey },
+        signal: ctrl.signal
+      });
+    } finally {
+      clearTimeout(timer);
     }
-    return false;
+    if (!res.ok) return 'unknown';
+    const data = await res.json();
+    const stats = data.data?.attributes?.last_analysis_stats;
+    if (!stats) return 'unknown';
+    if ((stats.malicious || 0) > 0) return 'malicious';
+    if ((stats.suspicious || 0) > 0) return 'suspicious';
+    return 'clean';
   } catch (err) {
-    return false;
+    return 'unknown';
   }
 }
 
@@ -131,6 +146,7 @@ function audit(event, fields) {
       file_size: typeof fields.size === 'number' ? fields.size : null,
       sha256: fields.sha256 || null,
       scan_signature: fields.signature || null,
+      vt_verdict: fields.vt || null,
       verdict: fields.verdict || null,
       bucket: fields.bucket || null,
       object_key: fields.key || null
@@ -150,7 +166,7 @@ async function auditToD1(env, entry) {
       new Date().toISOString(),
       entry.event,
       'Returns Upload',
-      JSON.stringify({ session: entry.sessionId, file: entry.fileName, size: entry.size, sha256: entry.sha256, verdict: entry.verdict, signature: entry.signature, key: entry.key }),
+      JSON.stringify({ session: entry.sessionId, file: entry.fileName, size: entry.size, sha256: entry.sha256, verdict: entry.verdict, vt: entry.vt || null, signature: entry.signature, key: entry.key }),
       entry.ownerEmail || 'anonymous',
       entry.ip || 'unknown'
     ).run();
@@ -224,9 +240,14 @@ export async function onRequestPost({ request, env }) {
 
     const isMagicSpoofed = !validateMagicBytes(bytes.slice(0, 16), ext);
     const scan = scanMalware(bytes, fileName);
-    const isVtMalicious = await scanVirustotal(sha256, env.VIRUSTOTAL_API_KEY);
+    // VirusTotal is consulted ONLY when local gates pass: it can only add a
+    // block verdict, never lift one — consulting it for condemned files
+    // wastes up to the 8s timeout per malicious upload.
+    const locallyCondemned = isMagicSpoofed || scan.infected;
+    const vtVerdict = locallyCondemned ? 'not-consulted' : await scanVirustotal(sha256, env.VIRUSTOTAL_API_KEY);
+    const isVtMalicious = vtVerdict === 'malicious';
 
-    if (isMagicSpoofed || scan.infected || isVtMalicious) {
+    if (locallyCondemned || isVtMalicious) {
       if (env.CACHE_KV) {
         await env.CACHE_KV.put(`blacklist_${sha256}`, '1', { expirationTtl: 86400 * 30 });
         const currentBan = parseInt(await env.CACHE_KV.get(`ban_${sessionId}`) || '0', 10);
@@ -234,7 +255,7 @@ export async function onRequestPost({ request, env }) {
       }
       
       const signature = scan.signature || (isVtMalicious ? 'VIRUSTOTAL_MALICIOUS' : 'SIGNATURE_SPOOF');
-      const entry = { ip, sessionId, fileName, size: fileSize, sha256, signature, verdict: 'BLOCKED_MALWARE' };
+      const entry = { ip, sessionId, fileName, size: fileSize, sha256, signature, verdict: 'BLOCKED_MALWARE', vt: vtVerdict };
       audit('upload.blocked.malware', entry);
       return json({ success: false, error: 'MALWARE_BLOCKED', message: 'Upload Blocked: Malicious signature detected or spoofed file. Incident logged.' }, 403);
     }
@@ -290,7 +311,7 @@ export async function onRequestPost({ request, env }) {
     let finalKey = prodKey;
     let finalBucket = 'production';
 
-    const done = { ip, sessionId, fileName, size: fileSize, sha256, verdict: 'CLEAN', bucket: finalBucket, key: finalKey, ownerEmail };
+    const done = { ip, sessionId, fileName, size: fileSize, sha256, verdict: 'CLEAN', vt: vtVerdict, bucket: finalBucket, key: finalKey, ownerEmail };
     audit('upload.accepted', done);
     await auditToD1(env, { event: 'UPLOAD_ACCEPTED', ...done });
 
@@ -302,7 +323,8 @@ export async function onRequestPost({ request, env }) {
       productId,
       hash: sha256,
       encrypted: 'AES-256',
-      scan: 'CLEAN'
+      scan: 'CLEAN',
+      vt: vtVerdict
     }, 201);
   } catch (err) {
     console.error('[upload] Internal error:', err); // server log only — client gets a generic message
