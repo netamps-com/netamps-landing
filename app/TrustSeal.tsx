@@ -5,10 +5,9 @@ import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
-// Trust chrome belongs on pre-auth/public surfaces. Inside the app
-// (dashboard, intake) and on login (dedicated strip present) it is
-// viewport tax — hidden there, rendered everywhere else.
-const HIDDEN_PREFIXES = ['/dashboard', '/intake', '/login'];
+// Trust chrome belongs only where no page owns a dedicated strip. Allowlist
+// (fail-closed): new pages get no seal unless consciously added here.
+const SEAL_ROUTES = ['/privacy', '/status'];
 
 const seals = [
   {
@@ -57,7 +56,7 @@ export default function TrustSeal() {
   }, []);
 
   if (!isMounted) return null;
-  if (HIDDEN_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
+  if (!SEAL_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
 
   return (
     <motion.div
