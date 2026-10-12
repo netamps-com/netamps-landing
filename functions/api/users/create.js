@@ -4,6 +4,51 @@ import { hashNewSecret } from './index.js';
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 const ALLOWED_ROLES = new Set(['admin', 'staff', 'user']);
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Account notice sender (best-effort, never fails provisioning). Secrets are
+// never emailed — activation mail points at sign-in, never carries credentials.
+async function sendAccountMail(env, to, subject, lines, tag) {
+  try {
+    const apiKey = env.RESEND_API_KEY;
+    if (!apiKey || !EMAIL_RE.test(to)) return false;
+    const html = `<h3>${escapeHtml(subject)}</h3>` +
+      lines.map((l) => `<p>${l}</p>`).join('') +
+      `<p style="font-size: 12px; color: #64748b;"><em>We never ask for passwords by email.</em></p>`;
+    const text = `${subject}\n\n` + lines.map((l) => l.replace(/<[^>]+>/g, '')).join('\n');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          from: 'Netamps Portal <no-reply@netamps.in>',
+          to,
+          subject,
+          html,
+          text,
+          headers: { 'List-Unsubscribe': '<mailto:contact@netamps.com?subject=Unsubscribe>' },
+          tags: [{ name: 'kind', value: tag || 'account-notice' }]
+        }),
+        signal: ctrl.signal
+      });
+      return res.ok;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return false;
+  }
+}
+
 function json(body, status) {
   return new Response(JSON.stringify(body), {
     status,
@@ -71,6 +116,19 @@ export async function onRequestPost({ request, env }) {
         caller.email,
         request.headers.get('cf-connecting-ip') || 'unknown'
       ).run();
+    } catch {}
+
+    // Activation notice to the new user (no secrets — password travels a
+    // separate channel). Admin-grant peer notices live in the invite accept
+    // path (invites.js): direct admin creation is refused without an
+    // accepted invite, so that path has no fellow admins to notify that the
+    // invite flow hasn't already told.
+    try {
+      await sendAccountMail(env, email,
+        'Your Netamps staff account was created',
+        [`An administrator (${escapeHtml(caller.email)}) created your <strong>${escapeHtml(role)}</strong> account.`,
+         `Sign in at netamps.com/login with the password shared with you separately, then change it from User Management.`],
+        'account-created');
     } catch {}
 
     return json({ success: true });

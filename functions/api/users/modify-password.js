@@ -10,6 +10,51 @@ function json(body, status) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Account-security notice sender (best-effort, never fails the operation).
+// No secrets inside — notices describe the event and the appeal path.
+async function sendAccountMail(env, to, subject, lines, tag) {
+  try {
+    const apiKey = env.RESEND_API_KEY;
+    if (!apiKey) return false;
+    const html = `<h3>${escapeHtml(subject)}</h3>` +
+      lines.map((l) => `<p>${l}</p>`).join('') +
+      `<p style="font-size: 12px; color: #64748b;"><em>We never ask for passwords by email.</em></p>`;
+    const text = `${subject}\n\n` + lines.map((l) => l.replace(/<[^>]+>/g, '')).join('\n');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          from: 'Netamps Portal <no-reply@netamps.in>',
+          to,
+          subject,
+          html,
+          text,
+          headers: { 'List-Unsubscribe': '<mailto:contact@netamps.com?subject=Unsubscribe>' },
+          tags: [{ name: 'kind', value: tag || 'account-notice' }]
+        }),
+        signal: ctrl.signal
+      });
+      return res.ok;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return false;
+  }
+}
+
 /**
  * POST /api/users/modify-password — password change bound to the caller's session.
  * - Regular callers may change ONLY their own password and must prove the current one.
@@ -75,6 +120,17 @@ export async function onRequestPost({ request, env }) {
         caller.email,
         request.headers.get('cf-connecting-ip') || 'unknown'
       ).run();
+    } catch {}
+
+    // Password-change alert to the account holder (breach tripwire: takeover
+    // becomes a detection event). Best-effort — never fails the change.
+    try {
+      await sendAccountMail(env, email,
+        'Your Netamps password was changed',
+        isAdmin && !isSelf
+          ? [`An administrator (${escapeHtml(caller.email)}) reset the password on your account. If you did not request this, contact your administrator immediately.`]
+          : [`The password on your account was just changed. If this was not you, contact your administrator immediately.`],
+        'password-changed');
     } catch {}
 
     return json({ success: true });

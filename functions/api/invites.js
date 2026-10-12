@@ -229,6 +229,20 @@ export async function onRequestPost({ request, env }) {
       await sendInviteMail(env, invite.invited_by, 'Invitation accepted',
         [`${escapeHtml(invite.email)} accepted your invitation (${escapeHtml(invite.role)}).`], 'invite-accepted-admin');
     }
+    // Admin grants notify FELLOW admins too (dual-control visibility): the
+    // direct-create path cannot mint admins, so this is the only birthplace
+    // of admin accounts — every peer learns here.
+    if (invite.role === 'admin') {
+      try {
+        const peers = await env.DB.prepare("SELECT email FROM users WHERE role = 'admin'").all();
+        for (const row of (peers && peers.results) || []) {
+          if (row.email && row.email !== invite.email && EMAIL_RE_INVITE.test(row.email)) {
+            await sendInviteMail(env, row.email, `Admin account activated: ${invite.email}`,
+              [`${escapeHtml(invite.email)} activated an <strong>admin</strong> account (invited by ${escapeHtml(invite.invited_by || 'unknown')}, approved by ${escapeHtml(invite.approved_by || 'unknown')}). Review in User Management if unexpected.`], 'admin-grant-notice');
+          }
+        }
+      } catch {}
+    }
     return json({ success: true });
   }
 

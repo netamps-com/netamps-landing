@@ -71,15 +71,31 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       const newHashed = await hashPassword(newPassword);
       
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/users/modify-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: targetAccount, passwordHash: newHashed, currentPasswordHash: hashedInput })
-      });
-      const data = await res.json();
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/api/users/modify-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: targetAccount, passwordHash: newHashed, currentPasswordHash: hashedInput })
+        });
+      } catch {
+        setPwdError('Could not reach the server. Check your connection and retry.');
+        setIsUpdatingPwd(false);
+        return;
+      }
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        setPwdError('Server returned an unreadable response. Retry shortly.');
+        setIsUpdatingPwd(false);
+        return;
+      }
       
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to update password');
+      if (!res.ok || !data.success) {
+        setPwdError(data.message || 'Password change refused by server.');
+        setIsUpdatingPwd(false);
+        return;
       }
 
       const updatedUsers = users.map(u => 
@@ -92,7 +108,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       setCurrentPassword('');
       setNewPassword('');
     } catch (err) {
-      setPwdError('Failed to process encryption.');
+      setPwdError('Unexpected error preparing the request. Retry shortly.');
     }
     setIsUpdatingPwd(false);
   };
@@ -119,15 +135,31 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       const newHashed = await hashPassword(newUserPassword);
       
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/users/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newUserEmail, passwordHash: newHashed, role: newUserRole })
-      });
-      const data = await res.json();
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/api/users/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: newUserEmail, passwordHash: newHashed, role: newUserRole })
+        });
+      } catch {
+        setPwdError('Could not reach the server. Check your connection and retry.');
+        setIsUpdatingPwd(false);
+        return;
+      }
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        setPwdError('Server returned an unreadable response. Retry shortly.');
+        setIsUpdatingPwd(false);
+        return;
+      }
       
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to create user');
+      if (!res.ok || !data.success) {
+        setPwdError(data.message || 'User creation refused by server.');
+        setIsUpdatingPwd(false);
+        return;
       }
 
       const updatedUsers = [...users, { email: newUserEmail, hash: newHashed }];
@@ -138,7 +170,7 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       setNewUserEmail('');
       setNewUserPassword('');
     } catch (err) {
-      setPwdError('Failed to process encryption.');
+      setPwdError('Unexpected error preparing the request. Retry shortly.');
     }
     setIsUpdatingPwd(false);
   };
@@ -175,9 +207,16 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
 
         <div className="p-6">
           {pwdError && (
-            <div className="mb-4 bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {pwdError}
+            <div className="mb-4 bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <div>{pwdError}</div>
+                {pwdError.toLowerCase().includes('invitation') && (
+                  <a href="/admin/invites" className="inline-block mt-1 font-bold underline underline-offset-2 hover:text-red-700">
+                    Open the invite console →
+                  </a>
+                )}
+              </div>
             </div>
           )}
           {pwdSuccess && (
