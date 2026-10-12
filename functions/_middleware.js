@@ -21,13 +21,35 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+// Authenticated app shells: never cache (stale post-deploy bundles + PII in
+// authed shells). NOTE: public/_headers carries the same rule, but static-
+// export builds do not refresh underscore-prefixed public files — this
+// middleware is the enforcement point. Hashed _next chunks stay immutable
+// regardless, so this costs zero performance.
+const NO_STORE_PATHS = ['/dashboard', '/intake', '/login'];
+
 export async function onRequest(context) {
   const { request, env, next } = context;
   const url = new URL(request.url);
   const isDevHost = url.hostname.endsWith('.pages.dev');
 
   if (!isDevHost) {
-    return next(); // production: zero behavior change
+    // production: zero behavior change except cache discipline below
+    const res = await next();
+    try {
+      const path = url.pathname;
+      if (NO_STORE_PATHS.some((p) => path === p || path.startsWith(p + '/'))) {
+        const headers = new Headers(res.headers);
+        headers.set('Cache-Control', 'no-store');
+        headers.set('X-Content-Type-Options', 'nosniff');
+        return new Response(res.body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers
+        });
+      }
+    } catch {}
+    return res;
   }
 
   const gatePassword = env.DEV_GATE_PASSWORD;
