@@ -1,4 +1,5 @@
 import { verifySession } from '../intake/auth';
+import { hashNewSecret } from './index.js';
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 const ALLOWED_ROLES = new Set(['admin', 'staff', 'user']);
@@ -45,7 +46,18 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'An account with this email already exists' }, 409);
     }
 
-    await env.DB.prepare('INSERT INTO users (email, hash, role) VALUES (?1, ?2, ?3)').bind(email, passwordHash, role).run();
+    // Admin-role grants require the invite flow (dual-approved invite accepted
+    // for this email) — direct creation cannot mint admins unilaterally.
+    if (role === 'admin') {
+      const inv = await env.DB.prepare(
+        "SELECT id FROM invites WHERE email = ?1 AND role = 'admin' AND status = 'accepted'"
+      ).bind(email).first().catch(() => null);
+      if (!inv) {
+        return json({ success: false, message: 'Admin accounts require an approved invitation. Invite first, then create.' }, 403);
+      }
+    }
+
+    await env.DB.prepare('INSERT INTO users (email, hash, role) VALUES (?1, ?2, ?3)').bind(email, await hashNewSecret(passwordHash), role).run();
 
     try {
       await env.DB.prepare(

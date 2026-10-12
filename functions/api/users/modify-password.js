@@ -1,4 +1,5 @@
 import { verifySession } from '../intake/auth';
+import { hashNewSecret, verifySecret } from './index.js';
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 
@@ -44,10 +45,13 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Forbidden: you can only change your own password' }, 403);
     }
 
-    // Non-admins must prove the current password; admins performing a reset are exempt (audited below).
+    // Non-admins must prove the current password; verification handles all
+    // stored formats (legacy hex, PBKDF2, Argon2id) — direct string equality
+    // used to lock out every migrated user. Admins resetting others are
+    // exempt (audited below).
     if (!isAdmin) {
       const row = await env.DB.prepare('SELECT hash FROM users WHERE email = ?1').bind(email).first();
-      if (!row || row.hash !== currentPasswordHash) {
+      if (!row || !(await verifySecret(row.hash, currentPasswordHash))) {
         return json({ success: false, message: 'Your current password is incorrect. Verification failed.' }, 403);
       }
     } else {
@@ -57,7 +61,7 @@ export async function onRequestPost({ request, env }) {
       }
     }
 
-    await env.DB.prepare('UPDATE users SET hash = ?1 WHERE email = ?2').bind(passwordHash, email).run();
+    await env.DB.prepare('UPDATE users SET hash = ?1 WHERE email = ?2').bind(await hashNewSecret(passwordHash), email).run();
 
     try {
       await env.DB.prepare(

@@ -195,6 +195,14 @@ export default function LoginPage() {
 
   const [showStatus, setShowStatus] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  // Invite acceptance (?invite=TOKEN): token-bound account activation.
+  // Rendered INSTEAD of the sign-in form — never alongside it.
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [invitePassword, setInvitePassword] = useState('');
+  const [inviteConfirm, setInviteConfirm] = useState('');
+  const [inviteMsg, setInviteMsg] = useState('');
+  const [inviteDone, setInviteDone] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   useEffect(() => {
     document.title = 'Netamps Connect';
@@ -211,10 +219,47 @@ export default function LoginPage() {
         url.searchParams.set('sid', sid);
         window.history.replaceState({}, '', url.toString());
       }
+      const inv = new URL(window.location.href).searchParams.get('invite');
+      if (inv) setInviteToken(inv);
     } catch {
       // URL manipulation unavailable
     }
   }, []);
+
+  const handleInviteAccept = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteMsg('');
+    if (!inviteToken) return;
+    if (invitePassword.length < 8) {
+      setInviteMsg('Choose a password of at least 8 characters.');
+      return;
+    }
+    if (invitePassword !== inviteConfirm) {
+      setInviteMsg('Passwords do not match.');
+      return;
+    }
+    setInviteBusy(true);
+    try {
+      const hashedPassword = await hashPassword(invitePassword);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'accept', token: inviteToken, passwordHash: hashedPassword })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        // Identical message for bad/expired/used invites (server-side too).
+        setInviteMsg('This invitation link is invalid or has expired. Ask your administrator for a new one.');
+        return;
+      }
+      setInviteDone(true);
+    } catch {
+      setInviteMsg('Network error. Try again shortly.');
+    } finally {
+      setInviteBusy(false);
+    }
+  };
 
   // Helper to hash password (Industry standard SHA-256 for client-side transmission simulation)
   const hashPassword = async (password: string) => {
@@ -325,6 +370,67 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl sm:px-10 border border-slate-200/60"
         >
+          {inviteToken ? (
+            <div className="space-y-6">
+              <div className="text-center">
+                <h3 className="text-xl font-black text-slate-900">Accept staff invitation</h3>
+                <p className="text-sm text-slate-500 mt-1">This link works once and is bound to your mailbox. Set your password to activate.</p>
+              </div>
+              {inviteDone ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center">
+                  <p className="text-sm font-bold text-emerald-700">Account active — sign in below with your new password.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setInviteToken(null); setInvitePassword(''); setInviteConfirm(''); setInviteMsg(''); }}
+                    className="mt-3 text-sm font-bold text-indigo-600 hover:underline"
+                  >
+                    Go to sign in
+                  </button>
+                </div>
+              ) : (
+                <form className="space-y-4" onSubmit={handleInviteAccept}>
+                  {inviteMsg && (
+                    <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-500 text-sm">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      {inviteMsg}
+                    </div>
+                  )}
+                  <div>
+                    <label htmlFor="invite-password" className="block text-sm font-medium text-slate-700">New password (min 8 characters)</label>
+                    <input
+                      id="invite-password"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      minLength={8}
+                      value={invitePassword}
+                      onChange={(e) => setInvitePassword(e.target.value)}
+                      className="mt-2 appearance-none block w-full px-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="invite-confirm" className="block text-sm font-medium text-slate-700">Confirm password</label>
+                    <input
+                      id="invite-confirm"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      value={inviteConfirm}
+                      onChange={(e) => setInviteConfirm(e.target.value)}
+                      className="mt-2 appearance-none block w-full px-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={inviteBusy}
+                    className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-all disabled:opacity-70"
+                  >
+                    {inviteBusy ? <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Activate account'}
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : (
           <form className="space-y-6" onSubmit={handleSubmit}>
             {errorMsg && (
               <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-400 text-sm">
@@ -419,6 +525,7 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+          )}
           
           </motion.div>
         
