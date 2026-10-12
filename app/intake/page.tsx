@@ -388,6 +388,13 @@ export default function IntakeWorkbench() {
   const [matchTotals, setMatchTotals] = useState<{ totalMatches: number; totalUnmatched: number; truncated: boolean }>({ totalMatches: 0, totalUnmatched: 0, truncated: false });
   const [matchError, setMatchError] = useState<string | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
+  // R2-backed server parse (stored-file preview; ingest pipeline stays local)
+  const [storedScope, setStoredScope] = useState('');
+  const [storedFiles, setStoredFiles] = useState<{ key: string; size: number | null; ext: string }[]>([]);
+  const [storedMsg, setStoredMsg] = useState('');
+  const [storedBusy, setStoredBusy] = useState(false);
+  const [storedPreview, setStoredPreview] = useState<any | null>(null);
+  const [parsingKey, setParsingKey] = useState<string | null>(null);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   // Sales-escalation state per match id (idempotent: sending/sent block re-send)
   const [escalateState, setEscalateState] = useState<Record<string, { status: 'sending' | 'sent' | 'failed'; error?: string }>>({});
@@ -439,6 +446,57 @@ export default function IntakeWorkbench() {
   }, [activeTab]);
 
   const MATCH_PAGE = 100;
+
+  // ── R2-backed server parse: list + preview staged files ──
+  // Parses the bytes R2 holds (chain-of-custody: what-you-parse-is-what's-
+  // stored) with the same guards as the browser path. Preview only — feeding
+  // server rows into validation/commit is a follow-up, not this change.
+  const listStoredFiles = async () => {
+    setStoredMsg('');
+    setStoredPreview(null);
+    if (!storedScope.trim()) {
+      setStoredMsg('Enter a request scope (the sid from the returns URL, e.g. ?sid=…).');
+      return;
+    }
+    setStoredBusy(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/intake/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list', scope: storedScope.trim() })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) throw new Error((data && data.message) || 'Storage listing failed.');
+      setStoredFiles(Array.isArray(data.files) ? data.files : []);
+      if ((data.files || []).length === 0) setStoredMsg('No CSV/JSON/XLSX files under this scope.');
+    } catch (e: any) {
+      setStoredMsg(e?.message || 'Storage listing failed.');
+    } finally {
+      setStoredBusy(false);
+    }
+  };
+
+  const previewStoredFile = async (key: string) => {
+    setStoredMsg('');
+    setStoredPreview(null);
+    setParsingKey(key);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/intake/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'parse', key, maxRows: 20 })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) throw new Error((data && data.message) || 'Server parse failed.');
+      setStoredPreview(data);
+    } catch (e: any) {
+      setStoredMsg(e?.message || 'Server parse failed.');
+    } finally {
+      setParsingKey(null);
+    }
+  };
 
   const fetchMatches = async (reset = true, pane: 'both' | 'matches' | 'unmatched' = 'both') => {
     setMatchLoading(true);
@@ -1595,6 +1653,69 @@ export default function IntakeWorkbench() {
 
               </div>
             )}
+
+            {/* R2-backed server parse: preview staged files without downloading them */}
+            <div className="mt-6 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Database className="w-4 h-4 text-indigo-400" /> Parse from storage (R2)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Parses the bytes storage holds — same guards as the browser path. Preview only; ingestion still runs locally.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input
+                  type="text"
+                  value={storedScope}
+                  onChange={(e) => setStoredScope(e.target.value)}
+                  placeholder="Request scope (sid from the returns URL)"
+                  aria-label="Request scope for stored files"
+                  className="flex-1 min-w-[220px] px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  onClick={listStoredFiles}
+                  disabled={storedBusy}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                >
+                  {storedBusy ? 'Listing…' : 'List files'}
+                </button>
+              </div>
+              {storedMsg && <p className="mt-2 text-xs text-amber-300">{storedMsg}</p>}
+              {storedFiles.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                  {storedFiles.map((f) => (
+                    <li key={f.key} className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-lg text-xs">
+                      <span className="font-mono text-slate-400 truncate" title={f.key}>
+                        {f.key.split('/').pop()}
+                        <span className="text-slate-600"> · {f.ext.toUpperCase()}{typeof f.size === 'number' ? ` · ${(f.size / 1024).toFixed(1)} KB` : ''}</span>
+                      </span>
+                      <button
+                        onClick={() => previewStoredFile(f.key)}
+                        disabled={parsingKey !== null}
+                        className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold transition-colors disabled:opacity-50"
+                      >
+                        {parsingKey === f.key ? 'Parsing…' : 'Preview'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {storedPreview && (
+                <div className="mt-3 p-3 bg-slate-950/60 border border-slate-800 rounded-lg text-xs">
+                  <div className="text-slate-300 font-bold">
+                    {storedPreview.totalRows} row{storedPreview.totalRows === 1 ? '' : 's'} × {storedPreview.cols.length} columns
+                    {storedPreview.sheetName && <> · sheet &quot;{storedPreview.sheetName}&quot;</>}
+                    {storedPreview.delimiter && <> · delimiter &quot;{storedPreview.delimiter}&quot;</>}
+                    {storedPreview.truncatedPreview && <> · preview capped at {storedPreview.rows.length}</>}
+                  </div>
+                  <div className="mt-1 font-mono text-slate-500 truncate">{storedPreview.cols.join(' · ')}</div>
+                  {storedPreview.rows.slice(0, 5).map((row: any, i: number) => (
+                    <div key={i} className="mt-1 font-mono text-slate-400 truncate">
+                      {storedPreview.cols.map((c: string) => String(row[c] ?? '')).join(' | ')}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {step === 2 && (
               <div className="space-y-6">
