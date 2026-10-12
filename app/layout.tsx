@@ -29,19 +29,9 @@ export const metadata: Metadata = {
   description: "Netamps Technologies specializes in enterprise cyber security, digital forensics (DFIR), zero trust architecture, network infrastructure, cloud architecture management, and risk management. We secure critical infrastructure with advanced threat defense and continuous SOC monitoring.",
   keywords: [
     "Cyber Security", "Digital Forensics", "DFIR", "Incident Response",
-    "Zero Trust Architecture", "SOC Monitoring", "Vulnerability Management",
-    "Data Protection", "Netamps Technologies", "Enterprise Security",
-    "Penetration Testing", "VAPT", "Cloud Architecture", "MSP",
-    "Network Infrastructure", "Smart Surveillance", "IoT Security",
-    "Bangalore Cyber Security", "Bangalore Network Infrastructure",
-    "Bangalore CCTV", "Bangalore Smart City", "Bangalore Firewall",
-    "Bangalore ITAD", "Bangalore Refurbish", "IT Asset Disposition Bangalore",
-    "Refurbished IT Hardware Bangalore", "Smart City Infrastructure",
-    "India Cyber Security", "Tamilnadu Network Infrastructure", "Chennai CCTV",
-    "Coimbatore Smart City", "Kerala Firewall", "Andhra ITAD", "Telangana Refurbish",
-    "Cyber Security Chennai", "Network Infrastructure Kerala", "CCTV Tamilnadu",
-    "Smart City India", "Firewall Coimbatore", "ITAD Andhra", "Refurbished IT Hardware Telangana",
-    "South India IT Security", "Enterprise Security Chennai", "Data Protection Kerala"
+    "Zero Trust Architecture", "Penetration Testing", "VAPT",
+    "IT Asset Disposition", "Cloud Architecture", "Network Infrastructure",
+    "Enterprise Security", "Bangalore Cyber Security",
   ],
   authors: [{ name: "Netamps Technologies", url: "https://netamps.com" }],
   creator: "Netamps Technologies",
@@ -118,6 +108,38 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://www.google.com" />
+        {/* Structured data: Organization + WebSite eligibility for rich
+            results. Facts only — identifiers and contact match the footer. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@graph': [
+                {
+                  '@type': 'Organization',
+                  name: 'Netamps Technologies Private Limited',
+                  alternateName: 'Netamps Technologies',
+                  url: 'https://netamps.com',
+                  logo: 'https://netamps.com/logo.jpg',
+                  identifier: 'CIN U72900KA2022PTC167699',
+                  contactPoint: {
+                    '@type': 'ContactPoint',
+                    email: 'contact@netamps.com',
+                    contactType: 'sales',
+                    areaServed: 'IN',
+                    availableLanguage: ['en'],
+                  },
+                },
+                {
+                  '@type': 'WebSite',
+                  name: 'Netamps Technologies',
+                  url: 'https://netamps.com',
+                },
+              ],
+            }),
+          }}
+        />
       </head>
       <body
         className={`${inter.variable} ${outfit.variable} font-sans select-none antialiased`}
