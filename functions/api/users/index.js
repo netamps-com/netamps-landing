@@ -1,4 +1,4 @@
-import { signDemoSession } from '../intake/auth';
+import { signDemoSession, verifySession } from '../intake/auth';
 import { verifyTurnstileToken } from '../verify-turnstile';
 import { argon2id, argon2Verify } from 'hash-wasm';
 
@@ -59,7 +59,7 @@ async function deriveKdf(clientHashHex, saltB64, iterations) {
   );
   return b64encode(new Uint8Array(bits));
 }
-async function hashNewSecret(clientHashHex) {
+export async function hashNewSecret(clientHashHex) {
   const material = String(clientHashHex);
   try {
     return await argon2id({
@@ -75,7 +75,7 @@ async function hashNewSecret(clientHashHex) {
     return `pbkdf2$${KDF_ITERATIONS}$${saltB64}$${dk}`;
   }
 }
-async function verifySecret(stored, clientHashHex) {
+export async function verifySecret(stored, clientHashHex) {
   if (typeof stored !== 'string' || typeof clientHashHex !== 'string') return false;
   if (stored.startsWith('$argon2id$')) {
     try {
@@ -119,6 +119,17 @@ async function auditAuth(env, request, event, email) {
       request.headers.get('cf-connecting-ip') || 'unknown'
     ).run();
   } catch {}
+}
+
+// Admin gate for user management: the open-registration hole (anyone could
+// POST action:add, including as admin) closes here. Separation of duties for
+// admin-role grants lives in the invite flow, not this legacy direct path.
+async function requireAdmin(env, request) {
+  try {
+    const user = await verifySession(env, request);
+    if (user && (user.role === 'admin' || user.email === 'admin@netamps.com')) return user;
+  } catch {}
+  return null;
 }
 
 export async function onRequestPost({ request, env }) {
@@ -236,6 +247,9 @@ export async function onRequestPost({ request, env }) {
       }
 
       if (action === 'add') {
+        if (!(await requireAdmin(env, request))) {
+          return new Response(JSON.stringify({ success: false, message: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        }
         await env.DB.prepare('INSERT INTO users (email, hash, role) VALUES (?, ?, ?)').bind(email, await hashNewSecret(passwordHash), role || 'staff').run();
         return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
       }
@@ -324,6 +338,10 @@ export async function onRequestPost({ request, env }) {
       }
 
       if (action === 'add') {
+        if (!(await requireAdmin(env, request))) {
+          await client.end();
+          return new Response(JSON.stringify({ success: false, message: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        }
         await client.query('INSERT INTO users (email, hash, role) VALUES ($1, $2, $3)', [email, await hashNewSecret(passwordHash), role || 'staff']);
         await client.end();
         return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
