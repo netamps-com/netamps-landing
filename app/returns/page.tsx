@@ -615,7 +615,7 @@ export default function ReturnsPage() {
                           <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {trackingResult.company}</p>
                           <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(trackingResult.date).toLocaleDateString()}</p>
                           {trackingResult.attachedFiles && trackingResult.attachedFiles.length > 0 && (
-                            <p className="text-sm text-slate-600"><strong className="text-slate-800">Attach asset details of any type below:</strong> {trackingResult.attachedFiles.length} securely uploaded file(s)</p>
+                            <p className="text-sm text-slate-600"><strong className="text-slate-800">Evidence files:</strong> {trackingResult.attachedFiles.length} uploaded</p>
                           )}
                         </div>
 
@@ -1011,7 +1011,7 @@ export default function ReturnsPage() {
                         {intent === 'sell' && (
                           <div className="mt-1 pt-3 border-t border-slate-200/60">
                             {(filesByProduct.get(product.id) || []).length === 0 ? (
-                              <p className="text-[11px] text-slate-400">No files linked yet — drop files here or assign them in the attach panel below.</p>
+                              <p className="text-[11px] text-slate-400">No evidence linked yet — drop files here or assign them in the upload panel below.</p>
                             ) : (
                               <div className="flex flex-wrap gap-1.5">
                                 {(filesByProduct.get(product.id) || []).map((f) => (
@@ -1037,7 +1037,7 @@ export default function ReturnsPage() {
                                     {f.assetUrl ? (
                                       <button
                                         type="button"
-                                        title={`Copy asset URL: ${f.assetUrl}`}
+                                        title={`Copy link: ${f.assetUrl}`}
                                         onClick={() => { try { navigator.clipboard.writeText(new URL(f.assetUrl as string, window.location.origin).toString()); } catch {} }}
                                         className="flex items-center gap-0.5 hover:underline p-1.5 -m-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                       >

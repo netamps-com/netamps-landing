@@ -241,7 +241,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         next.push({
           ...base,
           state: 'ERROR',
-          errorMessage: `Type not allowed: ".${ext || '?'}" files are rejected. Use PNG, JPEG, WEBP, GIF, TIFF, HEIC photos; MP4, MOV, WEBM, MKV, AVI, FLV videos; CSV, JSON, XLSX data files.`
+          errorMessage: `Unsupported file type: ".${ext || '?'}" isn't accepted. Supported: PNG, JPEG, WEBP, GIF, TIFF, HEIC images; MP4, MOV, WEBM, MKV, AVI, FLV videos; CSV, JSON, XLSX data files.`
         });
         continue;
       }
@@ -249,7 +249,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         next.push({
           ...base,
           state: 'ERROR',
-          errorMessage: 'Session cap exceeded: this file would push past the 300 MB session limit. Remove a file or submit a second request.'
+          errorMessage: 'Upload quota exceeded: this file would pass the 300 MB per-request limit. Remove a file or submit a second request.'
         });
         continue;
       }
@@ -455,8 +455,8 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
     <div className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl font-sans text-slate-200">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold text-white">Attach asset details of any type below</h3>
-          <p className="text-xs text-slate-400 mt-1">Accepted Payloads: Data (CSV, JSON, XLSX) • Video (MP4, MOV, WEBM, MKV) • Image (PNG, JPEG, WEBP, GIF, TIFF, HEIC) | Max 300 MB per file · 300 MB session quota</p>
+          <h3 className="text-lg font-bold text-white">Upload evidence files</h3>
+          <p className="text-xs text-slate-400 mt-1">Supported formats: Images (PNG, JPEG, WEBP, GIF, TIFF, HEIC) · Videos (MP4, MOV, WEBM, MKV, AVI, FLV) · Data (CSV, JSON, XLSX) · Max 300 MB per file, 300 MB per request</p>
           <button
             onClick={() => downloadIntakeTemplate()}
             className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition-colors"
@@ -466,7 +466,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         </div>
         {queuedFiles.length > 0 && (
           <span className="shrink-0 text-xs font-mono text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
-            {queuedFiles.filter((f) => f.state === 'SUCCESS').length}/{queuedFiles.length} stored
+            {queuedFiles.filter((f) => f.state === 'SUCCESS').length}/{queuedFiles.length} uploaded
           </span>
         )}
       </div>
@@ -474,7 +474,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
       {/* Session meter (real bytes, global across all mapped products) */}
       <div className="mb-5">
         <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider mb-1.5">
-          <span className="text-slate-400">{uploadingCount > 0 ? `Uploading ${uploadingCount} file${uploadingCount > 1 ? 's' : ''}…` : 'Session usage'}</span>
+          <span className="text-slate-400">{uploadingCount > 0 ? `Uploading ${uploadingCount} file${uploadingCount > 1 ? 's' : ''}…` : 'Upload quota'}</span>
           <span className="text-emerald-400 font-mono">{formatBytes(uploadedBytes)} / {formatBytes(MAX_SESSION_BYTES)}</span>
         </div>
         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -486,7 +486,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
       <div
         role="button"
         tabIndex={0}
-        aria-label="Upload Attach asset details of any type below"
+        aria-label="Upload evidence files"
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
@@ -500,7 +500,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         <p className="mb-1 text-sm text-slate-300">
           <span className="font-bold text-white">{isDragging ? 'Drop to start uploading' : 'Click to upload'}</span> or drag and drop
         </p>
-        <p className="text-xs text-slate-500">Files start uploading immediately · up to 3 at a time with speed & ETA · magic-byte verified server-side</p>
+        <p className="text-xs text-slate-500">Files upload immediately · up to 3 at a time with speed & ETA · verified automatically</p>
         <input
           ref={inputRef}
           type="file"
@@ -571,12 +571,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                       }}
                       className="text-xs bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 max-w-full"
                     >
-                      <option value="">Unassigned — select product…</option>
+                      <option value="">Select product…</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>{p.label}</option>
                       ))}
                     </select>
-                    {qFile.moving && <span className="text-[11px] text-indigo-300">Re-linking…</span>}
+                    {qFile.moving && <span className="text-[11px] text-indigo-300">Moving to selected product…</span>}
                   </div>
                   {qFile.state === 'UPLOADING' && (
                     <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden" role="progressbar" aria-valuenow={qFile.progress} aria-valuemin={0} aria-valuemax={100}>
@@ -585,13 +585,13 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                   )}
                   {qFile.state === 'SUCCESS' && (
                     <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1.5">
-                      <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Securely Stored & Encrypted (AES-256)
+                      <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Uploaded · Encrypted at rest (AES-256)
                       {qFile.hash ? <span className="font-mono font-normal text-emerald-400/70 truncate"> · {qFile.hash.slice(0, 12)}…</span> : null}
                       {qFile.assetUrl ? (
                         <button
                           type="button"
                           onClick={() => copyAssetUrl(qFile.id, qFile.assetUrl)}
-                          title="Copy asset URL"
+                          title="Copy link"
                           className="ml-auto flex items-center gap-1 p-2 -m-1 rounded text-emerald-300 hover:text-white shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                         >
                           {copiedId === qFile.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -607,12 +607,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                     </div>
                   )}
                   {qFile.state === 'QUEUED' && (
-                    <p className="text-xs text-slate-500">Queued — starts automatically ({MAX_CONCURRENT_UPLOADS} at a time)…</p>
+                    <p className="text-xs text-slate-500">Queued — uploads start automatically ({MAX_CONCURRENT_UPLOADS} at a time)…</p>
                   )}
                   {qFile.state === 'HASHING' && (
                     <p className="text-xs text-indigo-300 flex items-center gap-1.5">
                       <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                      Hashing for integrity…
+                      Verifying file integrity (SHA-256)…
                     </p>
                   )}
                 </div>
