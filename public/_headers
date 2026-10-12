@@ -11,6 +11,23 @@
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Authenticated app routes — never cache shells (stale post-deploy bundles +
+# PII in authed shells). Hashed JS/CSS chunks stay immutable-cached via
+# /_next/static/* above, so this costs zero performance.
+# Inherits all global security headers above (HSTS, CSP, X-Frame-Options, etc.)
+/dashboard
+/dashboard/*
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+/intake
+/intake/*
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+/login
+/login/*
+  Cache-Control: no-store
+  X-Content-Type-Options: nosniff
+
 # Status page — public HTML, always fresh (edge revalidates, browser does not cache stale)
 # Inherits all global security headers above (HSTS, CSP, X-Frame-Options, etc.)
 /status
