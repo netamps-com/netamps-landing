@@ -1070,7 +1070,25 @@ export default function ReturnsPage() {
                       }}
                       onQueueChange={handleQueueChange}
                       resetSignal={uploadReset}
+                      serverVerifyDataFiles
                     />
+                    {/* Server-verdict warning (warn-only): rejected tabular evidence
+                        never blocks submit — staff review covers it. */}
+                    {(() => {
+                      const bad = queueSnapshot.filter((f) => f.status === 'verified' && f.verdict?.status === 'rejected');
+                      if (bad.length === 0) return null;
+                      return (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800" role="note">
+                          <span className="font-bold">{bad.length} attached data file{bad.length > 1 ? 's' : ''} failed the server structure check</span>
+                          {bad.slice(0, 3).map((f) => (
+                            <span key={f.attachmentId} className="block mt-1 font-mono truncate" title={f.verdict?.status === 'rejected' ? f.verdict.reason : ''}>
+                              {f.fileName}: {f.verdict?.status === 'rejected' ? f.verdict.reason : ''}
+                            </span>
+                          ))}
+                          <span className="block mt-1">You can still submit — staff will review.</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

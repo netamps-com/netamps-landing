@@ -30,7 +30,19 @@ export interface AttachmentSnapshot {
   objectKey?: string;
   assetUrl?: string;
   error?: string;
+  // Server-side structure verdict (R2-backed parse; data files only, set when
+  // serverVerifyDataFiles is on). Absent = unchecked or check unavailable
+  // (anonymous sessions get 401 and stay silent — client guards still apply).
+  verdict?: ServerVerdict;
 }
+
+// Server structure verdict for a staged tabular file. 'checking' is
+// transient; 'ok' carries exact server counts; 'rejected' carries the
+// server's 422 wording verbatim (same guards as the browser path).
+export type ServerVerdict =
+  | { status: 'checking' }
+  | { status: 'ok'; rows: number; cols: number }
+  | { status: 'rejected'; reason: string };
 
 interface QueuedFile {
   id: string; // attachmentId — stable for the file's lifetime
@@ -47,6 +59,7 @@ interface QueuedFile {
   hash?: string; // client SHA-256 (pre-upload) or server hash
   productId: string | null; // owning product card; null = unassigned
   moving: boolean;
+  verdict?: ServerVerdict; // server structure verdict (data files only)
 }
 
 export interface SecureMediaUploaderHandle {
@@ -62,6 +75,10 @@ interface SecureMediaUploaderProps {
   products: { id: string; label: string }[]; // live product cards
   onQueueChange: (snapshot: AttachmentSnapshot[]) => void;
   resetSignal: number; // increment to abort + purge everything
+  // Opt-in: server-verify staged tabular files (csv/json/xlsx) against the
+  // bytes R2 holds. Media files never trigger a call. Anonymous sessions get
+  // 401 and stay silent — verdict simply stays absent.
+  serverVerifyDataFiles?: boolean;
 }
 
 function hexOf(bytes: Uint8Array) {
@@ -75,7 +92,7 @@ async function sha256Of(file: File): Promise<string> {
 }
 
 const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUploaderProps>(function SecureMediaUploader(
-  { onUploadSuccess, sessionId, requestScope, products, onQueueChange, resetSignal },
+  { onUploadSuccess, sessionId, requestScope, products, onQueueChange, resetSignal, serverVerifyDataFiles = false },
   ref
 ) {
   const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
@@ -115,7 +132,8 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         status: f.state === 'QUEUED' ? 'staged' : f.state === 'HASHING' || f.state === 'UPLOADING' ? 'uploading' : f.state === 'SUCCESS' ? 'verified' : 'error',
         objectKey: f.r2Key,
         assetUrl: f.assetUrl,
-        error: f.errorMessage
+        error: f.errorMessage,
+        ...(f.verdict ? { verdict: f.verdict } : {})
       }))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,6 +231,54 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
     pumpUploads();
   });
 
+  // Server structure verdicts for staged tabular files (opt-in). Fires once
+  // per verified data file against the bytes R2 holds (preview maxRows: 5 —
+  // only the structural verdict + counts travel). Media files never trigger
+  // a call; key changes (move/retry) clear the verdict and re-fire. Failures
+  // (401 anonymous, 5xx, network) stay silent — client guards still apply.
+  const verifyingRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!serverVerifyDataFiles) return;
+    for (const f of queueRef.current) {
+      if (f.state !== 'SUCCESS' || !f.r2Key) continue;
+      const ext = (f.file.name.split('.').pop() || '').toLowerCase();
+      if (!['csv', 'json', 'xlsx'].includes(ext)) continue;
+      if (f.verdict || verifyingRef.current.has(f.id)) continue;
+      verifyingRef.current.add(f.id);
+      const keyAtSend = f.r2Key;
+      setQueuedFiles((prev) => prev.map((x) => (x.id === f.id ? { ...x, verdict: { status: 'checking' } as ServerVerdict } : x)));
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      fetch(`${API_URL}/api/intake/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'parse', key: keyAtSend, maxRows: 5 })
+      })
+        .then(async (res) => {
+          const data = await res.json().catch(() => null);
+          // Stale win guard: a move/retry during flight changed the key —
+          // drop this verdict so the new key re-fires cleanly above.
+          setQueuedFiles((prev) => prev.map((x) => {
+            if (x.id !== f.id || x.r2Key !== keyAtSend) return x;
+            if (!res.ok || !data || !data.success) {
+              return { ...x, verdict: { status: 'rejected', reason: (data && data.message) || 'Server structure check failed.' } as ServerVerdict };
+            }
+            return { ...x, verdict: { status: 'ok', rows: data.totalRows ?? 0, cols: Array.isArray(data.cols) ? data.cols.length : 0 } as ServerVerdict };
+          }));
+        })
+        .catch(() => {
+          setQueuedFiles((prev) => prev.map((x) => {
+            if (x.id !== f.id || x.r2Key !== keyAtSend || x.verdict?.status !== 'checking') return x;
+            const next = { ...x } as QueuedFile;
+            delete next.verdict; // silent — no chip, no noise
+            return next;
+          }));
+        })
+        .finally(() => {
+          verifyingRef.current.delete(f.id);
+        });
+    }
+  });
+
   const stageFiles = useCallback(async (incoming: File[], productId: string | null = null) => {
     if (incoming.length === 0) return;
     // Validate the target product is still live; else stage as unassigned.
@@ -295,7 +361,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
       setQueuedFiles((prev) => prev.map((f) => (f.id === id ? { ...f, productId: null } : f)));
       return;
     }
-    setQueuedFiles((prev) => prev.map((f) => (f.id === id ? { ...f, moving: true, errorMessage: undefined } : f)));
+    setQueuedFiles((prev) => prev.map((f) => (f.id === id ? { ...f, moving: true, verdict: undefined, errorMessage: undefined } : f)));
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${API_URL}/api/secure-move`, {
@@ -590,7 +656,8 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                     </div>
                   )}
                   {qFile.state === 'SUCCESS' && (
-                    <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1.5">
+                    <>
+                      <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1.5">
                       <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Uploaded · Encrypted at rest (AES-256)
                       {qFile.hash ? <span className="font-mono font-normal text-emerald-400/70 truncate"> · {qFile.hash.slice(0, 12)}…</span> : null}
                       {qFile.assetUrl ? (
@@ -603,7 +670,25 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                           {copiedId === qFile.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
                       ) : null}
-                    </p>
+                      </p>
+                      {/* Server structure verdict (data files, opt-in): warn-only, never blocks submit */}
+                      {qFile.verdict?.status === 'checking' && (
+                        <p className="text-[11px] text-indigo-300 flex items-center gap-1.5 mt-1.5">
+                          <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                          Checking structure on server…
+                        </p>
+                      )}
+                      {qFile.verdict?.status === 'ok' && (
+                        <p className="text-[11px] font-mono text-emerald-400/80 mt-1.5">
+                          Server-verified · {qFile.verdict.rows} row{qFile.verdict.rows === 1 ? '' : 's'} × {qFile.verdict.cols} cols
+                        </p>
+                      )}
+                      {qFile.verdict?.status === 'rejected' && (
+                        <p className="text-[11px] text-amber-300 leading-relaxed mt-1.5" role="note">
+                          Server check: {qFile.verdict.reason} You can still submit — staff will review.
+                        </p>
+                      )}
+                    </>
                   )}
                   {qFile.state === 'ERROR' && (
                     <div className="bg-red-500/10 border border-red-500/30 rounded-md p-2.5" role="alert">
