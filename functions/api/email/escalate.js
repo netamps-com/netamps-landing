@@ -40,6 +40,39 @@ const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 // Fixed escalation mailbox. Not client-controlled.
 const SALES_ESCALATION_EMAIL = 'sales@netamps.in';
 
+// Deliverability + anti-abuse: per-recipient hourly cap (the fixed recipient
+// makes this a global escalation cap), text part, tags for webhook
+// correlation. No suppression check here — the recipient is internal and
+// constant; suppressing it would silently kill the sales handoff.
+const ESC_RL_WINDOW_MS = 60 * 60 * 1000;
+const ESC_RL_MAX = 20;
+const escRlMap = new Map();
+function escRateLimited() {
+  const now = Date.now();
+  const record = escRlMap.get(SALES_ESCALATION_EMAIL);
+  if (!record || now - record.windowStart > ESC_RL_WINDOW_MS) {
+    escRlMap.set(SALES_ESCALATION_EMAIL, { windowStart: now, count: 1 });
+    return false;
+  }
+  record.count += 1;
+  return record.count > ESC_RL_MAX;
+}
+
+function stripHtmlToText(html) {
+  return String(html || '')
+    .replace(/<(br|p|div|tr|h[1-6]|li)[^>]*>/gi, '\n')
+    .replace(/<\/t[dr]>/gi, '  ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 const asPaiseOrNull = (v) => (Number.isInteger(v) && v >= 0 ? v : null);
 const fmtPaise = (v) => (v === null || v === undefined)
   ? '—'
@@ -147,6 +180,10 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Email service is not configured. Please contact support.' }, 503);
     }
 
+    if (escRateLimited()) {
+      return json({ success: false, message: 'Too many escalations right now. Try again shortly.' }, 429);
+    }
+
     const rsRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -157,7 +194,15 @@ export async function onRequestPost({ request, env }) {
         from: 'Netamps Portal <no-reply@netamps.in>',
         to: SALES_ESCALATION_EMAIL,
         subject: `Match Escalation ${safeMatchId}: ${safeProduct} ${safeModel} (Buy ${safeBuyerId} / Sell ${safeSellerId})`,
-        html: htmlContent
+        html: htmlContent,
+        text: stripHtmlToText(htmlContent),
+        headers: {
+          'List-Unsubscribe': '<mailto:contact@netamps.com?subject=Unsubscribe>'
+        },
+        tags: [
+          { name: 'kind', value: 'escalation' },
+          { name: 'match', value: String(matchId).slice(0, 64) }
+        ]
       })
     });
 

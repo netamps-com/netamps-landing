@@ -31,6 +31,58 @@ function escapeHtml(value) {
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 
+// ── Deliverability + anti-abuse controls (spam handling) ──
+// Every send below carries: List-Unsubscribe (mailto, known contact address),
+// a text part (spam-score hygiene), Resend tags for webhook correlation.
+// Per-recipient rate caps stop reputation burn via automation (isolate-local,
+// same posture as the login throttle — distributed floods need KV limits).
+// Suppression (hard bounces/complaints recorded by /api/email/events) is
+// checked pre-send: re-mailing the dead burns the domain for everyone.
+const PUSH_RL_WINDOW_MS = 60 * 60 * 1000;
+const PUSH_RL_PER_RECIPIENT = 5;
+const pushRlMap = new Map();
+function pushRateLimited(email) {
+  const now = Date.now();
+  const key = String(email || '').toLowerCase();
+  if (!key) return false;
+  const record = pushRlMap.get(key);
+  if (!record || now - record.windowStart > PUSH_RL_WINDOW_MS) {
+    pushRlMap.set(key, { windowStart: now, count: 1 });
+    return false;
+  }
+  record.count += 1;
+  if (pushRlMap.size > 5000) pushRlMap.clear();
+  return record.count > PUSH_RL_PER_RECIPIENT;
+}
+
+function stripHtmlToText(html) {
+  return String(html || '')
+    .replace(/<(br|p|div|tr|h[1-6]|li)[^>]*>/gi, '\n')
+    .replace(/<\/t[dr]>/gi, '  ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function isSuppressed(env, email) {
+  try {
+    if (!env.DB || typeof env.DB.prepare !== 'function') return false;
+    await env.DB.prepare(
+      'CREATE TABLE IF NOT EXISTS email_suppressions (email TEXT PRIMARY KEY, reason TEXT, created_at TEXT)'
+    ).run();
+    const row = await env.DB.prepare('SELECT email FROM email_suppressions WHERE email = ?').bind(String(email).toLowerCase()).first();
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
 export async function onRequestPost({ request, env }) {
   try {
     let body;
@@ -43,6 +95,16 @@ export async function onRequestPost({ request, env }) {
     const { email, requestId, products, intent, consideration, askTotalPaise, finalPrice } = body;
     if (!email || typeof email !== 'string' || email.length > 254 || !EMAIL_RE.test(email) || !requestId) {
       return json({ success: false, message: 'Email and requestId required' }, 400);
+    }
+
+    // Abuse brake first: >5 pushes/hour to one address is automation, not ops.
+    if (pushRateLimited(email)) {
+      return json({ success: false, message: 'Too many notifications for this address. Try again later.' }, 429);
+    }
+    // Suppression brake: never re-mail a hard bounce or complaint.
+    if (await isSuppressed(env, email)) {
+      console.error('[email] Suppressed recipient refused:', email);
+      return json({ success: false, message: 'Notifications to this address are paused (delivery failures on record).' }, 403);
     }
 
     // ── Paise-integer money math (null = unstated, never 0) ──
@@ -113,24 +175,15 @@ export async function onRequestPost({ request, env }) {
       return fmtPaise(v);
     };
 
-    // ── Lot breakdown (ported from app/lib/money.ts lotBreakdownOf — keep
-    // byte-identical logic; this file cannot import TS. Line totals are
-    // qty × base (integers, exact); unsafe results degrade to null. ──
-    const bdRows = (Array.isArray(products) ? products : []).map(p => {
-      const qty = Number.isInteger(p.quantity) && p.quantity > 0 ? p.quantity : 1;
-      const base = asPaiseOrNull(p.basePricePaise);
-      let lineTotal = null;
-      if (base !== null) {
-        const t = qty * base;
-        lineTotal = Number.isSafeInteger(t) ? t : null;
-      }
-      return { qty, basePaise: base, lineTotal, category: p.category, details: p.details };
-    });
-    const bdStated = bdRows.filter(r => r.lineTotal !== null);
-    const bdSum = bdStated.length === 0 ? null : bdStated.reduce((a, r) => a + r.lineTotal, 0);
-    const bdVariance = (askTotal === null || bdSum === null) ? null : askTotal - bdSum;
-    const bdHasAnyBase = bdRows.some(r => r.basePaise !== null);
-    const isLotMode = cons && cons.pricingBasis === 'lot';
+    // ── Per-line final (ported from app/lib/money.ts lineFinalOf — keep
+    // byte-identical logic; this file cannot import TS. qty × base, exact;
+    // unsafe results degrade to null. ──
+    const lineFinalOfEmail = (qtyRaw, base) => {
+      const qty = Number.isInteger(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+      if (base === null || base === undefined) return null;
+      const t = qty * base;
+      return Number.isSafeInteger(t) ? t : null;
+    };
 
     const htmlContent = `
       <h3>Netamps Request Notification</h3>
@@ -143,6 +196,7 @@ export async function onRequestPost({ request, env }) {
             <th>Product</th>
             <th>Qty</th>
             <th>Consideration</th>
+            <th>Line Final</th>
             <th>Evaluated Price</th>
           </tr>
         </thead>
@@ -152,9 +206,10 @@ export async function onRequestPost({ request, env }) {
               <td>${escapeHtml(p.category)} - ${escapeHtml(p.details)}</td>
               <td align="center">${escapeHtml(p.quantity)}</td>
               <td align="right">${askCellOf(p)}</td>
+              <td align="right">${fmtPaise(lineFinalOfEmail(p.quantity, asPaiseOrNull(p.basePricePaise)))}</td>
               <td align="right">${fmtPaise(evalUnitOf(p))}</td>
             </tr>
-          `).join('') || '<tr><td colspan="4">No products listed.</td></tr>'}
+          `).join('') || '<tr><td colspan="5">No products listed.</td></tr>'}
         </tbody>
       </table>
       <p style="font-size: 16px; margin-top: 15px;">
@@ -162,31 +217,6 @@ export async function onRequestPost({ request, env }) {
         <strong>Total Evaluated: ${fmtPaise(evalTotal)}</strong>${evalPartial ? ' (partial — some lines unevaluated)' : ''}<br/>
         <strong>Final Agreed Value: ${fp ? `${fmtPaise(fp.totalPaise)} (${escapeHtml(fp.basis)}, v${fp.version})` : '— (awaiting approval snapshot)'}</strong>
       </p>
-      ${isLotMode ? `
-      <p style="font-size: 14px; margin-top: 15px;"><strong>Lot breakdown</strong></p>
-      ${!bdHasAnyBase ? `<p style="font-size: 12px; color: #64748b;">Line breakdown unavailable — captured before per-line pricing.</p>` : `
-      <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 600px;">
-        <thead>
-          <tr style="background-color: #f8fafc;">
-            <th>Product</th>
-            <th>Qty × Base</th>
-            <th>Line Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${bdRows.map(r => `
-            <tr>
-              <td>${escapeHtml(r.category)}${r.details ? ' - ' + escapeHtml(r.details) : ''}</td>
-              <td align="center">${r.qty} × ${r.basePaise === null ? '—' : fmtPaise(r.basePaise)}</td>
-              <td align="right">${fmtPaise(r.lineTotal)}${r.lineTotal === null && r.basePaise !== null ? ' (unsafe)' : ''}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <p style="font-size: 14px; margin-top: 8px;">
-        <strong>Sum of lines: ${fmtPaise(bdSum)}</strong>${bdStated.length < bdRows.length ? ' (partial)' : ''}<br/>
-        <strong>Variance: ${bdVariance === null ? '—' : bdVariance === 0 ? '✓ Reconciled' : `Differs by ${bdVariance < 0 ? '−' : '+'}${fmtPaise(Math.abs(bdVariance))}`}</strong>
-      </p>`}` : ''}
       <p style="font-size: 12px; color: #64748b;">
         <em>* All prices and total values mentioned are exclusive of applicable GST rates.</em>
       </p>
@@ -208,7 +238,19 @@ export async function onRequestPost({ request, env }) {
         from: 'Netamps Portal <no-reply@netamps.in>',
         to: email,
         subject: `Update on Request ${safeRequestId}`,
-        html: htmlContent
+        html: htmlContent,
+        text: stripHtmlToText(htmlContent),
+        headers: {
+          // List-Unsubscribe (mailto fallback — no HTTPS endpoint exists, so
+          // no One-Click header; the contact address below is real).
+          'List-Unsubscribe': '<mailto:contact@netamps.com?subject=Unsubscribe>'
+        },
+        // Tags echo back in webhooks (/api/email/events) to close the loop
+        // from accepted → delivered/bounced per request.
+        tags: [
+          { name: 'kind', value: 'owner-push' },
+          { name: 'request', value: String(requestId).slice(0, 64) }
+        ]
       })
     });
 
