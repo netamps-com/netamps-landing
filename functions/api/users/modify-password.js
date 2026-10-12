@@ -155,12 +155,13 @@ export async function onRequestPost({ request, env }) {
     } catch {}
 
     // Password-change alert to the account holder (breach tripwire: takeover
-    // becomes a detection event). Best-effort — never fails the change.
+    // becomes a detection event). Role language only — no mailboxes.
+    // Best-effort — never fails the change.
     try {
       await sendAccountMail(env, email,
         'Your Netamps password was changed',
         isAdmin && !isSelf
-          ? [`An administrator (${escapeHtml(caller.email)}) reset the password on your account. If you did not request this, contact your administrator immediately.`]
+          ? [`An administrator reset the password on your account. If you did not request this, contact your administrator immediately.`]
           : [`The password on your account was just changed. If this was not you, contact your administrator immediately.`],
         'password-changed');
     } catch {}

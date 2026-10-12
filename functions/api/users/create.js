@@ -137,15 +137,12 @@ export async function onRequestPost({ request, env }) {
     } catch {}
 
     // Activation notice to the new user (no secrets — password travels a
-    // separate channel). Admin-grant peer notices live in the invite accept
-    // path (invites.js): direct admin creation is refused without an
-    // accepted invite, so that path has no fellow admins to notify that the
-    // invite flow hasn't already told.
+    // separate channel; no mailboxes either — roles, never addresses).
     try {
       await sendAccountMail(env, email,
-        'Your Netamps staff account was created',
-        [`An administrator (${escapeHtml(caller.email)}) created your <strong>${escapeHtml(role)}</strong> account.`,
-         `Sign in at netamps.com/login with the password shared with you separately, then change it from User Management.`],
+        'Your Netamps account is ready',
+        [`Your account <strong>'${escapeHtml(email)}'</strong> was successfully created with the <strong>${escapeHtml(role)}</strong> role.`,
+         `Sign in at netamps.com/login with the password shared with you separately, then change it from User Management. If you did not expect this account, contact your administrator immediately.`],
         'account-created');
     } catch {}
 

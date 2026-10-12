@@ -41,6 +41,10 @@ async function ensureTable(env) {
        ip_address TEXT
      )`
   ).run();
+  // Index for 1M-row pagination performance (timestamp DESC sort)
+  await env.DB.prepare(
+    'CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(timestamp DESC)'
+  ).run();
 }
 
 export async function onRequestPost({ request, env }) {
@@ -96,15 +100,16 @@ export async function onRequestGet({ request, env }) {
       return json({ success: false, message: 'Unauthorized' }, 401);
     }
     if (!env.DB || typeof env.DB.prepare !== 'function') {
-      return json({ success: true, logs: [], store: 'none' });
+      return json({ success: true, logs: [], total: 0, store: 'none' });
     }
     await ensureTable(env);
-    // Server-side range/search so the viewer never needs rewriting at
-    // volume. All inputs strictly shaped; anything else falls back to the
-    // default window rather than erroring the whole read.
+    // Server-side range/search/pagination so the viewer scales to 1M+ rows.
+    // All inputs strictly shaped; anything else falls back to the default window
+    // rather than erroring the whole read.
     let since = null;
     let q = null;
-    let limit = 5000;
+    let limit = 100;
+    let offset = 0;
     try {
       const url = new URL(request.url);
       const sinceRaw = url.searchParams.get('since');
@@ -113,8 +118,11 @@ export async function onRequestGet({ request, env }) {
       if (qRaw) q = `%${qRaw.replace(/[%_]/g, '')}%`;
       const limRaw = parseInt(url.searchParams.get('limit') || '', 10);
       if (Number.isInteger(limRaw) && limRaw > 0) limit = Math.min(limRaw, 5000);
+      const offRaw = parseInt(url.searchParams.get('offset') || '', 10);
+      if (Number.isInteger(offRaw) && offRaw >= 0) offset = Math.min(offRaw, 1000000);
     } catch {}
     let query = 'SELECT * FROM audit_logs';
+    let countQuery = 'SELECT COUNT(*) as total FROM audit_logs';
     const clauses = [];
     const params = [];
     if (since) {
@@ -125,9 +133,16 @@ export async function onRequestGet({ request, env }) {
       clauses.push('(event_type LIKE ? OR details LIKE ? OR username LIKE ? OR page LIKE ?)');
       params.push(q, q, q, q);
     }
-    if (clauses.length > 0) query += ' WHERE ' + clauses.join(' AND ');
-    query += ' ORDER BY timestamp DESC LIMIT ?';
-    params.push(limit);
+    if (clauses.length > 0) {
+      const where = ' WHERE ' + clauses.join(' AND ');
+      query += where;
+      countQuery += where;
+    }
+    // Total count (same WHERE clause — counter and page can never disagree)
+    const countRes = await env.DB.prepare(countQuery).bind(...params).first();
+    const total = countRes && typeof countRes.total === 'number' ? countRes.total : 0;
+    query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
     const { results } = await env.DB.prepare(query).bind(...params).all();
     const formattedLogs = (results || []).map((row) => ({
       id: row.id,
@@ -138,7 +153,7 @@ export async function onRequestGet({ request, env }) {
       user: row.username,
       ipAddress: row.ip_address
     }));
-    return json({ success: true, logs: formattedLogs, store: 'd1' });
+    return json({ success: true, logs: formattedLogs, total, store: 'd1', limit, offset });
   } catch (err) {
     console.error('[logs] GET error:', err);
     return json({ success: false, message: 'Failed to read audit logs.' }, 500);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Search, Download, Filter, FileText, Database } from 'lucide-react';
 import type { AuditLog } from '../lib/logger';
 
@@ -65,6 +65,11 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
   const [eventTypeFilter, setEventTypeFilter] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Pagination state (server-side; client only renders the current page)
+  const [total, setTotal] = useState(0);
+  const [limit, setLimit] = useState(100);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
   // Clear flow: idle → confirm (auto-exported first) → clearing. Typed CLEAR
   // + server tombstone replace the old one-click window.confirm.
   const [clearStage, setClearStage] = useState<'idle' | 'confirm' | 'clearing'>('idle');
@@ -77,65 +82,69 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-        const params = new URLSearchParams();
-        if (dateFilter) params.set('since', dateFilter);
-        if (debouncedSearch) params.set('q', debouncedSearch);
-        const qs = params.toString();
-        const res = await fetch(`${API_URL}/api/logs${qs ? `?${qs}` : ''}`);
-        const data = await res.json();
-        if (data.success && data.logs) {
-          setStoreState(data.store === 'none' ? 'none' : 'd1');
-          
-          // Always merge on-device logs so the view retains history during D1 transition
-          // or captures any events that failed to POST to the central API.
-          const { getLogs } = await import('../lib/logger');
-          const local = getLogs();
-          
-          const remote = data.logs;
-          const merged = [...remote];
-          
-          local.forEach((l: AuditLog) => {
-            if (!merged.some(m => m.id === l.id)) {
-              merged.push(l);
-            }
-          });
-          
-          setLogs(merged);
-        } else {
-          // Fallback to local storage if API fails
-          const { getLogs } = await import('../lib/logger');
-          setLogs(getLogs());
-          setStoreState('local');
-        }
-      } catch (err) {
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const params = new URLSearchParams();
+      if (dateFilter) params.set('since', dateFilter);
+      if (debouncedSearch) params.set('q', debouncedSearch);
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+      const qs = params.toString();
+      const res = await fetch(`${API_URL}/api/logs${qs ? `?${qs}` : ''}`);
+      const data = await res.json();
+      if (data.success && data.logs) {
+        setStoreState(data.store === 'none' ? 'none' : 'd1');
+        setTotal(data.total || 0);
+        setLimit(data.limit || limit);
+        setOffset(data.offset || offset);
+        
+        // Always merge on-device logs so the view retains history during D1 transition
+        // or captures any events that failed to POST to the central API.
+        const { getLogs } = await import('../lib/logger');
+        const local = getLogs();
+        
+        const remote = data.logs;
+        const merged = [...remote];
+        
+        local.forEach((l: AuditLog) => {
+          if (!merged.some(m => m.id === l.id)) {
+            merged.push(l);
+          }
+        });
+        
+        setLogs(merged);
+      } else {
+        // Fallback to local storage if API fails
         const { getLogs } = await import('../lib/logger');
         setLogs(getLogs());
         setStoreState('local');
+        setTotal(0);
       }
-    };
-    fetchLogs();
-  }, [refreshKey, dateFilter, debouncedSearch]);
+    } catch (err) {
+      const { getLogs } = await import('../lib/logger');
+      setLogs(getLogs());
+      setStoreState('local');
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [dateFilter, debouncedSearch, limit, offset]);
 
-  const filteredLogs = useMemo(() => {
-    return logs
-      .filter(log => 
-        (searchTerm === '' || log.eventType?.toLowerCase().includes(searchTerm.toLowerCase()) || log.details?.toLowerCase().includes(searchTerm.toLowerCase()) || log.user?.toLowerCase().includes(searchTerm.toLowerCase())) &&
-        (dateFilter === '' || log.timestamp?.startsWith(dateFilter)) &&
-        (pageFilter === '' || log.page === pageFilter) &&
-        (eventTypeFilter === '' || log.eventType === eventTypeFilter)
-      )
-      .sort((a, b) => sortOrder === 'desc' 
-        ? new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
-        : new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
-      );
-  }, [logs, searchTerm, dateFilter, pageFilter, eventTypeFilter, sortOrder]);
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  const filteredLogs = logs; // Server-side filtered; client just renders current page
 
   const uniquePages = Array.from(new Set(logs.map(l => l.page)));
   const uniqueEventTypes = Array.from(new Set(logs.map(l => l.eventType).filter(Boolean))).sort();
+
+  const goPrev = () => setOffset(Math.max(0, offset - limit));
+  const goNext = () => setOffset(offset + limit);
+  const canGoPrev = offset > 0;
+  const canGoNext = offset + limit < total;
 
   const exportJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filteredLogs, null, 2));
@@ -279,6 +288,34 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
           </div>
         </div>
 
+        {/* Counter + Pagination (top) */}
+        <div className="px-4 py-3 border-b border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="text-slate-600 font-medium">
+            Showing <span className="font-mono text-indigo-700">{Math.min(total, offset + filteredLogs.length)}</span> of <span className="font-mono text-indigo-700">{total.toLocaleString()}</span> events
+          </span>
+          <div className="flex items-center gap-2">
+            <select
+              value={limit}
+              onChange={(e) => { setLimit(Number(e.target.value)); setOffset(0); }}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+              <option value={250}>250 / page</option>
+              <option value={500}>500 / page</option>
+            </select>
+            <button onClick={goPrev} disabled={!canGoPrev || loading} className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Previous page">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <span className="px-2 text-xs text-slate-500 font-mono">
+              Page {Math.floor(offset / limit) + 1} of {Math.max(1, Math.ceil(total / limit))}
+            </span>
+            <button onClick={goNext} disabled={!canGoNext || loading} className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Next page">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+        </div>
+
         {clearStage !== 'idle' && (
           <div className="px-4 py-3 border-b border-red-200 bg-red-50/60 flex flex-wrap items-center gap-3" role="alert">
             <p className="text-xs text-red-800 font-medium flex-1 min-w-[220px]">
@@ -364,6 +401,25 @@ export default function LogViewerModal({ onClose }: LogViewerModalProps) {
             </tbody>
           </table>
         </div>
+
+        {/* Counter + Pagination (bottom) */}
+        <div className="px-4 py-3 border-t border-slate-200 bg-white flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="text-slate-600 font-medium">
+            Showing <span className="font-mono text-indigo-700">{Math.min(total, offset + filteredLogs.length)}</span> of <span className="font-mono text-indigo-700">{total.toLocaleString()}</span> events
+          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={goPrev} disabled={!canGoPrev || loading} className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Previous page">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <span className="px-2 text-xs text-slate-500 font-mono">
+              Page {Math.floor(offset / limit) + 1} of {Math.max(1, Math.ceil(total / limit))}
+            </span>
+            <button onClick={goNext} disabled={!canGoNext || loading} className="p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Next page">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

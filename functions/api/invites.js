@@ -171,9 +171,9 @@ export async function onRequestPost({ request, env }) {
     await auditInvite(env, 'INVITE_CREATED', invite, admin.email);
     const link = `https://netamps.com/login?invite=${token}`;
     await sendInviteMail(env, email, 'Your Netamps staff invitation',
-      [`${escapeHtml(admin.email)} invited you to join Netamps as <strong>${escapeHtml(role)}</strong>.`,
+      [`You've been invited to join Netamps as <strong>${escapeHtml(role)}</strong>. Your account <strong>'${escapeHtml(email)}'</strong> will activate on acceptance.`,
        `Accept within 48 hours: <a href="${escapeHtml(link)}">accept invitation</a>.`,
-       needsSecond ? 'Admin-role grants additionally require a second admin approval before activation.' : 'Your account activates on acceptance — no further approval needed.'], 'invite-issued');
+       needsSecond ? 'Admin-role grants additionally require a second admin approval before activation.' : 'No further approval needed — your account activates on acceptance.'], 'invite-issued');
     return json({ success: true, id, inviteLink: link, needsSecondApproval: needsSecond });
   }
 
@@ -257,7 +257,7 @@ export async function onRequestPost({ request, env }) {
         for (const row of (peers && peers.results) || []) {
           if (row.email && row.email !== invite.email && EMAIL_RE_INVITE.test(row.email)) {
             await sendInviteMail(env, row.email, `Admin account activated: ${invite.email}`,
-              [`${escapeHtml(invite.email)} activated an <strong>admin</strong> account (invited by ${escapeHtml(invite.invited_by || 'unknown')}, approved by ${escapeHtml(invite.approved_by || 'unknown')}). Review in User Management if unexpected.`], 'admin-grant-notice');
+              [`${escapeHtml(invite.email)} activated an <strong>admin</strong> account. Review in User Management if unexpected.`], 'admin-grant-notice');
           }
         }
       } catch {}
