@@ -24,6 +24,31 @@ export function fileUrlFor(key: string, cdnBase: string): string {
   return `${cdnBase}/${key}`;
 }
 
+function extOf(key: string): string {
+  return (key.split('.').pop() || '').toLowerCase().split('?')[0];
+}
+
+/**
+ * Browser-renderability (not container class) drives the viewer choice.
+ * HEIC/HEIF/TIFF have no decoder in Chrome/Firefox (and TIFF in most
+ * browsers) — serving them to <img> yields a permanent error tile for a
+ * healthy file, so they render as download cards instead. data: URIs keep
+ * their existing routing (the browser itself decides).
+ */
+export function renderableImage(key: string): boolean {
+  if (key.startsWith('data:')) return key.startsWith('data:image');
+  return ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(extOf(key));
+}
+
+/**
+ * Only MP4/WebM/MOV play natively. MKV/AVI/FLV open a dead <video> player,
+ * so they render as download cards ("needs a desktop player").
+ */
+export function playableVideo(key: string): boolean {
+  if (key.startsWith('data:')) return key.startsWith('data:video');
+  return ['mp4', 'webm', 'mov'].includes(extOf(key));
+}
+
 export function fileNameOf(key: string): string {
   if (key.startsWith('data:')) return 'embedded file';
   const clean = key.split('?')[0];
@@ -103,9 +128,33 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
   const visible = items.filter((it) => !dismissedKeys.includes(it.key));
   const hiddenCount = items.length - visible.length;
 
-  const photos = visible.filter((it) => it.kind === 'image');
-  const videos = visible.filter((it) => it.kind === 'video');
+  const photos = visible.filter((it) => it.kind === 'image' && renderableImage(it.key));
+  const imageFiles = visible.filter((it) => it.kind === 'image' && !renderableImage(it.key));
+  const videos = visible.filter((it) => it.kind === 'video' && playableVideo(it.key));
+  const videoFiles = visible.filter((it) => it.kind === 'video' && !playableVideo(it.key));
   const datas = visible.filter((it) => it.kind === 'data' || it.kind === 'unknown');
+
+  // Download-card rows: data files + unrecognized types + containers the
+  // browser cannot render inline. One shared row UI; only the note and the
+  // link behavior differ (inline-renderable data opens in a tab, everything
+  // else downloads). Failure/dismiss handling is identical for all rows.
+  const fileRows = [
+    ...datas.map((it) => ({
+      ...it,
+      note: it.kind === 'unknown' ? 'Unrecognized type — opens as file' : 'Data file — opens in new tab',
+      newTab: true
+    })),
+    ...imageFiles.map((it) => ({
+      ...it,
+      note: 'Image file — download to view (needs a desktop viewer)',
+      newTab: false
+    })),
+    ...videoFiles.map((it) => ({
+      ...it,
+      note: 'Video file — download to play (needs a desktop player)',
+      newTab: false
+    }))
+  ];
 
   const markFailed = (id: string) =>
     setFailedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
@@ -196,7 +245,8 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
     return () => window.removeEventListener('keydown', onKey);
   }, [activeVideo]);
 
-  const counts = `${photos.length} photo${photos.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'} · ${datas.length} file${datas.length === 1 ? '' : 's'}`;
+  const fileCount = datas.length + imageFiles.length + videoFiles.length;
+  const counts = `${photos.length} photo${photos.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'} · ${fileCount} file${fileCount === 1 ? '' : 's'}`;
 
   return (
     <div className={compact ? 'mt-4 pt-4 border-t border-slate-700/50' : 'mt-6'}>
@@ -342,9 +392,9 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
             </div>
           )}
 
-          {datas.length > 0 && (
+          {fileRows.length > 0 && (
             <div className={`space-y-2 ${(photos.length > 0 || videos.length > 0) ? 'mt-3' : ''}`}>
-              {datas.map((it) => {
+              {fileRows.map((it) => {
                 return failedIds.includes(it.id) ? (
                   failStatus[it.id] === 404 ? (
                     <div key={`${it.id}:${retryKey}`} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-800/40 border border-slate-800 text-sm">
@@ -379,8 +429,9 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                   <a
                     key={`${it.id}:${retryKey}`}
                     href={it.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    {...(it.newTab
+                      ? { target: '_blank' as const, rel: 'noopener noreferrer' }
+                      : { download: it.name })}
                     className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-indigo-500 transition-colors"
                   >
                     <span className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
@@ -389,7 +440,7 @@ export default function EvidenceGallery({ files, cdnBase, title, compact }: Evid
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-slate-200 truncate">{it.name}</span>
                       <span className="block text-[11px] text-slate-500 uppercase">
-                        {it.kind === 'unknown' ? 'Unrecognized type — opens as file' : 'Data file — opens in new tab'}
+                        {it.note}
                       </span>
                     </span>
                   </a>

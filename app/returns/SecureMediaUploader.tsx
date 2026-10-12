@@ -377,6 +377,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
 
   const isImage = (f: File) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(f.name);
   const isVideo = (f: File) => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi|flv)$/i.test(f.name);
+  // Inline-preview eligibility mirrors the gallery's renderability contract:
+  // HEIC/TIFF have no browser decoder and MKV/AVI/FLV no browser player, so
+  // staged files of those types keep the file icon instead of a dead preview
+  // element. Icons above still use isImage/isVideo (container class).
+  const isPreviewableImage = (f: File) => /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+  const isPreviewableVideo = (f: File) => /\.(mp4|webm|mov)$/i.test(f.name);
   const isData = (f: File) => /\.(csv|json|xlsx)$/i.test(f.name);
 
   const handleFiles = useCallback(
@@ -525,7 +531,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                   ) : (
                     <ImageIcon className="w-5 h-5 text-slate-400" />
                   )}
-                  {qFile.previewUrl && isVideo(qFile.file) && (
+                  {qFile.previewUrl && isPreviewableVideo(qFile.file) && (
                     <video
                       src={qFile.previewUrl}
                       className="absolute inset-0 w-full h-full object-cover"
@@ -533,7 +539,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                       onError={(e) => { e.currentTarget.remove(); }}
                     />
                   )}
-                  {qFile.previewUrl && isImage(qFile.file) && (
+                  {qFile.previewUrl && isPreviewableImage(qFile.file) && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={qFile.previewUrl}
