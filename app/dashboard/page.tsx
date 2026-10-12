@@ -8,7 +8,7 @@ import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
 import EvidenceGallery from './EvidenceGallery';
-import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise, lotBreakdownOf } from '../lib/money';
+import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise, lineFinalOf } from '../lib/money';
 
 interface ProductItem {
   id: string;
@@ -50,6 +50,7 @@ interface ReturnRequest {
   lotConsiderationPaise?: number | null;
   manifest?: { requestId: string; hash: string; generatedAt: string; version?: number } | null;
   finalPrice?: FinalPriceSnapshot | null;
+  priceHistory?: { productId: string; oldPaise: number | null; newPaise: number | null; actor: string; at: string }[];
 }
 
 // ── Totals math (paise integers; null = unstated, never 0) ──
@@ -102,6 +103,42 @@ export default function DashboardPage() {
   const [approveBasis, setApproveBasis] = useState<'evaluated' | 'consideration' | 'negotiated'>('evaluated');
   const [approveNegotiated, setApproveNegotiated] = useState('');
   const [approveError, setApproveError] = useState<string | null>(null);
+
+  // Key-reconciliation reports, keyed by request id (admin-only UI below).
+  const [reconcileResult, setReconcileResult] = useState<Record<string, any>>({});
+  const [reconciling, setReconciling] = useState<string | null>(null);
+
+  const runReconcile = async (req: ReturnRequest, prune: boolean) => {
+    if (prune && !window.confirm(
+      'Remove all dead attachment references from this request? ' +
+      'Stored files are never touched; only unresolvable references are pruned. ' +
+      'This is recorded in the audit log.'
+    )) return;
+    setReconciling(req.id + (prune ? ':prune' : ':report'));
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/secure-reconcile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: req.id, prune })
+      });
+      const data = await res.json();
+      if (!data.success || !data.reports || data.reports.length === 0) {
+        throw new Error(data.message || 'Reconciliation failed.');
+      }
+      setReconcileResult(prev => ({ ...prev, [req.id]: data.reports[0] }));
+      if (prune) fetchReturns(false);
+      try {
+        const { logEvent } = await import('../lib/logger');
+        logEvent(prune ? 'EVIDENCE_PRUNED' : 'EVIDENCE_RECONCILED', 'Dashboard Page',
+          `${prune ? 'Pruned dead references in' : 'Reconciled keys for'} request ${req.id}`, userRole);
+      } catch {}
+    } catch (e: any) {
+      setReconcileResult(prev => ({ ...prev, [req.id]: { error: e.message || 'Reconciliation failed.' } }));
+    } finally {
+      setReconciling(null);
+    }
+  };
 
   const fetchReturns = useCallback(async (silent = true) => {
     if (!silent) setIsRefreshing(true);
@@ -210,7 +247,7 @@ export default function DashboardPage() {
           const unit = p ? evalUnitPaise(p) : null;
           const base = p && (p.basePricePaise ?? null) !== null ? (p.basePricePaise as number) : null;
           const qty = p ? (Number(p.quantity) || 1) : 1;
-          const lineTotal = base === null ? null : (Number.isSafeInteger(qty * base) ? qty * base : null);
+          const lineTotal = p ? lineFinalOf(qty, base) : null;
           rows.push([
             req.id, req.intent, req.status, req.company, req.email, req.date,
             req.pricingBasis === 'lot' ? 'lot' : 'per_product',
@@ -679,13 +716,28 @@ export default function DashboardPage() {
                                           </div>
                                           <div className="flex items-center gap-4">
                                             <div className="flex flex-col items-end">
-                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Consideration (Ask)</label>
-                                              <div className="px-3 py-1.5 text-sm font-mono font-bold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated value — read-only">
-                                                {paiseToDisplay(lineAskOf(req, product))}
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Base Price (Per Unit)</label>
+                                              <div className="px-3 py-1.5 text-sm font-mono font-bold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated base per unit — read-only, sealed in manifest">
+                                                {paiseToDisplay(product.basePricePaise ?? null)}
                                               </div>
                                             </div>
                                             <div className="flex flex-col items-end">
-                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Unit Price (INR)</label>
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Line Consideration (Upfront Discount)</label>
+                                              <div className="px-3 py-1.5 text-sm font-mono font-bold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated upfront total for this line — read-only">
+                                                {paiseToDisplay(lineAskOf(req, product))}
+                                              </div>
+                                              {(() => {
+                                                const final = lineFinalOf(Number(product.quantity) || 1, product.basePricePaise ?? null);
+                                                if (final === null) return null;
+                                                return (
+                                                  <div className="text-[11px] text-slate-400 mt-1" title="Quantity × base price — computed, read-only">
+                                                    Final: <span className="font-mono font-bold text-slate-200">{paiseToDisplay(final)}</span>
+                                                  </div>
+                                                );
+                                              })()}
+                                            </div>
+                                            <div className="flex flex-col items-end">
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Evaluated (Per Unit)</label>
                                               <div className="relative">
                                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
                                                 <input
@@ -740,52 +792,22 @@ export default function DashboardPage() {
                                         {row('Total Evaluated Value', paiseToDisplay(ev.total), ev.partial ? 'Partial — some lines unevaluated' : null, 'text-emerald-400')}
                                         <div className="border-t border-slate-700/60 my-1" />
                                         {row('Final', final ? `${paiseToDisplay(final.totalPaise)} (v${final.version})` : '—', null, 'text-white')}
-                                      </div>
-                                    );
-                                  })()}
-                                  {req.pricingBasis === 'lot' && (() => {
-                                    const bd = lotBreakdownOf(
-                                      (req.products || []).map(p => ({
-                                        qty: Number(p.quantity) || 1,
-                                        basePaise: p.basePricePaise ?? null
-                                      })),
-                                      req.lotConsiderationPaise ?? null
-                                    );
-                                    const hasAnyBase = bd.rows.some(r => r.basePaise !== null);
-                                    return (
-                                      <details className="mt-3 rounded-lg bg-slate-950/60 border border-slate-800 px-4 py-2">
-                                        <summary className="cursor-pointer text-xs font-bold text-slate-400 uppercase tracking-wider">Lot breakdown</summary>
-                                        {!hasAnyBase ? (
-                                          <p className="text-xs text-slate-500 mt-2">Line breakdown unavailable — captured before per-line pricing.</p>
-                                        ) : (
-                                        <div className="mt-2 space-y-1">
-                                          {(req.products || []).map((p, i) => {
-                                            const r = bd.rows[i];
-                                            return (
-                                              <div key={p.id || i} className="flex justify-between gap-3 text-sm">
-                                                <span className="text-slate-400 truncate">{p.category} · Qty {r ? r.qty : Number(p.quantity) || 1}</span>
-                                                <span className="font-mono text-slate-200 shrink-0">
-                                                  {!r || r.basePaise === null
-                                                    ? '—'
-                                                    : `${r.qty} × ${paiseToDisplay(r.basePaise)} = ${paiseToDisplay(r.lineTotal)}`}
-                                                </span>
-                                              </div>
-                                            );
-                                          })}
-                                          <div className="border-t border-slate-800/60 my-1" />
-                                          <div className="flex justify-between text-sm">
-                                            <span className="text-slate-400">Sum of lines</span>
-                                            <span className="font-mono text-slate-200">{paiseToDisplay(bd.sumLines)}{bd.partial ? ' (partial)' : ''}</span>
-                                          </div>
-                                          <div className="flex justify-between text-sm">
-                                            <span className="text-slate-400">Variance</span>
-                                            <span className={`font-mono font-bold ${bd.variance === null ? 'text-slate-500' : bd.variance === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                              {bd.variance === null ? '—' : bd.variance === 0 ? '✓ Reconciled' : `Differs by ${bd.variance < 0 ? '−' : '+'}${paiseToDisplay(Math.abs(bd.variance))}`}
-                                            </span>
-                                          </div>
-                                        </div>
+                                        {(req.priceHistory ?? []).length > 0 && (
+                                          <>
+                                            <div className="border-t border-slate-700/60 my-1" />
+                                            <div className="pt-2">
+                                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Price history (permanent audit trail)</div>
+                                              <ul className="space-y-1">
+                                                {(req.priceHistory ?? []).slice(-5).map((h, i) => (
+                                                  <li key={i} className="text-[11px] font-mono text-slate-400">
+                                                    {h.productId.slice(0, 8)}…: {paiseToDisplay(h.oldPaise)} → {paiseToDisplay(h.newPaise)} <span className="text-slate-600">· {h.actor} · {new Date(h.at).toLocaleString()}</span>
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          </>
                                         )}
-                                      </details>
+                                      </div>
                                     );
                                   })()}
                                 </div>
@@ -798,6 +820,68 @@ export default function DashboardPage() {
                                     title="Attached Evidence"
                                   />
                                 </div>
+
+                                {/* Key reconciliation — admin only. Report-first; prune is explicit + audited. */}
+                                {userRole === 'admin@netamps.com' && (
+                                  <div className="mt-4 rounded-lg bg-slate-950/60 border border-slate-800 px-4 py-3">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Key reconciliation</span>
+                                      <button
+                                        type="button"
+                                        disabled={reconciling === `${req.id}:report`}
+                                        onClick={(e) => { e.stopPropagation(); runReconcile(req, false); }}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors disabled:opacity-50"
+                                      >
+                                        {reconciling === `${req.id}:report` ? 'Checking…' : 'Verify attachment keys'}
+                                      </button>
+                                      {(() => {
+                                        const rep = reconcileResult[req.id];
+                                        if (!rep || rep.error) return null;
+                                        if (!rep.missing || rep.missing.length === 0) return null;
+                                        return (
+                                          <button
+                                            type="button"
+                                            disabled={reconciling === `${req.id}:prune`}
+                                            onClick={(e) => { e.stopPropagation(); runReconcile(req, true); }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 transition-colors disabled:opacity-50"
+                                          >
+                                            {reconciling === `${req.id}:prune` ? 'Pruning…' : `Remove ${rep.missing.length} dead reference${rep.missing.length > 1 ? 's' : ''}`}
+                                          </button>
+                                        );
+                                      })()}
+                                    </div>
+                                    {(() => {
+                                      const rep = reconcileResult[req.id];
+                                      if (!rep) return null;
+                                      if (rep.error) {
+                                        return <p className="text-xs text-red-400 mt-2">{rep.error}</p>;
+                                      }
+                                      return (
+                                        <div className="text-xs text-slate-400 mt-2 space-y-1">
+                                          <p>
+                                            Checked {rep.checked} reference{rep.checked === 1 ? '' : 's'}: {' '}
+                                            <span className="text-emerald-400 font-bold">{rep.ok} OK</span>
+                                            {rep.missing?.length > 0 && <span className="text-red-300 font-bold"> · {rep.missing.length} missing</span>}
+                                            {rep.malformed?.length > 0 && <span className="text-amber-300 font-bold"> · {rep.malformed.length} malformed</span>}
+                                            {rep.inline > 0 && <span> · {rep.inline} inline</span>}
+                                          </p>
+                                          {rep.missing?.length > 0 && (
+                                            <ul className="font-mono text-[11px] text-slate-500 space-y-0.5">
+                                              {rep.missing.map((m: any) => (
+                                                <li key={m.key} className="truncate" title={m.key}>
+                                                  ✗ {m.key} <span className="text-slate-600">({(m.sources || []).join(', ')})</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          )}
+                                          {rep.pruned?.length > 0 && (
+                                            <p className="text-emerald-400">Pruned {rep.pruned.length} dead reference{rep.pruned.length > 1 ? 's' : ''} (audited).{rep.manifestStale ? ' Manifest now differs from record — re-verify before transacting.' : ''}</p>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
 
                                 <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-800 pt-4 items-center">
                                   {approvingId === req.id && (

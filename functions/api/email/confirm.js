@@ -93,8 +93,9 @@ function buildConfirmationHtml(req) {
     <tr>
       <td>${escapeHtml(p.category)} - ${escapeHtml(p.details)}</td>
       <td align="center">${escapeHtml(p.quantity)}</td>
+      <td align="right">${fmtPaise(asPaiseOrNull(p.basePricePaise))}</td>
       <td align="right">${req.pricingBasis === 'lot' ? '—' : fmtPaise(asPaiseOrNull(p.lineConsiderationPaise))}</td>
-    </tr>`).join('') || '<tr><td colspan="3">No products listed.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="4">No products listed.</td></tr>';
   return `
     <h3>Your Netamps request is recorded</h3>
     <p>Hello ${escapeHtml(req.name)},</p>
@@ -105,7 +106,8 @@ function buildConfirmationHtml(req) {
         <tr style="background-color: #f8fafc;">
           <th>Product</th>
           <th>Qty</th>
-          <th>Consideration</th>
+          <th>Base Price (Per Unit)</th>
+          <th>Line Consideration (Upfront Discount)</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>

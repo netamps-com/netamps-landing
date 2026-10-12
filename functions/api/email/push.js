@@ -174,6 +174,7 @@ export async function onRequestPost({ request, env }) {
       const v = byIdV !== undefined ? byIdV : asPaiseOrNull(p.lineConsiderationPaise);
       return fmtPaise(v);
     };
+    const baseCellOf = (p) => fmtPaise(asPaiseOrNull(p.basePricePaise));
 
     // ── Per-line final (ported from app/lib/money.ts lineFinalOf — keep
     // byte-identical logic; this file cannot import TS. qty × base, exact;
@@ -195,9 +196,10 @@ export async function onRequestPost({ request, env }) {
           <tr style="background-color: #f8fafc;">
             <th>Product</th>
             <th>Qty</th>
-            <th>Consideration</th>
+            <th>Base Price (Per Unit)</th>
+            <th>Line Consideration (Upfront Discount)</th>
             <th>Line Final</th>
-            <th>Evaluated Price</th>
+            <th>Evaluated (Per Unit)</th>
           </tr>
         </thead>
         <tbody>
@@ -205,11 +207,12 @@ export async function onRequestPost({ request, env }) {
             <tr>
               <td>${escapeHtml(p.category)} - ${escapeHtml(p.details)}</td>
               <td align="center">${escapeHtml(p.quantity)}</td>
+              <td align="right">${baseCellOf(p)}</td>
               <td align="right">${askCellOf(p)}</td>
               <td align="right">${fmtPaise(lineFinalOfEmail(p.quantity, asPaiseOrNull(p.basePricePaise)))}</td>
               <td align="right">${fmtPaise(evalUnitOf(p))}</td>
             </tr>
-          `).join('') || '<tr><td colspan="5">No products listed.</td></tr>'}
+          `).join('') || '<tr><td colspan="6">No products listed.</td></tr>'}
         </tbody>
       </table>
       <p style="font-size: 16px; margin-top: 15px;">

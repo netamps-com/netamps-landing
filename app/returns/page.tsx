@@ -22,7 +22,8 @@ async function sha256Json(value: unknown): Promise<string> {
 // Line Consideration helper text. The placeholder stays under ~20 visible
 // chars (the field column truncates sentences mid-word); the microcopy below
 // the field carries the meaning. Whole-line semantics explicit; SELL total vs
-// BUY budget in one trailing word. Never a default — submits empty.
+// BUY budget in one trailing word. Industry term: upfront discount — the
+// visitor's line-total offer against evaluated value. Never a default — submits empty.
 function considerationHint(qtyRaw: unknown, baseRaw: string, intent: 'sell' | 'buy'): { placeholder: string; scope: string } {
   const n = Number(qtyRaw);
   const qty = Number.isInteger(n) && n > 0 ? n : 1;
@@ -443,7 +444,12 @@ export default function ReturnsPage() {
         attachedFiles: manifestProducts[i].attachments.map((a) => a.objectKey)
       }));
 
-      const uploadedFileUrls = [...uploadedSecureFiles];
+      // Flat list is DERIVED from the manifest (single source of truth), never
+      // from the incremental upload-success list. Upload-time keys go stale on
+      // secure-move (old key deleted) and on remove/purge (bytes deleted) —
+      // both left the old flat list pointing at 404s while the product gallery
+      // stayed correct. Deriving here keeps both galleries in agreement.
+      const uploadedFileUrls = manifestProducts.flatMap((m) => m.attachments.map((a) => a.objectKey));
       setGeneratedId(newId);
 
       const returnReq = {
@@ -941,7 +947,7 @@ export default function ReturnsPage() {
                           </div>
                           {pricingBasis === 'per_product' ? (
                             <div>
-                              <label className="block text-xs font-medium text-slate-700 mb-1">Base Price (₹/unit)</label>
+                              <label className="block text-xs font-medium text-slate-700 mb-1">Base Price (₹/Per Unit)</label>
                               <input
                                 type="text"
                                 inputMode="decimal"
@@ -956,7 +962,7 @@ export default function ReturnsPage() {
                                 placeholder="e.g. 18,000"
                                 className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
                               />
-                              <label className="block text-xs font-medium text-slate-700 mb-1 mt-2">Line Consideration (₹)</label>
+                              <label className="block text-xs font-medium text-slate-700 mb-1 mt-2">Line Consideration (₹) — Upfront Discount</label>
                               <input
                                 type="text"
                                 inputMode="decimal"
@@ -972,7 +978,7 @@ export default function ReturnsPage() {
                                 className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm"
                               />
                               <p className="text-[11px] text-slate-500 mt-1.5">
-                                Optional — your total for {considerationHint(product.quantity, product.basePrice, intent).scope}, not per-unit. Leave blank for us to evaluate.
+                                Optional — your upfront total for {considerationHint(product.quantity, product.basePrice, intent).scope}, not per-unit. Leave blank for us to evaluate.
                               </p>
                               {(() => {
                                 const base = moneyStringToPaise(product.basePrice || '');

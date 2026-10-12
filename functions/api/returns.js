@@ -259,8 +259,26 @@ export async function onRequestGet({ request, env }) {
         pricingBasis: row.pricingBasis === 'lot' ? 'lot' : 'per_product',
         lotConsiderationPaise: Number.isInteger(row.lotConsiderationPaise) ? row.lotConsiderationPaise : null,
         manifest: parseManifest(row.manifest),
-        finalPrice: parseFinalPrice(row.finalPrice)
+        finalPrice: parseFinalPrice(row.finalPrice),
+        priceHistory: []
       }));
+      // Attach append-only price history (best-effort; missing table = no history, never a read failure).
+      try {
+        const ids = returns.map(r => r.id);
+        if (ids.length > 0) {
+          const placeholders = ids.map(() => '?').join(',');
+          const hist = await env.DB.prepare(
+            `SELECT request_id, product_id, old_paise, new_paise, actor, at FROM price_history WHERE request_id IN (${placeholders}) ORDER BY at ASC`
+          ).bind(...ids).all().catch(() => ({ results: [] }));
+          const byReq = new Map();
+          for (const h of ((hist && hist.results) || [])) {
+            const arr = byReq.get(h.request_id) || [];
+            arr.push({ productId: h.product_id, oldPaise: h.old_paise, newPaise: h.new_paise, actor: h.actor, at: h.at });
+            byReq.set(h.request_id, arr);
+          }
+          for (const r of returns) r.priceHistory = byReq.get(r.id) || [];
+        }
+      } catch {}
       if (lookupId) {
         const hit = returns.find((r) => String(r.id).toUpperCase() === lookupId);
         if (!hit) {
@@ -376,6 +394,23 @@ export async function onRequestPut({ request, env }) {
 
     if (env.DB) {
       try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN finalPrice TEXT').run(); } catch(e){}
+      // Append-only evaluated-price history (chain of custody for pricing:
+      // every PUT-price writes old→new with actor + timestamp; never updated
+      // or deleted — the approval snapshot freezes the agreed figures).
+      try {
+        await env.DB.prepare(
+          `CREATE TABLE IF NOT EXISTS price_history (
+            id TEXT PRIMARY KEY,
+            request_id TEXT,
+            product_id TEXT,
+            old_paise INTEGER,
+            new_paise INTEGER,
+            actor TEXT,
+            at TEXT
+          )`
+        ).run();
+        await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_price_history_req ON price_history(request_id)').run();
+      } catch(e){}
       if (update.action === 'status') {
         if (update.finalPrice !== undefined) {
           const fp = validFinalPrice(update.finalPrice);
@@ -391,6 +426,11 @@ export async function onRequestPut({ request, env }) {
         const { results } = await env.DB.prepare('SELECT products FROM returns WHERE id = ?').bind(update.id).all();
         if (results.length > 0) {
           const products = JSON.parse(results[0].products || '[]');
+          const target = products.find(p => p && p.id === update.productId);
+          const oldPaise = target && Number.isInteger(target.pricePaise) && target.pricePaise >= 0 ? target.pricePaise : null;
+          const newPaise = (update.pricePaise === null || update.pricePaise === undefined)
+            ? null
+            : (Number.isInteger(update.pricePaise) && update.pricePaise >= 0 ? update.pricePaise : null);
           const updatedProducts = products.map(p => {
             if (p.id !== update.productId) return p;
             const next = { ...p };
@@ -411,6 +451,22 @@ export async function onRequestPut({ request, env }) {
           updatedProducts.forEach(p => { totalAmount += evalPaiseOf(p) * (Number(p.quantity) || 1); });
           try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN totalAmount REAL').run(); } catch(e){}
           await env.DB.prepare('UPDATE returns SET products = ?, totalAmount = ? WHERE id = ?').bind(JSON.stringify(updatedProducts), totalAmount, update.id).run();
+          // History write: only on actual change, best-effort (never fails the price update).
+          if (oldPaise !== newPaise) {
+            try {
+              let actor = 'unknown';
+              try {
+                const sessionUser = await verifySession(env, request);
+                if (sessionUser && sessionUser.email) actor = String(sessionUser.email).slice(0, 254);
+              } catch {}
+              await env.DB.prepare(
+                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+              ).bind(
+                crypto.randomUUID(), update.id, update.productId,
+                oldPaise, newPaise, actor, new Date().toISOString()
+              ).run();
+            } catch(e){}
+          }
         }
       }
     } else if (env.DATABASE_URL) {
@@ -418,6 +474,13 @@ export async function onRequestPut({ request, env }) {
       const client = new Client({ connectionString: env.DATABASE_URL });
       await client.connect();
       try { await client.query('ALTER TABLE returns ADD COLUMN finalprice TEXT'); } catch(e){}
+      try {
+        await client.query(`CREATE TABLE IF NOT EXISTS price_history (
+          id TEXT PRIMARY KEY, request_id TEXT, product_id TEXT,
+          old_paise NUMERIC, new_paise NUMERIC, actor TEXT, at TEXT
+        )`);
+        await client.query('CREATE INDEX IF NOT EXISTS idx_price_history_req ON price_history(request_id)');
+      } catch(e){}
       if (update.action === 'status') {
         if (update.finalPrice !== undefined) {
           const fp = validFinalPrice(update.finalPrice);
@@ -431,6 +494,11 @@ export async function onRequestPut({ request, env }) {
         const { rows } = await client.query('SELECT products FROM returns WHERE id = $1', [update.id]);
         if (rows.length > 0) {
           const products = JSON.parse(rows[0].products || '[]');
+          const targetPg = products.find(p => p && p.id === update.productId);
+          const oldPaisePg = targetPg && Number.isInteger(targetPg.pricePaise) && targetPg.pricePaise >= 0 ? targetPg.pricePaise : null;
+          const newPaisePg = (update.pricePaise === null || update.pricePaise === undefined)
+            ? null
+            : (Number.isInteger(update.pricePaise) && update.pricePaise >= 0 ? update.pricePaise : null);
           const updatedProducts = products.map(p => {
             if (p.id !== update.productId) return p;
             const next = { ...p };
@@ -451,6 +519,19 @@ export async function onRequestPut({ request, env }) {
           updatedProducts.forEach(p => { totalAmount += evalPaiseOfPg(p) * (Number(p.quantity) || 1); });
           try { await client.query('ALTER TABLE returns ADD COLUMN totalamount NUMERIC'); } catch(e){}
           await client.query('UPDATE returns SET products = $1, totalamount = $2 WHERE id = $3', [JSON.stringify(updatedProducts), totalAmount, update.id]);
+          if (oldPaisePg !== newPaisePg) {
+            try {
+              let actorPg = 'unknown';
+              try {
+                const sessionUser = await verifySession(env, request);
+                if (sessionUser && sessionUser.email) actorPg = String(sessionUser.email).slice(0, 254);
+              } catch {}
+              await client.query(
+                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                [crypto.randomUUID(), update.id, update.productId, oldPaisePg, newPaisePg, actorPg, new Date().toISOString()]
+              );
+            } catch(e){}
+          }
         }
       }
       await client.end();
