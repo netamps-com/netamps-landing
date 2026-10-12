@@ -693,8 +693,8 @@ export default function DashboardPage() {
                                   {req.products && req.products.length > 0 ? (
                                     req.products.map((product, idx) => (
                                       <div key={product.id || idx} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 flex flex-col gap-3">
-                                        <div className="flex justify-between items-start">
-                                          <div>
+                                        <div className="flex justify-between items-start gap-4 flex-wrap">
+                                          <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                               {product.strategicTarget && (
                                                 <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${product.strategicTarget === 'resale' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
@@ -714,30 +714,29 @@ export default function DashboardPage() {
                                               {product.details}
                                             </div>
                                           </div>
-                                          <div className="flex items-center gap-4">
+                                          <div className="flex items-start gap-3 shrink-0 flex-wrap">
                                             <div className="flex flex-col items-end">
-                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Base Price (Per Unit)</label>
-                                              <div className="px-3 py-1.5 text-sm font-mono font-bold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated base per unit — read-only, sealed in manifest">
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 whitespace-nowrap leading-4 min-h-4">Base Price (Per Unit)</label>
+                                              <div className="px-3 py-1.5 min-w-[7.5rem] flex items-center justify-end text-sm font-mono font-bold tabular-nums text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated base per unit — read-only, sealed in manifest">
                                                 {paiseToDisplay(product.basePricePaise ?? null)}
                                               </div>
                                             </div>
                                             <div className="flex flex-col items-end">
-                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Line Consideration (Upfront Discount)</label>
-                                              <div className="px-3 py-1.5 text-sm font-mono font-bold text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated upfront total for this line — read-only">
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 whitespace-nowrap leading-4 min-h-4">Line Consideration (Upfront Discount)</label>
+                                              <div className="px-3 py-1.5 min-w-[7.5rem] flex items-center justify-end text-sm font-mono font-bold tabular-nums text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated upfront total for this line — read-only">
                                                 {paiseToDisplay(lineAskOf(req, product))}
                                               </div>
                                               {(() => {
                                                 const final = lineFinalOf(Number(product.quantity) || 1, product.basePricePaise ?? null);
-                                                if (final === null) return null;
                                                 return (
-                                                  <div className="text-[11px] text-slate-400 mt-1" title="Quantity × base price — computed, read-only">
-                                                    Final: <span className="font-mono font-bold text-slate-200">{paiseToDisplay(final)}</span>
+                                                  <div className="text-[11px] text-slate-400 mt-1 min-h-[1.25rem]" title="Quantity × base price — computed, read-only">
+                                                    {final === null ? <>&nbsp;</> : <>Final: <span className="font-mono font-bold tabular-nums text-slate-200">{paiseToDisplay(final)}</span></>}
                                                   </div>
                                                 );
                                               })()}
                                             </div>
                                             <div className="flex flex-col items-end">
-                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Evaluated (Per Unit)</label>
+                                              <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 whitespace-nowrap leading-4 min-h-4">Evaluated (Per Unit)</label>
                                               <div className="relative">
                                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
                                                 <input
@@ -747,11 +746,11 @@ export default function DashboardPage() {
                                                   value={(product.pricePaise ?? null) !== null ? String((product.pricePaise as number) / 100) : (product.price ?? '')}
                                                   onChange={(e) => handlePriceChange(req.id, product.id, e.target.value.replace(/[^0-9.]/g, ''))}
                                                   placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
-                                                  className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                                                  className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm tabular-nums text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                                                 />
                                               </div>
                                             </div>
-                                            <div className="text-lg font-mono font-bold text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-lg border border-indigo-500/20">
+                                            <div className="shrink-0 self-start mt-[1.25rem] text-sm font-mono font-bold tabular-nums text-indigo-400 bg-indigo-500/10 px-3 py-1.5 rounded-lg border border-indigo-500/20">
                                               x{product.quantity}
                                             </div>
                                           </div>
