@@ -381,9 +381,13 @@ export default function IntakeWorkbench() {
   // Auto Ingestion State — initialized from localStorage
   const [autoJobs, setAutoJobs] = useState<any[]>([]);
 
-  // Matching Engine State
+  // Matching Engine State (server-side exact pass — Phase 0; the browser
+  // renders pages only, never the full table)
   const [stockMatches, setStockMatches] = useState<any[]>([]);
   const [unmatchedOrders, setUnmatchedOrders] = useState<any[]>([]);
+  const [matchTotals, setMatchTotals] = useState<{ totalMatches: number; totalUnmatched: number; truncated: boolean }>({ totalMatches: 0, totalUnmatched: 0, truncated: false });
+  const [matchError, setMatchError] = useState<string | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   // Sales-escalation state per match id (idempotent: sending/sent block re-send)
   const [escalateState, setEscalateState] = useState<Record<string, { status: 'sending' | 'sent' | 'failed'; error?: string }>>({});
@@ -434,56 +438,45 @@ export default function IntakeWorkbench() {
     }
   }, [activeTab]);
 
-  const fetchMatches = async () => {
+  const MATCH_PAGE = 100;
+
+  const fetchMatches = async (reset = true, pane: 'both' | 'matches' | 'unmatched' = 'both') => {
+    setMatchLoading(true);
+    setMatchError(null);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/returns`);
-      const data = await res.json();
-      if (data.success) {
-        const returns = data.returns;
-        const buyReqs = returns.filter((r: any) => r.intent?.toLowerCase() === 'buy');
-        const sellReqs = returns.filter((r: any) => r.intent?.toLowerCase() === 'sell');
-
-        const matches: any[] = [];
-        const unmatchedBuy = [...buyReqs];
-        const unmatchedSell = [...sellReqs];
-
-        buyReqs.forEach((buy: any) => {
-           const bProd = buy.products?.[0];
-           if (!bProd) return;
-           const bName = bProd.category?.trim().toUpperCase();
-           const bModel = bProd.details?.trim().toUpperCase();
-
-           if (!bName || !bModel) return;
-
-           const sellIndex = unmatchedSell.findIndex(sell => {
-             const sProd = sell.products?.[0];
-             if (!sProd) return false;
-             return sProd.category?.trim().toUpperCase() === bName && sProd.details?.trim().toUpperCase() === bModel;
-           });
-
-           if (sellIndex !== -1) {
-             const matchedSell = unmatchedSell.splice(sellIndex, 1)[0];
-             matches.push({
-               id: `match-${buy.id}-${matchedSell.id}`,
-               buyer: buy,
-               seller: matchedSell,
-               productName: bProd.category,
-               modelNumber: bProd.details,
-               buyerQty: bProd.quantity || 1,
-               sellerQty: matchedSell.products?.[0]?.quantity || 1,
-               timestamp: new Date().toISOString()
-             });
-             const bIdx = unmatchedBuy.findIndex(b => b.id === buy.id);
-             if (bIdx !== -1) unmatchedBuy.splice(bIdx, 1);
-           }
-        });
-
-        setStockMatches(matches);
-        setUnmatchedOrders([...unmatchedBuy, ...unmatchedSell]);
+      const wantMatches = pane === 'both' || pane === 'matches';
+      const wantUnmatched = pane === 'both' || pane === 'unmatched';
+      const res = await fetch(`${API_URL}/api/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          limit: wantMatches ? MATCH_PAGE : 0,
+          offset: reset ? 0 : stockMatches.length,
+          unmatchedLimit: wantUnmatched ? MATCH_PAGE : 0,
+          unmatchedOffset: reset ? 0 : unmatchedOrders.length
+        })
+      });
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Match service returned an unreadable response.');
       }
-    } catch(err) {
-      console.error("Error fetching matches", err);
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || 'Match service refused the request.');
+      }
+      if (wantMatches) setStockMatches(reset ? (data.matches || []) : [...stockMatches, ...(data.matches || [])]);
+      if (wantUnmatched) setUnmatchedOrders(reset ? (data.unmatched || []) : [...unmatchedOrders, ...(data.unmatched || [])]);
+      setMatchTotals({
+        totalMatches: data.totalMatches ?? 0,
+        totalUnmatched: data.totalUnmatched ?? 0,
+        truncated: !!data.truncated
+      });
+    } catch(err: any) {
+      setMatchError(err?.message || 'Matching failed.');
+    } finally {
+      setMatchLoading(false);
     }
   };
 
@@ -1967,20 +1960,32 @@ export default function IntakeWorkbench() {
                   <h3 className="text-lg font-bold text-white flex items-center gap-2">
                     <ListChecks className="w-5 h-5 text-emerald-400" /> Buy/Sell Intelligent Stock Matching Engine
                   </h3>
-                  <p className="text-sm text-slate-400 mt-1">Cross-referencing exact [Product Name] and [Model Number] matches across supply and demand.</p>
+                  <p className="text-sm text-slate-400 mt-1">Cross-referencing exact [Product Name] and [Model Number] matches across supply and demand — every product line, matched server-side.</p>
                 </div>
-                <button onClick={fetchMatches} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-semibold flex items-center gap-2">
-                   Refresh
+                <button onClick={() => fetchMatches(true)} disabled={matchLoading} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
+                   {matchLoading ? 'Matching…' : 'Refresh'}
                 </button>
               </div>
+
+              {matchError && (
+                <div className="mx-6 mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-300" role="alert">
+                  {matchError}
+                </div>
+              )}
+              {matchTotals.truncated && !matchError && (
+                <div className="mx-6 mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                  Large backlog — matching scanned the 20,000 most recent orders. Older orders are excluded from this view.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-800">
                 
                 {/* Matched Pairs Pane */}
                 <div className="p-6">
-                  <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" /> Ready for Fulfillment ({stockMatches.length})
+                  <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> Ready for Fulfillment ({matchTotals.totalMatches})
                   </h4>
+                  <p className="text-[11px] text-slate-500 mb-4">Showing {stockMatches.length} of {matchTotals.totalMatches}</p>
                   
                   {stockMatches.length === 0 ? (
                     <div className="text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-800 rounded-xl">
@@ -2111,15 +2116,25 @@ export default function IntakeWorkbench() {
                           )}
                         </div>
                       ))}
+                      {stockMatches.length < matchTotals.totalMatches && (
+                        <button
+                          onClick={() => fetchMatches(false, 'matches')}
+                          disabled={matchLoading}
+                          className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors disabled:opacity-50"
+                        >
+                          {matchLoading ? 'Loading…' : `Show more (${matchTotals.totalMatches - stockMatches.length} remaining)`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Unmatched / Orphaned Pane */}
                 <div className="p-6">
-                  <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <Package className="w-4 h-4" /> Unmatched Orders ({unmatchedOrders.length})
+                  <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+                    <Package className="w-4 h-4" /> Unmatched Orders ({matchTotals.totalUnmatched})
                   </h4>
+                  <p className="text-[11px] text-slate-500 mb-4">Showing {unmatchedOrders.length} of {matchTotals.totalUnmatched}</p>
                   
                   {unmatchedOrders.length === 0 ? (
                     <div className="text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-800 rounded-xl">
@@ -2148,6 +2163,15 @@ export default function IntakeWorkbench() {
                           </span>
                         </div>
                       ))}
+                      {unmatchedOrders.length < matchTotals.totalUnmatched && (
+                        <button
+                          onClick={() => fetchMatches(false, 'unmatched')}
+                          disabled={matchLoading}
+                          className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors disabled:opacity-50"
+                        >
+                          {matchLoading ? 'Loading…' : `Show more (${matchTotals.totalUnmatched - unmatchedOrders.length} remaining)`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
