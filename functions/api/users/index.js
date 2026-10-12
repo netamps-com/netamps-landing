@@ -1,6 +1,7 @@
 import { signDemoSession, verifySession } from '../intake/auth';
 import { verifyTurnstileToken } from '../verify-turnstile';
 import { argon2id, argon2Verify } from 'hash-wasm';
+import bcrypt from 'bcryptjs';
 
 // Login rate limiting (isolate-local, same posture as verify-turnstile:
 // slows single-origin stuffing; distributed botnets need KV-backed limits).
@@ -22,16 +23,20 @@ function loginRateLimited(kind, key) {
   return record.count > (kind === 'email' ? LOGIN_RL_PER_EMAIL : LOGIN_RL_PER_IP);
 }
 
-// Password storage: Argon2id over the client-supplied SHA-256 (raw passwords
-// never cross the wire AND never rest on the server). Stored value is the
-// self-describing encoded form ($argon2id$v=19$m=19456,t=3,p=1$…).
+// Password storage: bcrypt ($2b$, cost 11) over the client-supplied SHA-256
+// (raw passwords never cross the wire AND never rest on the server).
+// RUNTIME EVIDENCE (2026-10-12, /api/health/crypto on production): this
+// isolate returns CompileError for argon2id WASM and NotSupportedError for
+// PBKDF2-deriveBits, while bcryptjs (pure JS) verifies clean. Argon2id was
+// the specified primitive and remains first preference on paper — but code
+// ships for the runtime that exists, so bcrypt is primary and the choice is
+// recorded here, not silently substituted. Cost 11 (~0.5s): login rarity +
+// rate limits make per-attempt cost irrelevant to abuse.
 // Migration chain (verify-only downward, upgrade upward on success):
-//   $argon2id$ (current) → pbkdf2$… (previous) → 64-hex SHA-256 (original).
-// argon2id params: m=19 MiB, t=3, p=1 (~190 ms — safe inside Worker CPU
-// limits; logins are rare). If WASM instantiation ever fails, new secrets
-// fall back to PBKDF2 (loudly logged) rather than locking users out;
-// argon2 rows that cannot verify fail closed (deny).
-const ARGON_OPTS = { parallelism: 1, iterations: 3, memorySize: 19456, hashLength: 32 };
+//   $2b$ (current) → $argon2id$ (never stored in prod — kept for safety) →
+//   pbkdf2$… (previous) → 64-hex SHA-256 (original).
+// New-secret creation has NO fallback: a broken KDF must deny, never
+// silently downgrade (that path recreates the original sin).
 const KDF_ITERATIONS = 120000;
 const KDF_SALT_LEN = 16;
 const KDF_DK_LEN = 32;
@@ -61,22 +66,20 @@ async function deriveKdf(clientHashHex, saltB64, iterations) {
 }
 export async function hashNewSecret(clientHashHex) {
   const material = String(clientHashHex);
-  try {
-    return await argon2id({
-      password: material,
-      salt: crypto.getRandomValues(new Uint8Array(16)),
-      ...ARGON_OPTS,
-      outputType: 'encoded'
-    });
-  } catch (err) {
-    console.error('[auth] argon2id unavailable, PBKDF2 fallback (temporary, still salted):', err);
-    const saltB64 = b64encode(crypto.getRandomValues(new Uint8Array(KDF_SALT_LEN)));
-    const dk = await deriveKdf(material, saltB64, KDF_ITERATIONS);
-    return `pbkdf2$${KDF_ITERATIONS}$${saltB64}$${dk}`;
-  }
+  // No fallback: bcryptjs is pure JS (no WASM, no subtle-derive). If THIS
+  // throws, the runtime is unfit for credential writes and fail-closed deny
+  // (hash-kdf stage) is correct — silent downgrade recreated the original sin.
+  return await bcrypt.hash(material, 11);
 }
 export async function verifySecret(stored, clientHashHex) {
   if (typeof stored !== 'string' || typeof clientHashHex !== 'string') return false;
+  if (stored.startsWith('$2b$') || stored.startsWith('$2a$')) {
+    try {
+      return await bcrypt.compare(clientHashHex, stored);
+    } catch {
+      return false;
+    }
+  }
   if (stored.startsWith('$argon2id$')) {
     try {
       return await argon2Verify({ password: clientHashHex, hash: stored });
@@ -101,7 +104,7 @@ export async function verifySecret(stored, clientHashHex) {
   }
   return false;
 }
-const needsUpgrade = (stored) => typeof stored === 'string' && !stored.startsWith('$argon2id$');
+const needsUpgrade = (stored) => typeof stored === 'string' && !stored.startsWith('$2b$');
 
 // Server-side auth audit (the trail must not depend on client logging).
 // Login-gated paths call this for failures; successes log inline.
