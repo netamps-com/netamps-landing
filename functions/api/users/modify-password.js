@@ -62,8 +62,13 @@ async function sendAccountMail(env, to, subject, lines, tag) {
  * No Postgres branch: Workers have no TCP — D1 only.
  */
 export async function onRequestPost({ request, env }) {
+  // Stage-tagged failures (same diagnostics contract as the OTP module):
+  // every 500 carries a `stage` so the next failure names its line instead
+  // of ever again producing one opaque banner for five different causes.
+  const fail = (stage) =>
+    json({ success: false, message: 'Failed to update password. Please try again shortly.', stage }, 500);
   try {
-    const caller = await verifySession(env, request);
+    const caller = await verifySession(env, request).catch(() => null);
     if (!caller) {
       return json({ success: false, message: 'Unauthorized' }, 401);
     }
@@ -95,18 +100,33 @@ export async function onRequestPost({ request, env }) {
     // used to lock out every migrated user. Admins resetting others are
     // exempt (audited below).
     if (!isAdmin) {
-      const row = await env.DB.prepare('SELECT hash FROM users WHERE email = ?1').bind(email).first();
-      if (!row || !(await verifySecret(row.hash, currentPasswordHash))) {
+      let row = null;
+      try {
+        row = await env.DB.prepare('SELECT hash FROM users WHERE email = ?1').bind(email).first();
+      } catch {
+        return fail('db-read');
+      }
+      let verified = false;
+      try {
+        verified = await verifySecret(row && row.hash, currentPasswordHash);
+      } catch {
+        return fail('verify-kdf');
+      }
+      if (!row || !verified) {
         return json({ success: false, message: 'Your current password is incorrect. Verification failed.' }, 403);
       }
     } else {
-      const row = await env.DB.prepare('SELECT email FROM users WHERE email = ?1').bind(email).first();
+      const row = await env.DB.prepare('SELECT email FROM users WHERE email = ?1').bind(email).first().catch(() => null);
       if (!row) {
         return json({ success: false, message: 'Account not found' }, 404);
       }
     }
 
-    await env.DB.prepare('UPDATE users SET hash = ?1 WHERE email = ?2').bind(await hashNewSecret(passwordHash), email).run();
+    try {
+      await env.DB.prepare('UPDATE users SET hash = ?1 WHERE email = ?2').bind(await hashNewSecret(passwordHash), email).run();
+    } catch {
+      return fail('db-write');
+    }
 
     try {
       await env.DB.prepare(
@@ -136,6 +156,6 @@ export async function onRequestPost({ request, env }) {
     return json({ success: true });
   } catch (err) {
     console.error('[users] Modify-password error:', err);
-    return json({ success: false, message: 'Failed to update password. Please try again shortly.' }, 500);
+    return fail('unhandled');
   }
 }

@@ -187,7 +187,21 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Invite is not awaiting approval.' }, 400);
     }
     if (invite.invited_by === admin.email) {
-      return json({ success: false, message: 'Separation of duties: a different admin must approve.' }, 403);
+      // Bootstrap exception: separation of duties needs TWO admins to exist.
+      // A single-admin organization would otherwise deadlock permanently
+      // (nobody else can ever approve). Allowed only when no other admin
+      // account exists, and audit-flagged as bootstrap.
+      let otherAdmins = 0;
+      try {
+        const found = await env.DB.prepare("SELECT email FROM users WHERE role = 'admin'").all();
+        otherAdmins = ((found && found.results) || []).filter((r) => r.email && r.email !== admin.email).length;
+      } catch {}
+      if (otherAdmins > 0) {
+        return json({ success: false, message: 'Separation of duties: a different admin must approve.' }, 403);
+      }
+      await env.DB.prepare('UPDATE invites SET status = ?, approved_by = ? WHERE id = ?').bind('approved', admin.email + ' (bootstrap self-approval: sole admin)', id).run();
+      await auditInvite(env, 'INVITE_APPROVED', { ...invite, status: 'approved', bootstrap: true }, admin.email);
+      return json({ success: true, bootstrap: true });
     }
     await env.DB.prepare('UPDATE invites SET status = ?, approved_by = ? WHERE id = ?').bind('approved', admin.email, id).run();
     await auditInvite(env, 'INVITE_APPROVED', { ...invite, status: 'approved' }, admin.email);
@@ -203,8 +217,11 @@ export async function onRequestPost({ request, env }) {
     }
     const tokenHash = await sha256hex(token);
     const invite = await env.DB.prepare('SELECT * FROM invites WHERE token_hash = ?').bind(tokenHash).first().catch(() => null);
-    // Unknown, expired, revoked, already-used, or not-yet-approved deny
-    // IDENTICALLY — no enumeration oracle.
+    // Unknown, expired, revoked, already-used deny IDENTICALLY — no
+    // enumeration oracle. One deliberate exception below: a VALID token for
+    // a not-yet-approved invite reveals only "waiting for approval" — the
+    // holder already possesses the 256-bit secret, so nothing new leaks,
+    // and it ends the exact confusion in the field (genuine link, dead end).
     const now = Date.now();
     const usable = invite && invite.status === 'approved' && invite.expires_at && new Date(invite.expires_at).getTime() > now;
     if (!usable) {
@@ -213,6 +230,8 @@ export async function onRequestPost({ request, env }) {
           await env.DB.prepare('UPDATE invites SET status = ? WHERE id = ?').bind('expired', invite.id).run();
           await auditInvite(env, 'INVITE_EXPIRED', invite, 'system');
         } catch {}
+      } else if (invite && invite.status === 'pending-second' && invite.expires_at && new Date(invite.expires_at).getTime() > now) {
+        return json({ success: false, message: 'This invitation is waiting for admin approval.', code: 'PENDING_APPROVAL' }, 403);
       }
       return json({ success: false, message: 'Invalid invitation.' }, 404);
     }

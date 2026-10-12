@@ -93,7 +93,8 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       }
       
       if (!res.ok || !data.success) {
-        setPwdError(data.message || 'Password change refused by server.');
+        const ref = data && data.stage ? ` (ref: ${data.stage})` : '';
+        setPwdError(`${(data && data.message) || 'Password change refused by server.'}${ref}`);
         setIsUpdatingPwd(false);
         return;
       }

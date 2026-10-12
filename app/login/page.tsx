@@ -249,8 +249,13 @@ export default function LoginPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data || !data.success) {
-        // Identical message for bad/expired/used invites (server-side too).
-        setInviteMsg('This invitation link is invalid or has expired. Ask your administrator for a new one.');
+        // PENDING_APPROVAL is shown plainly (the holder already owns the
+        // token — nothing leaks); everything else stays identical.
+        if (data && data.code === 'PENDING_APPROVAL') {
+          setInviteMsg('This invitation is waiting for admin approval. You will be notified once approved — no need to request again.');
+        } else {
+          setInviteMsg('This invitation link is invalid or has expired. Ask your administrator for a new one.');
+        }
         return;
       }
       setInviteDone(true);

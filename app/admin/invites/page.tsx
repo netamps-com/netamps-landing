@@ -113,7 +113,11 @@ export default function AdminInvitesPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data || !data.success) throw new Error((data && data.message) || `${action} failed.`);
-      setNotice(`Invite ${action === 'approve' ? 'approved' : 'revoked'}.`);
+      setNotice(action === 'approve'
+        ? (data.bootstrap
+          ? 'Approved under the bootstrap rule (sole admin — logged as such). Add a second admin to restore separation of duties.'
+          : 'Invite approved.')
+        : 'Invite revoked.');
       await fetchInvites();
     } catch (e: any) {
       setErrorMsg(e?.message || `${action} failed.`);
