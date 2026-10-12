@@ -123,7 +123,19 @@ export async function onRequestPost({ request, env }) {
     }
 
     try {
-      await env.DB.prepare('UPDATE users SET hash = ?1 WHERE email = ?2').bind(await hashNewSecret(passwordHash), email).run();
+      let newHash;
+    try {
+      newHash = await hashNewSecret(passwordHash);
+    } catch (err) {
+      console.error('[users] Modify-password KDF failure:', err && err.message ? err.message : err);
+      return fail('hash-kdf');
+    }
+    try {
+      await env.DB.prepare('UPDATE users SET hash = ?1 WHERE email = ?2').bind(newHash, email).run();
+    } catch (err) {
+      console.error('[users] Modify-password DB write failure:', err && err.message ? err.message : err);
+      return fail('db-write');
+    }
     } catch {
       return fail('db-write');
     }

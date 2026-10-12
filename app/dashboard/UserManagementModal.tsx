@@ -158,7 +158,8 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
       }
       
       if (!res.ok || !data.success) {
-        setPwdError(data.message || 'User creation refused by server.');
+        const ref = data && data.stage ? ` (ref: ${data.stage})` : '';
+        setPwdError(`${data.message || 'User creation refused by server.'}${ref}`);
         setIsUpdatingPwd(false);
         return;
       }
@@ -205,6 +206,18 @@ export default function UserManagementModal({ onClose, currentUserRole }: UserMa
             </button>
           )}
         </div>
+
+        {currentUserRole === 'admin@netamps.com' && (
+          <div className="px-6 pt-4">
+            <a
+              href="/admin/invites"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-indigo-200 bg-indigo-50/50 text-indigo-700 text-sm font-bold hover:bg-indigo-100 transition-colors"
+            >
+              <UserPlus className="w-4 h-4" /> Invite console — provision by invitation
+            </a>
+            <p className="text-[11px] text-slate-500 mt-1.5 text-center">Admin accounts can only be created through an approved invitation.</p>
+          </div>
+        )}
 
         <div className="p-6">
           {pwdError && (
