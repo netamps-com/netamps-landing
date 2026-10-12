@@ -109,13 +109,13 @@ export async function onRequestPost({ request, env }) {
       createdHash = await hashNewSecret(passwordHash);
     } catch (err) {
       console.error('[users] Create KDF failure:', err && err.message ? err.message : err);
-      return json({ success: false, message: 'Failed to create account. Please try again shortly.', stage: 'hash-kdf' }, 500);
+      return json({ success: false, message: 'Failed to create account. Please try again shortly.', stage: 'hash-kdf', err: err && err.name ? err.name : typeof err }, 500);
     }
     try {
       await env.DB.prepare('INSERT INTO users (email, hash, role) VALUES (?1, ?2, ?3)').bind(email, createdHash, role).run();
     } catch (err) {
       console.error('[users] Create DB write failure:', err && err.message ? err.message : err);
-      return json({ success: false, message: 'Failed to create account. Please try again shortly.', stage: 'db-write' }, 500);
+      return json({ success: false, message: 'Failed to create account. Please try again shortly.', stage: 'db-write', err: err && err.name ? err.name : typeof err }, 500);
     }
 
     try {

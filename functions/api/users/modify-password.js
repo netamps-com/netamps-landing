@@ -65,8 +65,8 @@ export async function onRequestPost({ request, env }) {
   // Stage-tagged failures (same diagnostics contract as the OTP module):
   // every 500 carries a `stage` so the next failure names its line instead
   // of ever again producing one opaque banner for five different causes.
-  const fail = (stage) =>
-    json({ success: false, message: 'Failed to update password. Please try again shortly.', stage }, 500);
+  const fail = (stage, errName) =>
+    json({ success: false, message: 'Failed to update password. Please try again shortly.', stage, ...(errName ? { err: errName } : {}) }, 500);
   try {
     const caller = await verifySession(env, request).catch(() => null);
     if (!caller) {
@@ -128,13 +128,13 @@ export async function onRequestPost({ request, env }) {
       newHash = await hashNewSecret(passwordHash);
     } catch (err) {
       console.error('[users] Modify-password KDF failure:', err && err.message ? err.message : err);
-      return fail('hash-kdf');
+      return fail('hash-kdf', err && err.name ? err.name : typeof err);
     }
     try {
       await env.DB.prepare('UPDATE users SET hash = ?1 WHERE email = ?2').bind(newHash, email).run();
     } catch (err) {
       console.error('[users] Modify-password DB write failure:', err && err.message ? err.message : err);
-      return fail('db-write');
+      return fail('db-write', err && err.name ? err.name : typeof err);
     }
     } catch {
       return fail('db-write');
