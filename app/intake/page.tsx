@@ -1541,17 +1541,17 @@ export default function IntakeWorkbench() {
             <div className="flex items-center gap-4 mb-8">
               <div className={`flex items-center gap-2 ${step >= 1 ? 'text-indigo-400' : 'text-slate-600'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 1 ? 'bg-indigo-500/20 border border-indigo-500' : 'bg-slate-800 border border-slate-700'}`}>1</div>
-                <span className="font-medium">Raw Import</span>
+                <span className="font-medium hidden sm:inline">Raw Import</span>
               </div>
               <div className={`h-px w-12 ${step >= 2 ? 'bg-indigo-500/50' : 'bg-slate-800'}`}></div>
               <div className={`flex items-center gap-2 ${step >= 2 ? 'text-indigo-400' : 'text-slate-600'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 2 ? 'bg-indigo-500/20 border border-indigo-500' : 'bg-slate-800 border border-slate-700'}`}>2</div>
-                <span className="font-medium">Schema Map</span>
+                <span className="font-medium hidden sm:inline">Schema Map</span>
               </div>
               <div className={`h-px w-12 ${step >= 3 ? 'bg-indigo-500/50' : 'bg-slate-800'}`}></div>
               <div className={`flex items-center gap-2 ${step >= 3 ? 'text-indigo-400' : 'text-slate-600'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 3 ? 'bg-indigo-500/20 border border-indigo-500' : 'bg-slate-800 border border-slate-700'}`}>3</div>
-                <span className="font-medium">Preview & Commit</span>
+                <span className="font-medium hidden sm:inline">Preview & Commit</span>
               </div>
             </div>
 
@@ -1801,8 +1801,8 @@ export default function IntakeWorkbench() {
                   <p className="text-slate-500">No automated ingestion jobs running.</p>
                 </div>
               ) : (
-                <div className="overflow-hidden border border-slate-800 rounded-xl">
-                  <table className="w-full text-left text-sm">
+                <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                  <table className="w-full text-left text-sm min-w-[640px]">
                     <thead className="bg-slate-800/50 text-slate-300">
                       <tr>
                         <th className="px-4 py-3 font-medium w-8"></th>
@@ -2005,7 +2005,7 @@ export default function IntakeWorkbench() {
                           
                           {expandedMatchId === match.id && (
                             <div className="p-4 border-t border-emerald-500/20 bg-[#020817]/50 text-sm">
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                   <div className="text-xs font-bold text-slate-500 uppercase mb-1">Buyer Details</div>
                                   <div className="text-slate-200">{match.buyer.name}</div>
@@ -2021,7 +2021,7 @@ export default function IntakeWorkbench() {
                                   <div className="text-slate-400 text-xs mt-1">Ask: <span className="font-mono text-slate-200">{formatPaise(askTotalOfOrder(match.seller))}</span></div>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-2 gap-4 mt-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                                 {[{ side: 'Buyer lines', order: match.buyer }, { side: 'Seller lines', order: match.seller }].map(({ side, order }) => (
                                   <div key={side}>
                                     <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">{side}</div>

@@ -677,6 +677,8 @@ export default function ReturnsPage() {
                   <div>
                     <input 
                       type="text" 
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value)}
                       className="block w-full max-w-xs mx-auto text-center tracking-widest text-2xl px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500" 

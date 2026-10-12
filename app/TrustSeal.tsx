@@ -64,9 +64,10 @@ export default function TrustSeal() {
       initial={{ y: 20 }}
       animate={{ y: 0 }}
       transition={{ delay: 0.5, duration: 0.5 }}
-      className="fixed bottom-6 left-6 z-[9999] flex flex-col gap-2 group cursor-default hover:!opacity-100 transition-opacity duration-300"
+      className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-6 z-[9999] flex flex-col gap-2 group cursor-pointer hover:!opacity-100 transition-opacity duration-300"
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
+      onClick={() => setIsExpanded((v) => !v)}
     >
       {/* Expanded badges */}
       <AnimatePresence>
