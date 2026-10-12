@@ -89,7 +89,7 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'A new password hash is required' }, 400);
     }
 
-    const isAdmin = caller.role === 'admin';
+    const isAdmin = caller.role === 'admin' || caller.email === 'admin@netamps.com';
     const isSelf = email === caller.email;
     if (!isSelf && !isAdmin) {
       return json({ success: false, message: 'Forbidden: you can only change your own password' }, 403);

@@ -203,6 +203,17 @@ export default function LoginPage() {
   const [inviteMsg, setInviteMsg] = useState('');
   const [inviteDone, setInviteDone] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
+  // Self-service password reset (?reset=TOKEN): same token discipline as
+  // invites (single-use, 15-min TTL, identical errors). Rendered INSTEAD of
+  // the sign-in form — staff/user set their own password, admins never see it.
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
+  const [resetDone, setResetDone] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetRequestMsg, setResetRequestMsg] = useState('');
+  const [resetRequestBusy, setResetRequestBusy] = useState(false);
 
   useEffect(() => {
     document.title = 'Netamps Connect';
@@ -221,10 +232,70 @@ export default function LoginPage() {
       }
       const inv = new URL(window.location.href).searchParams.get('invite');
       if (inv) setInviteToken(inv);
+      const rst = new URL(window.location.href).searchParams.get('reset');
+      if (rst) setResetToken(rst);
     } catch {
       // URL manipulation unavailable
     }
   }, []);
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetMsg('');
+    if (!resetToken) return;
+    if (resetPassword.length < 8) {
+      setResetMsg('Choose a password of at least 8 characters.');
+      return;
+    }
+    if (resetPassword !== resetConfirm) {
+      setResetMsg('Passwords do not match.');
+      return;
+    }
+    setResetBusy(true);
+    try {
+      const hashedPassword = await hashPassword(resetPassword);
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/users/password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset', token: resetToken, passwordHash: hashedPassword })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        setResetMsg('This reset link is invalid or has expired. Request a fresh one below.');
+        return;
+      }
+      setResetDone(true);
+    } catch {
+      setResetMsg('Network error. Try again shortly.');
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const handleResetRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetRequestMsg('');
+    if (!email.trim()) {
+      setResetRequestMsg('Enter your account email above first.');
+      return;
+    }
+    setResetRequestBusy(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      await fetch(`${API_URL}/api/users/password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request', email: email.trim() })
+      });
+      // Identical either way (server never confirms nor denies existence).
+      setResetRequestMsg('If this mailbox holds an account, a reset link is on its way (15 minutes, single use).');
+    } catch {
+      setResetRequestMsg('If this mailbox holds an account, a reset link is on its way (15 minutes, single use).');
+    } finally {
+      setResetRequestBusy(false);
+    }
+  };
 
   const handleInviteAccept = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -375,7 +446,67 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl sm:px-10 border border-slate-200/60"
         >
-          {inviteToken ? (
+          {resetToken ? (
+            <div className="space-y-6">
+              <div className="text-center">
+                <h3 className="text-xl font-black text-slate-900">Choose a new password</h3>
+                <p className="text-sm text-slate-500 mt-1">This link works once and expires 15 minutes after issue.</p>
+              </div>
+              {resetDone ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center">
+                  <p className="text-sm font-bold text-emerald-700">Password updated — sign in below with your new password.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setResetToken(null); setResetPassword(''); setResetConfirm(''); setResetMsg(''); }}
+                    className="mt-3 text-sm font-bold text-indigo-600 hover:underline"
+                  >
+                    Go to sign in
+                  </button>
+                </div>
+              ) : (
+                <form className="space-y-4" onSubmit={handleResetSubmit}>
+                  {resetMsg && (
+                    <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-500 text-sm">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      {resetMsg}
+                    </div>
+                  )}
+                  <div>
+                    <label htmlFor="reset-password" className="block text-sm font-medium text-slate-700">New password (min 8 characters)</label>
+                    <input
+                      id="reset-password"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      minLength={8}
+                      value={resetPassword}
+                      onChange={(e) => setResetPassword(e.target.value)}
+                      className="mt-2 appearance-none block w-full px-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="reset-confirm" className="block text-sm font-medium text-slate-700">Confirm password</label>
+                    <input
+                      id="reset-confirm"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      value={resetConfirm}
+                      onChange={(e) => setResetConfirm(e.target.value)}
+                      className="mt-2 appearance-none block w-full px-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={resetBusy}
+                    className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-all disabled:opacity-70"
+                  >
+                    {resetBusy ? <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Set new password'}
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : inviteToken ? (
             <div className="space-y-6">
               <div className="text-center">
                 <h3 className="text-xl font-black text-slate-900">Accept staff invitation</h3>
@@ -528,6 +659,17 @@ export default function LoginPage() {
                   </>
                 )}
               </button>
+            </div>
+            <div className="text-center space-y-1">
+              <button
+                type="button"
+                onClick={handleResetRequest}
+                disabled={resetRequestBusy}
+                className="text-sm font-bold text-indigo-600 hover:underline disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+              >
+                {resetRequestBusy ? 'Sending…' : 'Locked out? Email me a reset link'}
+              </button>
+              {resetRequestMsg && <p className="text-xs text-slate-500">{resetRequestMsg}</p>}
             </div>
           </form>
           )}

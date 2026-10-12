@@ -29,6 +29,27 @@ export default function AdminInvitesPage() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [notice, setNotice] = useState('');
+  // Lifecycle filter: Active (default) mirrors the server default
+  // (pending + approved). Every other state is one select away.
+  const [statusFilter, setStatusFilter] = useState('');
+
+  // Industry-standard status indicators: colored dot + label + the timestamp
+  // that matters for that state. Derived live on every render/poll.
+  const lifecycleOf = (inv: InviteRow): { dot: string; label: string; sub: string } => {
+    if (inv.status === 'accepted') {
+      return { dot: 'bg-emerald-500', label: 'Activated', sub: inv.accepted_at ? new Date(inv.accepted_at).toLocaleString() : '' };
+    }
+    if (inv.status === 'revoked') {
+      return { dot: 'bg-slate-500', label: 'Revoked', sub: '' };
+    }
+    if (inv.status === 'expired' || (inv.expires_at && new Date(inv.expires_at).getTime() <= Date.now() && inv.status !== 'accepted')) {
+      return { dot: 'bg-red-500', label: 'Expired', sub: inv.expires_at ? new Date(inv.expires_at).toLocaleString() : '' };
+    }
+    if (inv.status === 'approved') {
+      return { dot: 'bg-blue-500', label: 'Approved — awaiting user', sub: inv.expires_at ? `expires ${new Date(inv.expires_at).toLocaleString()}` : '' };
+    }
+    return { dot: 'bg-amber-500', label: 'Pending approval', sub: inv.expires_at ? `expires ${new Date(inv.expires_at).toLocaleString()}` : '' };
+  };
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'staff' | 'admin'>('staff');
   const [creating, setCreating] = useState(false);
@@ -58,7 +79,7 @@ export default function AdminInvitesPage() {
       const res = await fetch(`${API_URL}/api/invites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'list' })
+        body: JSON.stringify({ action: 'list', ...(statusFilter ? { status: statusFilter } : {}) })
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data || !data.success) throw new Error((data && data.message) || 'Failed to load invites.');
@@ -68,10 +89,18 @@ export default function AdminInvitesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     if (isAuthenticated) void fetchInvites();
+  }, [isAuthenticated, fetchInvites]);
+
+  // Real-time posture: 30s passive poll keeps lifecycle states (expiry in
+  // particular) fresh without a reload. Manual refresh stays primary.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const t = setInterval(() => { void fetchInvites(); }, 30000);
+    return () => clearInterval(t);
   }, [isAuthenticated, fetchInvites]);
 
   const createInvite = async (e: React.FormEvent) => {
@@ -200,33 +229,52 @@ export default function AdminInvitesPage() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-          <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+          <div className="p-6 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-indigo-400" /> Pending invitations ({invites.length})
+              <ShieldCheck className="w-5 h-5 text-indigo-400" /> Invitations ({invites.length})
             </h3>
-            <button onClick={() => fetchInvites()} disabled={loading} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                aria-label="Filter by lifecycle state"
+                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">Active (pending + approved)</option>
+                <option value="all">All states</option>
+                <option value="pending-second">Pending approval</option>
+                <option value="approved">Approved — awaiting user</option>
+                <option value="accepted">Activated</option>
+                <option value="expired">Expired</option>
+                <option value="revoked">Revoked</option>
+              </select>
+              <button onClick={() => fetchInvites()} disabled={loading} aria-label="Refresh invitations" className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50">
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
           {loading ? (
             <div className="p-12 text-center text-slate-500 text-sm">Loading…</div>
           ) : invites.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 text-sm">No pending invitations.</div>
+            <div className="p-12 text-center text-slate-500 text-sm">No invitations in this view.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm min-w-[720px]">
+              <table className="w-full text-left text-sm min-w-[760px]">
                 <thead className="bg-slate-800/50 text-slate-300">
                   <tr>
                     <th className="px-4 py-3 font-medium">Email</th>
                     <th className="px-4 py-3 font-medium">Role</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Activation</th>
                     <th className="px-4 py-3 font-medium">Invited by</th>
                     <th className="px-4 py-3 font-medium">Expires</th>
                     <th className="px-4 py-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {invites.map((inv) => (
+                  {invites.map((inv) => {
+                    const life = lifecycleOf(inv);
+                    const actionable = inv.status === 'pending-second' || inv.status === 'approved';
+                    return (
                     <tr key={inv.id} className="hover:bg-slate-800/50">
                       <td className="px-4 py-3 text-slate-200">{inv.email}</td>
                       <td className="px-4 py-3">
@@ -234,7 +282,13 @@ export default function AdminInvitesPage() {
                           {inv.role}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-400 text-xs font-mono">{inv.status}</td>
+                      <td className="px-4 py-3">
+                        <span className="flex items-center gap-2 text-xs font-bold text-slate-200">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${life.dot}`} aria-hidden />
+                          {life.label}
+                        </span>
+                        {life.sub && <span className="block text-[11px] text-slate-500 font-mono mt-0.5 ml-4">{life.sub}</span>}
+                      </td>
                       <td className="px-4 py-3 text-slate-400 text-xs">{inv.invited_by}</td>
                       <td className="px-4 py-3 text-slate-500 text-xs font-mono">{inv.expires_at ? new Date(inv.expires_at).toLocaleString() : '—'}</td>
                       <td className="px-4 py-3 text-right">
@@ -243,12 +297,13 @@ export default function AdminInvitesPage() {
                             <button
                               onClick={() => actOnInvite(inv.id, 'approve')}
                               disabled={!isAdmin || actingId === inv.id}
-                              title="Approve (must differ from inviter — enforced server-side)"
+                              title="Approve (must differ from inviter — enforced server-side; sole-admin bootstrap logged)"
                               className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors disabled:opacity-50"
                             >
                               <CheckCircle className="w-3.5 h-3.5" /> Approve
                             </button>
                           )}
+                          {actionable && (
                           <button
                             onClick={() => actOnInvite(inv.id, 'revoke')}
                             disabled={!isAdmin || actingId === inv.id}
@@ -256,10 +311,12 @@ export default function AdminInvitesPage() {
                           >
                             <XCircle className="w-3.5 h-3.5" /> Revoke
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

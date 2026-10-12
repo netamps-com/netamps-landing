@@ -66,7 +66,11 @@ export async function onRequestPost({ request, env }) {
     if (!caller) {
       return json({ success: false, message: 'Unauthorized' }, 401);
     }
-    if (caller.role !== 'admin') {
+    // Unified admin definition (matches logs/reconcile/invites gates and the
+    // dashboard UI, which keys off the admin mailbox): role OR mailbox.
+    // verifySession already authenticated the caller — this only widens a
+    // misconfigured-role edge, never anonymous access.
+    if (caller.role !== 'admin' && caller.email !== 'admin@netamps.com') {
       return json({ success: false, message: 'Forbidden: admin role required' }, 403);
     }
 

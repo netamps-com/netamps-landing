@@ -282,13 +282,21 @@ export async function onRequestPost({ request, env }) {
     return json({ success: true });
   }
 
-  // ── list (admin; token hashes never leave) ──
+  // ── list (admin; token hashes never leave). ?status= narrows the
+  // lifecycle view (default: actionable pending + approved). Accepted and
+  // expired rows power the done/pending/expired indicators in the console.
   if (action === 'list') {
     const admin = await requireAdmin(env, request);
     if (!admin) return json({ success: false, message: 'Forbidden' }, 403);
+    const allowed = new Set(['pending-second', 'approved', 'accepted', 'expired', 'revoked']);
+    const wanted = typeof body.status === 'string' && body.status !== '' ? body.status : '';
+    const states = wanted === 'all'
+      ? ['pending-second', 'approved', 'accepted', 'expired', 'revoked']
+      : allowed.has(wanted) ? [wanted] : ['pending-second', 'approved'];
+    const placeholders = states.map(() => '?').join(',');
     const { results } = await env.DB.prepare(
-      "SELECT id, email, role, status, invited_by, approved_by, created_at, expires_at, accepted_at FROM invites WHERE status IN ('pending-second','approved') ORDER BY created_at DESC"
-    ).all();
+      `SELECT id, email, role, status, invited_by, approved_by, created_at, expires_at, accepted_at FROM invites WHERE status IN (${placeholders}) ORDER BY created_at DESC`
+    ).bind(...states).all();
     return json({ success: true, invites: results || [] });
   }
 
