@@ -1,4 +1,5 @@
 import { verifySession } from './intake/auth';
+import { sendConfirmationEmail } from './email/confirm.js';
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -150,7 +151,31 @@ export async function onRequestPost({ request, env }) {
       await client.end();
     }
 
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    // Submission confirmation (step 7 of the ordered pipeline): best-effort
+    // post-insert send. Mail failure never fails the submission — the outcome
+    // persists as confirmemailstatus for the dashboard badge + resend action.
+    // A refused insert never reaches here, so phantom emails are impossible.
+    let confirmEmail = 'queued';
+    try {
+      const result = await sendConfirmationEmail(env, {
+        id: returnReq.id,
+        intent: returnReq.intent,
+        name: returnReq.name,
+        company: returnReq.company,
+        email: returnReq.email,
+        phone: returnReq.phone,
+        products: returnReq.products || [],
+        pricingBasis,
+        lotConsiderationPaise: lotPaise,
+        date: returnReq.date,
+        status: returnReq.status
+      });
+      confirmEmail = result.status;
+    } catch {
+      confirmEmail = 'failed';
+    }
+
+    return new Response(JSON.stringify({ success: true, confirmEmail }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
