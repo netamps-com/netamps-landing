@@ -312,6 +312,35 @@ export async function onRequestPost({ request, env }) {
     return json({ success: true });
   }
 
+  // ── resend (admin): rotate token + fresh 48h window + re-mail ──
+  // The raw token is never stored, so a resend cannot replay the old link —
+  // it mints a new one (the previous link dies with the rotated hash).
+  // Status is preserved: pending-second stays pending (approval is never
+  // bypassed by re-sending). Audited as INVITE_RESENT.
+  if (action === 'resend') {
+    const admin = await requireAdmin(env, request);
+    if (!admin) return json({ success: false, message: 'Forbidden' }, 403);
+    const id = typeof body.id === 'string' ? body.id.slice(0, 64) : '';
+    const invite = id ? await getInvite(env, id) : null;
+    if (!invite || (invite.status !== 'pending-second' && invite.status !== 'approved')) {
+      return json({ success: false, message: 'Invite cannot be re-sent in its current state.' }, 400);
+    }
+    const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, '');
+    const link = `https://netamps.com/login?invite=${token}`;
+    await env.DB.prepare('UPDATE invites SET token_hash = ?, expires_at = ? WHERE id = ?')
+      .bind(await sha256hex(token), new Date(Date.now() + INVITE_TTL_MS).toISOString(), id).run();
+    const mailed = await sendInviteMail(env, invite.email, 'Your Netamps staff invitation (re-sent)',
+      [`You've been invited to join Netamps as <strong>${escapeHtml(invite.role)}</strong>. Your account <strong>'${escapeHtml(invite.email)}'</strong> will activate on acceptance.`,
+       `This is a fresh link — any previous invitation link no longer works. Accept within 48 hours: <a href="${escapeHtml(link)}">accept invitation</a>.`,
+       invite.role === 'admin' ? 'Admin-role grants additionally require a second admin approval before activation.' : 'No further approval needed — your account activates on acceptance.'], 'invite-issued', id);
+    try {
+      await env.DB.prepare('UPDATE invites SET email_status = ?, email_sent_at = ? WHERE id = ?')
+        .bind(mailed ? 'sent' : 'failed', new Date().toISOString(), id).run();
+    } catch {}
+    await auditInvite(env, 'INVITE_RESENT', { ...invite }, admin.email);
+    return json({ success: true, id, inviteLink: link, emailSent: mailed });
+  }
+
   // ── list (admin; token hashes never leave). ?status= narrows the
   // lifecycle view (default: actionable pending + approved). Accepted and
   // expired rows power the done/pending/expired indicators in the console.

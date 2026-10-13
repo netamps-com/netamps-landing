@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, UserPlus, CheckCircle, XCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, UserPlus, CheckCircle, XCircle, RefreshCw, ShieldCheck, Mail } from 'lucide-react';
 import NetampsLogo from '../../NetampsLogo';
 import { useIdleTimeout, IdleTimeoutModal } from '../../lib/idle-timeout';
 
@@ -162,7 +162,7 @@ export default function AdminInvitesPage() {
     }
   };
 
-  const actOnInvite = async (id: string, action: 'approve' | 'revoke') => {
+  const actOnInvite = async (id: string, action: 'approve' | 'revoke' | 'resend') => {
     setActingId(id);
     setNotice('');
     setErrorMsg('');
@@ -181,6 +181,10 @@ export default function AdminInvitesPage() {
         ? (data.bootstrap
           ? 'Approved under the bootstrap rule (sole admin — logged as such). Add a second admin to restore separation of duties.'
           : 'Invite approved.')
+        : action === 'resend'
+        ? (data.emailSent === false
+          ? 'Invite rotated but the email failed to send — copy the fresh link from the server log or retry.'
+          : 'Invitation re-sent — previous link revoked, fresh 48-hour window.')
         : 'Invite revoked.');
       await fetchInvites();
     } catch (e: any) {
@@ -344,6 +348,16 @@ export default function AdminInvitesPage() {
                             >
                               <CheckCircle className="w-3.5 h-3.5" /> Approve
                             </button>
+                          )}
+                          {actionable && (
+                          <button
+                            onClick={() => actOnInvite(inv.id, 'resend')}
+                            disabled={!isAdmin || actingId === inv.id}
+                            title="Re-send invitation (rotates the link — the previous link stops working; fresh 48-hour window)"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                          >
+                            <Mail className="w-3.5 h-3.5" /> Resend
+                          </button>
                           )}
                           {actionable && (
                           <button
