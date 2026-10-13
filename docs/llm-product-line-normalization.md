@@ -1,188 +1,293 @@
 # LLM Product-Line Normalization — Design Spec (Tier 2)
 
-**Status:** PROPOSED — awaiting review. No code written.
-**Author:** prepared after the Tier-1 typeahead + BUY precision shell shipped.
-**Scope:** normalize SELL and BUY product lines to industry-standard catalog descriptors.
+**Status:** Design locked, awaiting review. **No code written.**
+**Decisions supplied by stakeholder (2026-10-14):** async post-submit · fixed spec
+schema · catalog-anchored · Llama · normalized lines replace raw text as match key.
 
 ---
 
-## 1. Problem
+## 1. Confirmed Decisions
 
-A visitor types free text into **Equipment Category** and **Details & Specs**
-(e.g. `25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition`).
-This text is the key the match engine uses (`match.js` folds
-`category` + `details` into its line key). Free text means:
-
-- **Variant sprawl** — `R740`, `r740`, `PowerEdge R740`, `Dell R740xd` become
-  distinct match keys, fragmenting BUY demand and hiding SELL supply.
-- **No spec capture** — CPU model, RAM, drive config, form factor are buried in
-  prose and can't be filtered, matched, or compared.
-- **Poor matching recall** — a BUY line that says "2u server" and a SELL line
-  that says "2U rack server" never join, despite being the same product class.
-
-The LLM's job is to turn each submitted line into a **structured, industry-standard
-descriptor** that (a) normalizes the wording and (b) extracts the specs, *without
-inventing facts*.
+| # | Decision | Choice |
+|---|---|---|
+| D1 | Enrichment timing | **Async post-submit** |
+| D2 | Spec schema | **Fixed** (CPU / memory / storage / ports) |
+| D3 | Normalization stance | **Catalog-anchored** |
+| D4 | Model | **Llama** (Cloudflare Workers AI) |
+| D5 | Match key | **Normalized replaces raw text** |
 
 ---
 
-## 2. Goals / Non-Goals
+## 2. What This Solves
 
-### Goals
-1. **Normalize** the free text to a canonical product descriptor
-   (manufacturer, model, form factor, category, key specs).
-2. **Extract** structured specs (CPU, memory, storage, ports, etc.) into fields.
-3. **Never fabricate** — if a spec isn't stated, leave it null. The LLM may
-   *reformat* stated facts, never add unstated ones.
-4. **Map to the existing catalog** where a product is already known, so match
-   keys align with the seeded `products` table.
+Today the match key is free text:
 
-### Non-Goals (explicitly deferred)
-- Price suggestion or valuation (BUY shows no price; SELL base price stays human).
-- Auto-matching BUY→SELL (that's the match engine's job, downstream).
-- Multilingual / transliteration (v2, deferred per prior decision).
-
----
-
-## 3. Where It Runs (architecture decision — important)
-
-The LLM call must **not** be in the browser or in the request path of the
-submit. Proposal:
-
-- **Runs server-side, post-submit, async**, on the stored request.
-- Trigger: after a request is persisted, enqueue a **normalization job** per
-  product line.
-- The **original** submitted text is always retained; the LLM produces an
-  **enriched/normalised variant** stored alongside.
-- The visitor's own words are **never overwritten** — they're the record of what
-  was asked/offered.
-
-Rationale: keeps submit fast (no LLM latency in the funnel), keeps the form
-offline-capable, avoids leaking API keys to the client, and makes the raw input
-immutable evidence. Cost is bounded because it runs once per line.
-
-> Open question for review: synchronous (visitor waits ~1-2s, sees the cleaned
-> line before submit) vs async (submit is instant, normalization lands for the
-> operator). **Recommend async.**
-
----
-
-## 4. What the LLM Outputs (the normalized line)
-
-For each product line, the LLM emits a structured descriptor:
-
+```js
+// functions/api/match.js:40-46
+const norm = (v) => String(v ?? '').trim().toUpperCase();
+const lineKeyOf = (p) => {
+  const name = norm(p && p.category);
+  const model = norm(p && p.details);
+  if (!name || !model) return null;
+  return `${name}\x00${model}`;
+};
 ```
-{
-  "normalizedCategory": "Servers > Rack Servers",     // canonical taxonomy
-  "manufacturer": "Dell",
-  "model": "PowerEdge R740",
-  "formFactor": "2U Rack",
-  "specs": {
-    "cpu": ["2x Intel Xeon Gold 6130"],
-    "memoryGb": 128,
-    "storage": ["...as stated..."],
-    "other": ["...key specs extracted from text..."]
-  },
-  "catalogMatchId": "srv-001" | null,                  // link to products table if known
-  "confidence": 0.0 - 1.0,
-  "specsStated": true | false,                        // did the visitor state specs at all?
-  "flags": ["NEEDS_REVIEW"]                           // low confidence / ambiguous
+
+A BUY line reading `Dell PowerEdge R750` and a SELL line reading
+`25x PowerEdge R750, working` produce different keys and never join, despite
+being the same product. D5 fixes this at the root.
+
+---
+
+## 3. Architecture (D1 — Async)
+
+Submit stays instant. Enrichment runs after the response is sent.
+
+Reuses the **existing async precedent** in this codebase — `intake/sessions.js`
+already does queue-first-with-inline-fallback:
+
+```js
+// functions/api/intake/sessions.js:146 (existing pattern to mirror)
+if (env.INTAKE_QUEUE && typeof env.INTAKE_QUEUE.send === 'function') {
+  await env.INTAKE_QUEUE.send({ ... });
 }
 ```
 
-**Hard rule:** every populated spec must be traceable to the visitor's text.
-Post-processing **strips** any field the model returns that isn't grounded in
-the input (a validation step re-checks; see §6).
-
----
-
-## 5. Model Choice & Cost
-
-- Model: a fast, cheap instruct model (e.g. Gemini Flash class or an equivalent
-  low-cost hosted model). This is a **classification/extraction** task, not
-  creative generation — a small model is the right fit.
-- Structured output (JSON schema-constrained) to avoid parsing failures.
-- Cost: bounded to one short call per line; volume tied to submissions.
-  Batch-friendly (multiple lines per call where qty>1 shares a model).
-
----
-
-## 6. Guardrails (the "no hallucination" contract)
-
-1. **Schema-constrained decoding** — the model must return valid JSON matching
-   the descriptor shape; malformed output is rejected, not guessed.
-2. **Grounding check** — a post-validator confirms each extracted spec value
-   appears in (or is a safe transform of) the source text. Ungrounded fields are
-   nulled.
-3. **Catalog anchoring** — if the text matches a known `products` row (via the
-   existing Tier-1 deterministic matcher), prefer that canonical
-   `category`/`model` over the LLM's free-text interpretation.
-4. **Deterministic first** — Tier-1 (prefix/fuzzy) runs first; the LLM only
-   handles what deterministic matching can't confidently resolve (this honors
-   the "deterministic-first, no-LLM-for-known-products" principle from Tier 1).
-5. **Operator visibility** — normalized output is stored with
-   `specsStated`/`confidence`/`flags`; low-confidence lines are flagged
-   `NEEDS_REVIEW` for a human, never silently trusted.
-6. **Idempotent + versioned** — store `normalizerVersion` so a re-run after a
-   model/prompt change is distinguishable.
-
----
-
-## 7. Data Model (additive)
-
-New table (does not alter existing `products` or `match_lines`):
+Proposed flow:
 
 ```
-product_line_norm (
-  productId TEXT,        -- FK to the request's product line
-  requestId TEXT,
-  intent TEXT,           -- sell | buy
-  payload TEXT,          -- JSON descriptor from §4
-  catalogMatchId TEXT,   -- FK to products.id or NULL
-  confidence REAL,
-  specsStated INTEGER,
-  flags TEXT,
-  normalizerVersion TEXT,
-  createdAt DATETIME
-)
+returns POST
+  ├─ D1 INSERT order                 (unchanged, synchronous)
+  ├─ indexLinesFor → match_lines     (raw keys, immediate matchability)
+  ├─ respond 200 to visitor          (no LLM in the path)
+  └─ ctx.waitUntil( normalize(requestId) )
+         ├─ queue-first: env.NORMALIZE_QUEUE.send({ requestId })
+         └─ fallback:    inline, one pass, bounded
 ```
 
-Original text stays in the existing `returns.products` JSON — untouched.
+**Guarantees**
+- Visitor never waits on the model.
+- Raw text is immutable — enrichment writes a new table, never overwrites
+  `returns.products`.
+- Failure is non-fatal: a line that never normalizes keeps its raw key and
+  stays matchable. Normalization can only *add* a better key, never remove one.
 
 ---
 
-## 8. Interaction with Match
+## 4. Fixed Spec Schema (D2)
 
-- `match.js` currently keys on folded `category` + `details`. With normalization,
-  the **match key can optionally** prefer `normalizedCategory` + normalized model
-  when present, improving recall without changing the deterministic engine's
-  logic. (This is a follow-up decision, not in this spec's first cut.)
+Per line, a closed schema — no open "other" bucket:
 
----
+```jsonc
+{
+  "category":      "servers",            // catalog category
+  "manufacturer":  "Dell",               // or null
+  "model":         "PowerEdge R750",     // or null
+  "formFactor":    "2U Rack",            // or null
+  "cpu":           ["2x Intel Xeon Gold 6130"],   // [] = not stated
+  "memoryGb":      128,                  // integer or null
+  "storage":       ["2x 480GB SATA SSD"],        // [] = not stated
+  "ports":         null,                 // integer or null (network gear)
+  "catalogId":     "srv-002",            // or null
+  "confidence":    0.92,                 // 0..1
+  "grounded":      true                  // validator verdict
+}
+```
 
-## 9. Rollout Plan
+Contract: **unstated means null / empty array, never a guess.** A missing CPU
+is `[]`, not `"unknown CPU"`.
 
-1. **Shadow mode** — run normalization on submissions, store it, but don't use
-   it. Inspect quality/confidence distribution. No user-visible change.
-2. **Operator view** — surface normalized line + confidence/flags in the
-   dashboard for review. Flag disagreement with catalog.
-3. **Match key experiment** — optionally use normalized keys; measure recall lift.
-4. **Full adoption** — once quality is validated, normalized lines become the
-   canonical descriptors.
-
----
-
-## 10. Open Questions for Review
-
-1. **Async (recommended) vs synchronous** enrichment at submit time?
-2. **Spec granularity** — fixed schema (CPU/mem/storage/ports) or open "other"?
-3. **Catalog-anchored vs free** normalization when Tier-1 already matched?
-4. **Which provider/model** — in-house budget constraints?
-5. **Match key adoption** — should normalized keys replace raw-text keys?
+`formFactor`, `manufacturer` and `model` are normalized *case and spacing only*
+against the catalog when `catalogId` is set; the model never re-authors them.
 
 ---
 
-## Next Step
+## 5. Catalog-Anchored Normalization (D3)
 
-On approval, implement in shadow mode: the normalizer function, the
-`product_line_norm` table, the async job hook, and the grounding validator.
+Order of resolution per line — **deterministic first, model last**:
+
+1. **Tier-1 deterministic match** (existing `products/suggest` — prefix + alias
+   + Jaro-Winkler ≥ 0.85). If it resolves, that catalog row **is** the
+   normalization. **No LLM call at all.**
+2. **LLM extraction** only for lines Tier-1 cannot resolve. Llama extracts the
+   fixed schema and may propose a `category` from the controlled vocabulary,
+   but may **not** invent a manufacturer/model that is absent from the input.
+3. **Catalog re-check**: a proposed descriptor that matches an existing catalog
+   row is snapped to that row's canonical `category`/`model`.
+
+> ### ⚠ Caveat you should weigh before approving D3 as-is
+> The catalog holds **29 seeded rows**; the agreed MVP target is **500**.
+> Until the catalog grows, Tier-1 resolves a small minority of real
+> submissions, so most lines will take the LLM path — meaning the "anchored"
+> guarantee is currently carried mostly by the *validator*, not by catalog
+> coverage. Two ways to close this, your call:
+> **(a)** fund the 500-entry seed first (deterministic wins, model rarely fires), or
+> **(b)** ship now and grow the catalog as the normalizer's misses are reviewed.
+> (b) gets the match-key win — the main prize — sooner.
+
+---
+
+## 6. Model Choice (D4) — Llama on Workers AI
+
+```toml
+# wrangler.toml — new binding
+[ai]
+binding = "AI"
+```
+
+Model: **`@cf/meta/llama-3.1-8b-instruct`** (`env.AI.run(...)`).
+
+Why this one:
+- Native Cloudflare binding — same account as D1/R2, **no new vendor, no API
+  key to store or leak**, no cross-region hop.
+- Extraction/classification is the target task; a small model is the right size.
+- Already have the `ai` scope on the wrangler token.
+
+**Honest limitation, and the mitigation:** an 8B model is not reliably
+JSON-schema-perfect. Therefore:
+
+- Request `response_format: { type: "json_object" }`.
+- **One** retry on parse failure.
+- Escalate to `@cf/meta/llama-3.3-70b-instruct` if the 8B output still fails
+  validation (cheap: rare path only).
+- Any line that survives escalation as unparseable is written with
+  `grounded: false` and flagged `NEEDS_REVIEW`, and **keeps its raw match key**
+  (never promoted on a bad parse).
+
+---
+
+## 7. No-Fabrication Guardrail
+
+The validator is the contract. After the model returns:
+
+1. **Schema check** — fixed keys, correct types, no extras.
+2. **Grounding check** — each populated value must appear in the source text, or
+   be a safe transform of it (case/space fold, `"128GB"` → `128`).
+   Ungrounded fields are **nulled**, not trusted.
+3. **No-invention check** — `manufacturer`/`model` must be substrings of the
+   source text. A model that invents a part number is rejected wholesale.
+4. **Promotion gate** — a line is promoted to the normalized match key only if
+   `grounded === true` **and** `confidence >= 0.80`. Below that it stays
+   raw-keyed, so a bad extraction can never merge two unrelated products.
+
+---
+
+## 8. Match-Key Replacement (D5) — the consequential one
+
+`match_lines` today:
+
+| column | meaning |
+|---|---|
+| `norm_name`, `norm_model` | the key (folded category, folded details) |
+| `raw_cat`, `raw_det` | display text |
+
+### The migration problem
+
+Three concrete hazards, all of which the codebase already cares about — the
+`match.js` header documents *"mixed states never silently miss"*:
+
+1. **Async race.** Normalization finishes seconds to minutes after submit. A BUY
+   at T0 and a SELL at T0+5s must still match, even though only one has been
+   normalized.
+2. **Historical rows.** Every existing `match_lines` row is raw-keyed. New rows
+   keyed on normalized text would never join with them.
+3. **Bad extractions.** Promoting a low-confidence key splits or merges the wrong
+   products.
+
+### Solution — dual-key during transition
+
+Each line is indexed under **both** keys: the normalized key (primary) and the
+raw key (secondary, permanent for the transition period).
+
+- **At submit**: index raw-keyed (unchanged code path, immediate matchability).
+- **After normalization**: `UPDATE match_lines` for that one order's lines to
+  the normalized key, **keeping the raw key as the secondary**. One write, one
+  order, no table rewrite.
+- **At match time**: a BUY competes under its primary key, then its secondary.
+  A SELL is found by either key. Union of both key spaces.
+- **Retirement**: only after `normalized` covers 100% of live lines *and* a soak
+  period, drop the secondary key. Not in this phase.
+
+New columns (additive, nullable):
+
+```sql
+ALTER TABLE match_lines ADD COLUMN alt_name TEXT;    -- secondary key, raw
+ALTER TABLE match_lines ADD COLUMN alt_model TEXT;
+ALTER TABLE match_lines ADD COLUMN normalized INTEGER DEFAULT 0;  -- 1 = promoted
+```
+
+`buildIndexedInputs` then pushes each sell line into `sellQueues` under **both**
+keys, and a BUY looks up both. `indexLinesFor` stays the single definition of
+"what a line is" — no drift.
+
+### Invariants preserved
+- `match_meta.ready` gate untouched.
+- A line that never normalizes is fully matchable on its raw key.
+- Truncation flagging (`truncated: true`) unchanged.
+
+---
+
+## 9. Data Model (additive — nothing existing is altered)
+
+```sql
+CREATE TABLE IF NOT EXISTS product_line_norm (
+  productId          TEXT NOT NULL,
+  requestId          TEXT NOT NULL,
+  intent             TEXT NOT NULL,
+  lineIdx            INTEGER NOT NULL,
+  payload            TEXT,          -- fixed-schema JSON (§4)
+  catalogId          TEXT,          -- products.id or NULL
+  confidence         REAL,
+  grounded           INTEGER DEFAULT 0,
+  flags              TEXT,          -- NEEDS_REVIEW etc.
+  normalizerVersion  TEXT,
+  createdAt          DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (requestId, lineIdx)
+);
+CREATE INDEX IF NOT EXISTS idx_pln_request ON product_line_norm(requestId);
+CREATE INDEX IF NOT EXISTS idx_pln_catalog ON product_line_norm(catalogId);
+```
+
+Original text stays in `returns.products` — untouched, auditable.
+
+---
+
+## 10. Failure & Cost Posture
+
+| Path | Behaviour |
+|---|---|
+| Model timeout / 5xx | Line keeps raw key. Retry once via queue. Never blocks a match. |
+| Bad JSON | 1 retry on 8B → 70B → else `NEEDS_REVIEW`, raw key retained. |
+| Ungrounded field | Nulled by validator; line still promotable on remaining fields. |
+| Queue unavailable | Inline `waitUntil` pass (same as intake's fallback). |
+
+Cost is bounded to one short call per unmatched line, with the 70B escalation
+on a rare path. Catalog-anchoring (D3) is the cost ceiling — as the catalog
+fills in, LLM calls drop toward zero.
+
+---
+
+## 11. Rollout
+
+1. **Schema + normalizer**, `product_line_norm` live, `match_lines` untouched.
+   Normalization runs, output stored, **no behavioural change**. Inspect
+   confidence distribution + validator rejection rate.
+2. **Dual-key indexing** behind a flag, raw remains primary. Measure whether
+   normalized keys actually increase match recall before going further.
+3. **Promote normalized to primary** once step 2 shows a real recall lift and
+   rejection rate is low.
+4. **Retire secondary keys** — out of scope for this phase.
+
+---
+
+## 12. What I Need From You
+
+1. **The catalog-size call in §5** — fund the 500-entry seed first, or ship with
+   the current 29 and grow from review misses? This is the one place where your
+   D3 decision has a weaker foundation than it appears.
+2. **Promotion threshold** — I propose `confidence ≥ 0.80` + grounded. Confirm
+   or adjust.
+3. **70B escalation** — keep it as a rare fallback, or drop to 8B-only for cost?
+
+Once these three are settled I'll implement steps 1–2 behind flags, so the match
+engine's current behaviour stays intact until you call the switch.
