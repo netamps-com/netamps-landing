@@ -14,11 +14,18 @@ Current live results, `GET /api/products/suggest?q=&limit=20`:
 |---|---|---|
 | `ssd` | **0** | **22** |
 | `nvme` | **0** | **19** |
-| `2u` | **0** | **33** |
+| `2u` | **0** | **31** |
 | `proliant` | **1** | **14** |
 | `poweredge` | 3 | 14 |
 | `thinkpad` | 5 | ~20 |
 | `dell` / `cisco` / `lenovo` | 20 (capped) | 48+ / 38+ / 46+ |
+
+> **Correction (2026-10-14).** An earlier draft of this table said `2u` should return
+> **33**, derived from a `LIKE '%2u%'` SQL count. That baseline was wrong: substring
+> matching also hits `LG UltraFine 32UN880` ("32**UN**880" contains "2u") and
+> `APC NetShelter SX 42U Rack` ("42**u**"), neither of which is a 2U product. A
+> token-accurate count gives **31**, which is what the FTS5 index reproduces exactly.
+> The `LIKE`-derived figures for the other three terms were checked and are correct.
 
 **Root cause — two hard structural limits in `products/catalog.js`:**
 
@@ -221,8 +228,8 @@ read-replica — no application rewrite, because the interface is one SQL query.
 ## 10. Migration & Rollback
 
 1. Build `products_fts` + synonyms + staging alongside the current path. **No traffic change.**
-2. Backfill and **verify recall parity** with a fixed query set (I would assert the
-   §1 numbers: `ssd`→22, `nvme`→19, `2u`→33, `proliant`→14).
+2. Backfill and **verify recall parity** with a fixed query set (assert the
+   §1 numbers: `ssd`→22, `nvme`→19, `2u`→31, `proliant`→14).
 3. Shadow-compare FTS vs current for N days; log disagreements.
 4. Cut over behind a flag; keep the old path one release for instant rollback.
 5. Only then delete the `LIMIT 200` scan.
