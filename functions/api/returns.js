@@ -1,5 +1,64 @@
 import { verifySession } from './intake/auth';
 import { sendConfirmationEmail } from './email/confirm.js';
+import { indexLinesFor, ensureMatchTables } from './match.js';
+
+// Phase-1 match index maintenance (shared with match.js — one line
+// definition via indexLinesFor, no drift). DELETE + INSERT per order keeps
+// retries idempotent. Throws on failure: callers compensate (see POST).
+export async function writeMatchLines(env, orderId, intent, products, pricingBasis) {
+  const lines = indexLinesFor({ id: orderId, intent, products, pricingBasis });
+  if (env.DB && typeof env.DB.prepare === 'function') {
+    await ensureMatchTables(env);
+    await env.DB.prepare('DELETE FROM match_lines WHERE order_id = ?').bind(orderId).run();
+    for (const ln of lines) {
+      await env.DB.prepare(
+        'INSERT INTO match_lines (order_id, line_idx, side, norm_name, norm_model, raw_cat, raw_det, qty, ask_paise) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)'
+      ).bind(ln.order_id, ln.line_idx, ln.side, ln.norm_name, ln.norm_model, ln.raw_cat, ln.raw_det, ln.qty, ln.ask_paise).run();
+    }
+  } else if (env.DATABASE_URL) {
+    const { Client } = await import('pg');
+    const client = new Client({ connectionString: env.DATABASE_URL });
+    await client.connect();
+    try {
+      await client.query(`CREATE TABLE IF NOT EXISTS match_lines (
+        order_id TEXT NOT NULL, line_idx INTEGER NOT NULL, side TEXT NOT NULL,
+        norm_name TEXT NOT NULL, norm_model TEXT NOT NULL,
+        raw_cat TEXT NOT NULL, raw_det TEXT NOT NULL,
+        qty INTEGER NOT NULL, ask_paise NUMERIC,
+        PRIMARY KEY (order_id, line_idx)
+      )`);
+      try { await client.query('CREATE INDEX IF NOT EXISTS idx_match_lines_key ON match_lines(side, norm_name, norm_model)'); } catch {}
+      await client.query('DELETE FROM match_lines WHERE order_id = $1', [orderId]);
+      for (const ln of lines) {
+        await client.query(
+          'INSERT INTO match_lines (order_id, line_idx, side, norm_name, norm_model, raw_cat, raw_det, qty, ask_paise) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+          [ln.order_id, ln.line_idx, ln.side, ln.norm_name, ln.norm_model, ln.raw_cat, ln.raw_det, ln.qty, ln.ask_paise]
+        );
+      }
+    } finally {
+      await client.end();
+    }
+  }
+  return lines.length;
+}
+
+async function purgeMatchLines(env, orderId) {
+  // Best-effort: index hygiene must never fail a deletion.
+  try {
+    if (env.DB && typeof env.DB.prepare === 'function') {
+      await env.DB.prepare('DELETE FROM match_lines WHERE order_id = ?').bind(orderId).run();
+    } else if (env.DATABASE_URL) {
+      const { Client } = await import('pg');
+      const client = new Client({ connectionString: env.DATABASE_URL });
+      await client.connect();
+      try {
+        await client.query('DELETE FROM match_lines WHERE order_id = $1', [orderId]);
+      } finally {
+        await client.end();
+      }
+    }
+  } catch {}
+}
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -108,6 +167,20 @@ export async function onRequestPost({ request, env }) {
         pricingBasis,
         lotPaise
       ).run();
+
+      // Phase-1 match index: mirror this order's matchable lines. Fail-closed
+      // with compensation — a submission whose lines cannot be indexed throws
+      // (after removing the just-inserted row) rather than recording into a
+      // state the indexed matcher would silently miss. The outer catch turns
+      // this into a 500, distinct from 422 validation refusals.
+      try {
+        await writeMatchLines(env, returnReq.id, returnReq.intent, returnReq.products || [], pricingBasis);
+      } catch (lineErr) {
+        try { await env.DB.prepare('DELETE FROM returns WHERE id = ?').bind(returnReq.id).run(); } catch {}
+        try { await env.DB.prepare('DELETE FROM match_lines WHERE order_id = ?').bind(returnReq.id).run(); } catch {}
+        console.error('[returns] Match-index write failed; submission rolled back:', lineErr);
+        throw new Error('Failed to index the request for matching. Nothing was recorded — retry.');
+      }
     } else if (env.DATABASE_URL) {
       const { Client } = await import('pg');
       const client = new Client({ connectionString: env.DATABASE_URL });
@@ -148,6 +221,16 @@ export async function onRequestPost({ request, env }) {
           returnReq.manifest ? JSON.stringify(returnReq.manifest) : null, pgPricingBasis, pgLotPaise
         ]
       );
+      // Phase-1 match index (PG mirror): same fail-closed compensation as D1.
+      try {
+        await writeMatchLines(env, returnReq.id, returnReq.intent, returnReq.products || [], pricingBasis);
+      } catch (lineErr) {
+        try { await client.query('DELETE FROM returns WHERE id = $1', [returnReq.id]); } catch {}
+        try { await client.query('DELETE FROM match_lines WHERE order_id = $1', [returnReq.id]); } catch {}
+        console.error('[returns] Match-index write failed; submission rolled back:', lineErr);
+        try { await client.end(); } catch {}
+        throw new Error('Failed to index the request for matching. Nothing was recorded — retry.');
+      }
       await client.end();
     }
 
@@ -550,12 +633,16 @@ export async function onRequestDelete({ request, env }) {
 
     if (env.DB) {
       await env.DB.prepare('DELETE FROM returns WHERE id = ?').bind(id).run();
+      // Phase-1 match index hygiene: purge lines so deleted orders can never
+      // match (best-effort — never fails the deletion).
+      await purgeMatchLines(env, id);
     } else if (env.DATABASE_URL) {
       const { Client } = await import('pg');
       const client = new Client({ connectionString: env.DATABASE_URL });
       await client.connect();
       await client.query('DELETE FROM returns WHERE id = $1', [id]);
       await client.end();
+      await purgeMatchLines(env, id);
     }
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {

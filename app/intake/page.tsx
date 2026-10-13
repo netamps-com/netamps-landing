@@ -177,6 +177,9 @@ function sniffDelimiter(sample: string): string {
 // ── Ragged-row stats from a header:1 2-D array ──
 // Short rows are padded by the object parser; long-row extras are ignored.
 // Returns counts so callers can reject when >5% of data rows are ragged.
+// CRITICAL: pass the RAW AoA (no defval) — SheetJS pads short rows to sheet
+// width when defval is set, making every row equal header length and this
+// guard unfireable. Mapping code keeps its padded copy; stats take raw.
 function raggedStats(aoa: any[][]): { ragged: number; total: number } {
   if (aoa.length <= 1) return { ragged: 0, total: 0 };
   const headerLen = (aoa[0] || []).length;
@@ -853,14 +856,12 @@ export default function IntakeWorkbench() {
         const wb = XLSX.read(buf, { type: 'array' });
         // First non-empty sheet wins; empty sheets skipped (name shown in UI)
         let sheetData: any[] = [];
-        let sheetAoa: any[][] = [];
         for (const name of wb.SheetNames) {
           const ws = wb.Sheets[name];
           if (!ws) continue;
           const aoa = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '', raw: false });
           const hasData = aoa.length > 1 && aoa.slice(1).some((r) => (r || []).some((c) => String(c ?? '').trim() !== ''));
           if (hasData) {
-            sheetAoa = aoa;
             sheetData = XLSX.utils.sheet_to_json<any>(ws, { defval: '', raw: false });
             detectedSheet = name;
             break;
@@ -872,7 +873,9 @@ export default function IntakeWorkbench() {
         }
         cols = Object.keys(sheetData[0]);
         rows = sheetData;
-        const { ragged, total } = raggedStats(sheetAoa);
+        // Ragged stats run on the RAW AoA (no defval padding — see helper note).
+        const rawAoa = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[detectedSheet as string], { header: 1, raw: false });
+        const { ragged, total } = raggedStats(rawAoa);
         if (total > 0 && ragged / total > 0.05) {
           await rejectInsufficient(`ragged rows: ${ragged} of ${total} data rows have a field count different from the header`, cols, { totalRows: rows.length, sheetName: detectedSheet });
           return;
@@ -909,7 +912,9 @@ export default function IntakeWorkbench() {
         }
         cols = Object.keys(d[0]);
         rows = d;
-        const { ragged, total } = raggedStats(aoa);
+        // Raw AoA for stats (no defval padding — see raggedStats note).
+        const rawAoaCsv = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: false });
+        const { ragged, total } = raggedStats(rawAoaCsv);
         if (total > 0 && ragged / total > 0.05) {
           await rejectInsufficient(`ragged rows: ${ragged} of ${total} data rows have a field count different from the header`, cols, { totalRows: rows.length, delimiter: detectedDelimiter });
           return;

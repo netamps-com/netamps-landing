@@ -65,6 +65,9 @@ function sniffDelimiter(sample) {
 }
 
 function raggedStats(aoa) {
+  // CRITICAL: callers must pass the RAW AoA (no defval) — SheetJS pads short
+  // rows to sheet width when defval is set, making every row equal header
+  // length and this guard unfireable. (Kept in sync with app/intake/page.tsx.)
   if (!Array.isArray(aoa) || aoa.length <= 1) return { ragged: 0, total: 0 };
   const headerLen = (aoa[0] || []).length;
   let ragged = 0;
@@ -249,14 +252,12 @@ export async function onRequestPost({ request, env }) {
           if (ext === 'xlsx') {
             const wb = lib.read(bytes, { type: 'array' });
             let sheetData = [];
-            let sheetAoa = [];
             for (const name of wb.SheetNames || []) {
               const ws = wb.Sheets[name];
               if (!ws) continue;
               const aoa = lib.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
               const hasData = aoa.length > 1 && aoa.slice(1).some((r) => (r || []).some((c) => String(c ?? '').trim() !== ''));
               if (hasData) {
-                sheetAoa = aoa;
                 sheetData = lib.utils.sheet_to_json(ws, { defval: '', raw: false });
                 sheetName = name;
                 break;
@@ -268,7 +269,8 @@ export async function onRequestPost({ request, env }) {
             }
             cols = Object.keys(sheetData[0]);
             rows = sheetData;
-            const { ragged, total } = raggedStats(sheetAoa);
+            const rawSheetAoa = lib.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: false });
+            const { ragged, total } = raggedStats(rawSheetAoa);
             if (total > 0 && ragged / total > 0.05) {
               await auditParse(env, request, 'INTAKE_SERVER_PARSED', { key, ext, rejected: `ragged rows: ${ragged} of ${total}` }, user.email);
               return reject(`ragged rows: ${ragged} of ${total} data rows have a field count different from the header`, { cols, totalRows: rows.length, sheetName });
@@ -295,7 +297,9 @@ export async function onRequestPost({ request, env }) {
             }
             cols = Object.keys(d[0]);
             rows = d;
-            const { ragged, total } = raggedStats(aoa);
+            // Raw AoA for stats (no defval padding — see raggedStats note).
+            const rawAoaCsv = lib.utils.sheet_to_json(ws, { header: 1, raw: false });
+            const { ragged, total } = raggedStats(rawAoaCsv);
             if (total > 0 && ragged / total > 0.05) {
               await auditParse(env, request, 'INTAKE_SERVER_PARSED', { key, ext, rejected: `ragged rows: ${ragged} of ${total}` }, user.email);
               return reject(`ragged rows: ${ragged} of ${total} data rows have a field count different from the header`, { cols, totalRows: rows.length, delimiter });
