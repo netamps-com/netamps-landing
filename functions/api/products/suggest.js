@@ -1,7 +1,5 @@
-import { verifySession } from './intake/auth';
-
 /**
- * POST /api/products/suggest { q, limit? } — deterministic catalog typeahead.
+ * GET /api/products/suggest?q=&limit= — deterministic catalog typeahead.
  *
  * Catalog source: D1 `products` table seeded from approved SELL history +
  * ITAD taxonomy. Zero LLM, zero hallucination, sub-300ms cold, <50ms warm.
@@ -9,10 +7,11 @@ import { verifySession } from './intake/auth';
  * Contract:
  *  - q (string, 2–64 chars, folded): query string
  *  - limit (integer, 1–20): max results (default 10)
- *  - Returns: { suggestions: ProductSuggestion[] }
+ *  - Returns: { success, suggestions: ProductSuggestion[] }
  *
  * Matching: prefix on normalized name/model, then fuzzy (Jaro-Winkler ≥0.85)
  * over canonical model + aliases. No invention, no external calls.
+ * Public endpoint (no session): per-IP rate limit only.
  */
 
 function json(body, status = 200) {
@@ -117,7 +116,6 @@ async function searchCatalog(env, q, limit) {
   if (!qnorm || qnorm.length < CATALOG_MIN_QUERY) return [];
 
   // Exact prefix matches first (fast path)
-  const prefix = qnorm.replace(/ /g, '% ');
   const rows = await env.DB.prepare(
     `SELECT id, category, model, spec_template
      FROM products
@@ -136,39 +134,56 @@ async function searchCatalog(env, q, limit) {
 
   if (results.length >= limit) return results.slice(0, limit);
 
-  // Fuzzy fallback: scan remaining (capped) and Jaro-Winkler rank
-  const prefixIds = new Set(results.map((r) => r.id));
-  const remaining = await env.DB.prepare(
-    `SELECT id, category, model, spec_template
-     FROM products
-     WHERE id NOT IN (${[...prefixIds].map(() => '?').join(',') || 'NULL'})
-     LIMIT 200`
-  ).bind(...prefixIds).all();
+  // Alias-prefix + fuzzy fallback over a capped scan (aliases live in a
+  // JSON column, so token matching happens in JS over ≤200 rows).
+  const prefixIds = [...new Set(results.map((r) => r.id))];
+  const remaining = prefixIds.length > 0
+    ? await env.DB.prepare(
+      `SELECT id, category, model, spec_template, aliases
+       FROM products
+       WHERE id NOT IN (${prefixIds.map(() => '?').join(',')})
+       LIMIT 200`
+    ).bind(...prefixIds).all()
+    : await env.DB.prepare(
+      `SELECT id, category, model, spec_template, aliases
+       FROM products
+       LIMIT 200`
+    ).all();
 
-  const fuzzy = (rows?.results || [])
-    .map((r) => {
-      const jw = jaroWinkler(normalizeFold(q), normalizeFold(r.model));
-      if (jw < 0.85) return null;
-      return {
-        id: r.id,
-        category: r.category,
-        model: r.model,
-        specTemplate: r.spec_template || '',
-        matchType: 'fuzzy',
-        score: jw
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.score - a.score);
+  const extras = [];
+  for (const r of (remaining?.results || [])) {
+    const aliases = parseAliases(r);
+    const base = {
+      id: r.id,
+      category: r.category,
+      model: r.model,
+      specTemplate: r.spec_template || ''
+    };
+    // Alias-prefix ranks as an exact-tier hit (buyer typed "r740", not the full model).
+    if (aliases.some((a) => a.startsWith(qnorm))) {
+      extras.push({ ...base, matchType: 'prefix', score: 1 });
+      continue;
+    }
+    // Fuzzy: best Jaro-Winkler over canonical model + aliases, threshold 0.85.
+    const modelFold = normalizeFold(r.model);
+    let best = jaroWinkler(qnorm, modelFold);
+    for (const a of aliases) best = Math.max(best, jaroWinkler(qnorm, a));
+    if (best >= 0.85) extras.push({ ...base, matchType: 'fuzzy', score: best });
+  }
+  extras.sort((a, b) => (b.score - a.score) || (a.model < b.model ? -1 : 1));
 
-  return [...results, ...fuzzy.slice(0, limit - results.length)];
+  return [...results, ...extras.slice(0, limit - results.length)]
+    .map(({ score, ...s }) => s);
 }
 
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
-  });
+function parseAliases(r) {
+  try {
+    const a = JSON.parse(r?.aliases || '[]');
+    if (!Array.isArray(a)) return [];
+    return a.map((x) => normalizeFold(x)).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 export async function onRequestGet({ request, env }) {
