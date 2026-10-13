@@ -85,22 +85,44 @@ export async function ensureCatalog(env) {
   ).run();
 }
 
+// SQLite rejects LIKE patterns beyond a complexity budget with
+// "LIKE or GLOB pattern too complex". A visitor pasting a whole sentence
+// (the Tier-2 normalizer feeds raw `details` prose in) blew that budget and
+// threw, which silently downgraded every such line off the catalog path.
+// Cap the folded query to a safe prefix length.
+const MAX_FOLD_QUERY = 64;
+
+/** Escape LIKE metacharacters so a visitor's `%` / `_` stays literal.
+ *  Without this, "PowerVault_ME484" would match any single char, and a bare
+ *  "%" would return the entire catalog. Paired with ESCAPE '\' in the SQL. */
+function escapeLike(s) {
+  return String(s ?? '').replace(/[\\%_]/g, (c) => '\\' + c);
+}
+
 /**
  * @returns {Promise<Array<{id,category,model,specTemplate,matchType}>>}
  */
 export async function searchCatalog(env, q, limit) {
   if (!env.DB || typeof env.DB.prepare !== 'function') return [];
-  const qnorm = normalizeFold(q);
-  if (!qnorm || qnorm.length < CATALOG_MIN_QUERY) return [];
+  const folded = normalizeFold(q);
+  if (!folded || folded.length < CATALOG_MIN_QUERY) return [];
+  // Two views of the same query: `qcmp` for in-JS string similarity (no SQL
+  // metacharacters), `qsql` escaped for the LIKE bind parameter.
+  const qcmp = folded.slice(0, MAX_FOLD_QUERY);
+  const qsql = escapeLike(qcmp);
 
-  // Exact prefix matches first (fast path)
+  // Exact prefix matches first (fast path).
+  // The `%` rides inside the BOUND PARAMETER, never after the ESCAPE clause:
+  // `LIKE ? ESCAPE '\' || '%'` folds the escape char and '%' into a 2-char
+  // escape expression and SQLite throws "ESCAPE expression must be a single
+  // character", turning every catalog lookup into a 500.
   const rows = await env.DB.prepare(
     `SELECT id, category, model, spec_template
      FROM products
-     WHERE lower(model) LIKE ? || '%'
-        OR lower(category) LIKE ? || '%'
+     WHERE lower(model) LIKE ? ESCAPE '\\'
+        OR lower(category) LIKE ? ESCAPE '\\'
      LIMIT ?`
-  ).bind(qnorm, qnorm, limit * 2).all();
+  ).bind(`${qsql}%`, `${qsql}%`, limit * 2).all();
 
   const results = (rows?.results || []).map((r) => ({
     id: r.id,
@@ -138,14 +160,14 @@ export async function searchCatalog(env, q, limit) {
       specTemplate: r.spec_template || ''
     };
     // Alias-prefix ranks as an exact-tier hit (buyer typed "r740", not the full model).
-    if (aliases.some((a) => a.startsWith(qnorm))) {
+    if (aliases.some((a) => a.startsWith(qcmp))) {
       extras.push({ ...base, matchType: 'prefix', score: 1 });
       continue;
     }
     // Fuzzy: best Jaro-Winkler over canonical model + aliases, threshold 0.85.
     const modelFold = normalizeFold(r.model);
-    let best = jaroWinkler(qnorm, modelFold);
-    for (const a of aliases) best = Math.max(best, jaroWinkler(qnorm, a));
+    let best = jaroWinkler(qcmp, modelFold);
+    for (const a of aliases) best = Math.max(best, jaroWinkler(qcmp, a));
     if (best >= 0.85) extras.push({ ...base, matchType: 'fuzzy', score: best });
   }
   extras.sort((a, b) => (b.score - a.score) || (a.model < b.model ? -1 : 1));

@@ -69,7 +69,7 @@ async function normalizeEnabled(env) {
 function scheduleNormalization(context, env, order) {
   const work = (async () => {
     if (env.NORMALIZE_QUEUE && typeof env.NORMALIZE_QUEUE.send === 'function') {
-      await env.NORMALIZE_QUEUE.send({ requestId: order.id });
+      await env.NORMALIZE_QUEUE.send({ requestId: order.requestId });
       return;
     }
     const { normalizeOrder } = await import('./normalize/line.js');
@@ -78,7 +78,7 @@ function scheduleNormalization(context, env, order) {
   })().catch((err) => {
     // Enrichment is strictly additive; a failure here leaves every line on its
     // raw match key, which is still fully matchable.
-    console.error('[normalize] scheduled normalization failed', order?.id, err?.message);
+    console.error('[normalize] scheduled normalization failed', order?.requestId, err?.message);
   });
 
   if (context && typeof context.waitUntil === 'function') {
@@ -308,7 +308,7 @@ export async function onRequestPost({ request, env, context }) {
     // Promotion to normalized keys is a separate, still-unimplemented step.
     if (await normalizeEnabled(env)) {
       scheduleNormalization(context, env, {
-        id: returnReq.id,
+        requestId: returnReq.id,
         intent: returnReq.intent,
         products: returnReq.products || []
       });

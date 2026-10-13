@@ -32,8 +32,12 @@ export const NORMALIZER_VERSION = 'llm-norm-v1';
 // extraction must never merge two unrelated products or split a good pair.
 export const PROMOTE_MIN_CONFIDENCE = 0.80;
 
-const MODEL_SMALL = '@cf/meta/llama-3.1-8b-instruct';
-const MODEL_LARGE = '@cf/meta/llama-3.3-70b-instruct';
+// Verified live against the Workers AI catalog 2026-10-14. The unsuffixed
+// `@cf/meta/llama-3.1-8b-instruct` was DEPRECATED 2026-05-30 (error 5028) and
+// `@cf/meta/llama-3.3-70b-instruct` never existed under that name (error 5007).
+// Both live variants are the FP8 builds.
+const MODEL_SMALL = '@cf/meta/llama-3.1-8b-instruct-fp8';
+const MODEL_LARGE = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 const CATEGORIES = [
   'servers', 'storage', 'networking', 'laptops',
@@ -107,6 +111,29 @@ function asStringArray(v) {
 }
 
 /**
+ * Verified-evidence confidence, in [0, 1].
+ *
+ * Starts from what the validator actually confirmed, not what the model
+ * claimed. Catalog anchoring is the strongest signal (our own row), a full
+ * grounded identity triple is next, and each grounded spec is a small bonus.
+ * A line that is only a category guess lands below the promotion gate.
+ */
+function computeConfidence(d, src) {
+  let c = 0;
+  if (d.catalogId) return 0.97;           // our catalog row — strongest
+  if (d.model && d.manufacturer) c += 0.60;
+  else if (d.model) c += 0.45;
+  else if (d.category) c += 0.25;          // category only: never promotable alone
+  if (d.category && d.model) c += 0.15;    // coherent pair
+  if (d.formFactor) c += 0.05;
+  if (d.cpu.length) c += 0.10;
+  if (d.memoryGb !== null) c += 0.08;
+  if (d.storage.length) c += 0.05;
+  if (d.ports !== null) c += 0.03;
+  return Math.max(0, Math.min(c, 0.96));
+}
+
+/**
  * Validate + ground a raw model payload against the visitor's own text.
  * @returns {{d: object, rejected: string|null}}
  */
@@ -157,9 +184,11 @@ export function validateDescriptor(raw, { source }) {
   const ports = clampInt(raw.ports);
   if (ports !== null && src.includes(String(ports))) d.ports = ports;
 
-  // Confidence is the MODEL's self-report; clamp but never trust past 0.99.
-  const conf = Number(raw.confidence);
-  d.confidence = Number.isFinite(conf) ? Math.max(0, Math.min(conf, 0.99)) : 0;
+  // Confidence is COMPUTED, never taken from the model. Live testing showed
+  // llama-3.1-8b self-reports 0.99 on essentially every line including vague
+  // ones, so a model-reported score made the 0.80 promotion gate
+  // non-discriminating. Our score reflects only what the validator verified.
+  d.confidence = computeConfidence(d, src);
 
   // A line with no grounded identity — or one where the model invented an
   // identity — is not promotable.
@@ -277,7 +306,8 @@ export async function normalizeLine(env, { category, details, model: modelHint }
     } catch {}
   }
 
-  d.confidence = Math.max(d.confidence, 0.5);
+  // No floor is applied to the computed confidence: the validator's score is
+  // the promotion signal, and inflating it here would defeat the gate.
   return { descriptor: d, flags, model: call.model };
 }
 
@@ -297,10 +327,19 @@ export function isPromotable(descriptor) {
 /**
  * Normalize every line of one submitted order and persist to product_line_norm.
  * Additive only: never mutates `returns.products`. Never throws.
+ *
+ * @param {{requestId: string, intent: string, products: Array}} order
+ *   NOTE: the key is `requestId`, NOT `id`. The returns POST originally passed
+ *   `id`, which bound requestId to undefined and made every INSERT fail with
+ *   D1_TYPE_ERROR. The contract is explicit and guarded below.
  */
 export async function normalizeOrder(env, { requestId, intent, products }) {
   const summary = { requestId, lines: 0, catalog: 0, promoted: 0, review: 0 };
   if (!env.DB || typeof env.DB.prepare !== 'function') return summary;
+  if (!requestId) {
+    console.error('[normalize] normalizeOrder called without requestId; skipping');
+    return summary;
+  }
   try {
     await ensureNormTables(env);
   } catch (err) {
