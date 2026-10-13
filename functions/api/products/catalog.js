@@ -83,12 +83,12 @@ export async function ensureCatalog(env) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`
   ).run();
-  // Pre-existing rows predate the column: mark them 'verified' ONLY if they
-  // came from the hand-reviewed seed (ids ending in -001..-009 are the original
-  // curated set). Everything else added later defaults to 'unverified'.
-  await env.DB.prepare(
-    "UPDATE products SET verification_status = 'verified' WHERE verification_status IS NULL AND id GLOB '*-00[0-9]'"
-  ).run().catch(() => {});
+  // Pre-existing rows predate the column. Deliberately NO heuristic here (an
+  // earlier `id GLOB '*-00[0-9]'` idea was wrong: it also matched generated
+  // ids like 'r750-001' and would have marked unverified SKUs as verified,
+  // lifting their confidence cap). Verification is set explicitly by the seed
+  // / admin path only, so trust can never be inferred from an id shape.
+  // Anything left NULL is treated as unverified by the normalizer.
   await env.DB.prepare(
     'CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)'
   ).run();
