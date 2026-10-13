@@ -97,6 +97,27 @@ function tagOf(tags, name) {
   return hit && typeof hit.value === 'string' ? hit.value : null;
 }
 
+async function markInviteEmail(env, inviteId, status) {
+  // Correlates Resend delivery webhooks back to the invite row (activation
+  // truth). Best-effort: unknown ids, pre-column tables, and non-D1 stores
+  // silently skip — the invite lifecycle never depends on this write.
+  // 'delivered' never overwrites a terminal 'bounced'/'failed' (last-wins
+  // would otherwise resurrect dead addresses); 'bounced' always wins.
+  try {
+    if (!env.DB || typeof env.DB.prepare !== 'function') return;
+    if (!inviteId || typeof inviteId !== 'string') return;
+    try { await env.DB.prepare('ALTER TABLE invites ADD COLUMN email_status TEXT').run(); } catch {}
+    try { await env.DB.prepare('ALTER TABLE invites ADD COLUMN email_sent_at DATETIME').run(); } catch {}
+    if (status === 'delivered') {
+      await env.DB.prepare(
+        "UPDATE invites SET email_status = 'delivered' WHERE id = ? AND (email_status IS NULL OR email_status NOT IN ('bounced','failed'))"
+      ).bind(inviteId.slice(0, 64)).run();
+    } else {
+      await env.DB.prepare('UPDATE invites SET email_status = ? WHERE id = ?').bind(status, inviteId.slice(0, 64)).run();
+    }
+  } catch {}
+}
+
 export async function onRequestPost({ request, env }) {
   let payloadText = '';
   try {
@@ -133,18 +154,21 @@ export async function onRequestPost({ request, env }) {
   const to = data.to || data.email || null;
   const requestId = tagOf(data.tags, 'request');
   const kind = tagOf(data.tags, 'kind');
+  const inviteId = tagOf(data.tags, 'invite');
 
   if (type === 'email.bounced' || type === 'email.complained') {
     const reason = type === 'email.complained' ? 'complaint' : 'hard-bounce';
     if (apply && to) await suppress(env, to, reason);
     if (apply && requestId && kind === 'owner-push') await markReturnDelivery(env, requestId, 'failed');
-    await auditEvent(env, type === 'email.complained' ? 'EMAIL_COMPLAINT' : 'EMAIL_BOUNCED', { to, requestId, kind, applied: apply }, to);
+    if (apply && inviteId) await markInviteEmail(env, inviteId, 'bounced');
+    await auditEvent(env, type === 'email.complained' ? 'EMAIL_COMPLAINT' : 'EMAIL_BOUNCED', { to, requestId, kind, inviteId, applied: apply }, to);
     return json({ success: true });
   }
 
   if (type === 'email.delivered') {
     if (apply && requestId && kind === 'owner-push') await markReturnDelivery(env, requestId, 'sent');
-    await auditEvent(env, 'EMAIL_DELIVERED', { to, requestId, kind, applied: apply }, to);
+    if (apply && inviteId) await markInviteEmail(env, inviteId, 'delivered');
+    await auditEvent(env, 'EMAIL_DELIVERED', { to, requestId, kind, inviteId, applied: apply }, to);
     return json({ success: true });
   }
 

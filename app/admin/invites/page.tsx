@@ -20,6 +20,11 @@ interface InviteRow {
   created_at: string;
   expires_at: string;
   accepted_at?: string | null;
+  email_status?: string | null;
+  email_sent_at?: string | null;
+  // Server-derived activation truth (list computes it; UI renders verbatim).
+  activation?: 'completed' | 'not-completed';
+  detail?: string;
 }
 
 export default function AdminInvitesPage() {
@@ -34,22 +39,48 @@ export default function AdminInvitesPage() {
   // (pending + approved). Every other state is one select away.
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Industry-standard status indicators: colored dot + label + the timestamp
-  // that matters for that state. Derived live on every render/poll.
+  // Email Activation truth: server-derived per row (completed only on user
+  // acceptance; everything else is Not Completed with the actionable reason).
+  // Rendered verbatim — the console never re-derives activation client-side.
   const lifecycleOf = (inv: InviteRow): { dot: string; label: string; sub: string } => {
-    if (inv.status === 'accepted') {
-      return { dot: 'bg-emerald-500', label: 'Activated', sub: inv.accepted_at ? new Date(inv.accepted_at).toLocaleString() : '' };
+    // Deploy-window fallback: servers predating activation truth omit the
+    // fields — derive from lifecycle status alone (transient, never blank).
+    if (!inv.activation) {
+      if (inv.status === 'accepted') {
+        return { dot: 'bg-emerald-500', label: 'Email Activation Completed', sub: inv.accepted_at ? new Date(inv.accepted_at).toLocaleString() : '' };
+      }
+      if (inv.status === 'revoked') {
+        return { dot: 'bg-slate-500', label: 'Email Activation Not Completed', sub: 'invitation revoked' };
+      }
+      if (inv.status === 'expired' || (inv.expires_at && new Date(inv.expires_at).getTime() <= Date.now() && inv.status !== 'accepted')) {
+        return { dot: 'bg-red-500', label: 'Email Activation Not Completed', sub: inv.expires_at ? `invitation expired ${new Date(inv.expires_at).toLocaleString()}` : 'invitation expired' };
+      }
+      return { dot: 'bg-amber-500', label: 'Email Activation Not Completed', sub: inv.expires_at ? `expires ${new Date(inv.expires_at).toLocaleString()}` : '' };
     }
-    if (inv.status === 'revoked') {
-      return { dot: 'bg-slate-500', label: 'Revoked', sub: '' };
+    if (inv.activation === 'completed') {
+      return { dot: 'bg-emerald-500', label: 'Email Activation Completed', sub: inv.accepted_at ? new Date(inv.accepted_at).toLocaleString() : '' };
     }
-    if (inv.status === 'expired' || (inv.expires_at && new Date(inv.expires_at).getTime() <= Date.now() && inv.status !== 'accepted')) {
-      return { dot: 'bg-red-500', label: 'Expired', sub: inv.expires_at ? new Date(inv.expires_at).toLocaleString() : '' };
+    const expiry = inv.expires_at ? `expires ${new Date(inv.expires_at).toLocaleString()}` : '';
+    switch (inv.detail) {
+      case 'revoked':
+        return { dot: 'bg-slate-500', label: 'Email Activation Not Completed', sub: 'invitation revoked' };
+      case 'expired':
+        return { dot: 'bg-red-500', label: 'Email Activation Not Completed', sub: inv.expires_at ? `invitation expired ${new Date(inv.expires_at).toLocaleString()}` : 'invitation expired' };
+      case 'email-bounced':
+        return { dot: 'bg-red-500', label: 'Email Activation Not Completed', sub: 'invitation email bounced — check address' };
+      case 'email-failed':
+        return { dot: 'bg-red-500', label: 'Email Activation Not Completed', sub: 'invitation email failed to send' };
+      case 'pending-approval':
+        return { dot: 'bg-amber-500', label: 'Email Activation Not Completed', sub: `awaiting second admin approval · ${expiry}` };
+      default: {
+        const delivered = inv.email_status === 'delivered';
+        return {
+          dot: 'bg-blue-500',
+          label: 'Email Activation Not Completed',
+          sub: `${delivered ? 'email delivered — awaiting user action' : 'invitation sent — awaiting user action'}${expiry ? ` · ${expiry}` : ''}`
+        };
+      }
     }
-    if (inv.status === 'approved') {
-      return { dot: 'bg-blue-500', label: 'Approved — awaiting user', sub: inv.expires_at ? `expires ${new Date(inv.expires_at).toLocaleString()}` : '' };
-    }
-    return { dot: 'bg-amber-500', label: 'Pending approval', sub: inv.expires_at ? `expires ${new Date(inv.expires_at).toLocaleString()}` : '' };
   };
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'staff' | 'admin'>('staff');

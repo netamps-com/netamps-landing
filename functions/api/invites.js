@@ -65,9 +65,14 @@ async function ensureInvitesTable(env) {
       approved_by TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       expires_at DATETIME NOT NULL,
-      accepted_at DATETIME
+      accepted_at DATETIME,
+      email_status TEXT,
+      email_sent_at DATETIME
     )`
   ).run();
+  // Backward-compatible columns for pre-existing tables (activation truth).
+  try { await env.DB.prepare('ALTER TABLE invites ADD COLUMN email_status TEXT').run(); } catch {}
+  try { await env.DB.prepare('ALTER TABLE invites ADD COLUMN email_sent_at DATETIME').run(); } catch {}
 }
 
 async function auditInvite(env, event, invite, actor) {
@@ -86,7 +91,7 @@ async function auditInvite(env, event, invite, actor) {
   } catch {}
 }
 
-async function sendInviteMail(env, to, subject, lines, tag) {
+async function sendInviteMail(env, to, subject, lines, tag, inviteId) {
   try {
     const apiKey = env.RESEND_API_KEY;
     if (!apiKey || !EMAIL_RE_INVITE.test(to)) return false;
@@ -94,6 +99,10 @@ async function sendInviteMail(env, to, subject, lines, tag) {
       lines.map((l) => `<p>${l}</p>`).join('') +
       `<p style="font-size: 12px; color: #64748b;"><em>Security note: this link expires in 48 hours, works once, and is bound to ${escapeHtml(to)}. We never ask for passwords by email.</em></p>`;
     const text = `${subject}\n\n` + lines.map((l) => l.replace(/<[^>]+>/g, '')).join('\n');
+    // Correlation tag: lets /api/email/events flip this invite's email_status
+    // on delivered/bounced (activation truth). Absent on old sends — harmless.
+    const tags = [{ name: 'kind', value: tag || 'invite' }];
+    if (inviteId) tags.push({ name: 'invite', value: String(inviteId).slice(0, 64) });
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
@@ -107,7 +116,7 @@ async function sendInviteMail(env, to, subject, lines, tag) {
           html,
           text,
           headers: { 'List-Unsubscribe': '<mailto:contact@netamps.com?subject=Unsubscribe>' },
-          tags: [{ name: 'kind', value: tag || 'invite' }]
+          tags
         }),
         signal: ctrl.signal
       });
@@ -118,6 +127,21 @@ async function sendInviteMail(env, to, subject, lines, tag) {
   } catch {
     return false;
   }
+}
+
+// Server-derived activation truth (keeps the console dumb): 'completed' only
+// when the holder accepted; everything else is 'not-completed' with the
+// actionable reason. Read-only — never mutates expiry here.
+function activationOf(inv) {
+  if (inv.status === 'accepted') return { activation: 'completed', detail: 'activated' };
+  if (inv.status === 'revoked') return { activation: 'not-completed', detail: 'revoked' };
+  if (inv.status === 'expired' || (inv.expires_at && new Date(inv.expires_at).getTime() <= Date.now())) {
+    return { activation: 'not-completed', detail: 'expired' };
+  }
+  if (inv.email_status === 'bounced') return { activation: 'not-completed', detail: 'email-bounced' };
+  if (inv.email_status === 'failed') return { activation: 'not-completed', detail: 'email-failed' };
+  if (inv.status === 'pending-second') return { activation: 'not-completed', detail: 'pending-approval' };
+  return { activation: 'not-completed', detail: 'awaiting-user' };
 }
 
 async function requireAdmin(env, request) {
@@ -170,11 +194,17 @@ export async function onRequestPost({ request, env }) {
     const invite = { id, email, role, status: needsSecond ? 'pending-second' : 'approved' };
     await auditInvite(env, 'INVITE_CREATED', invite, admin.email);
     const link = `https://netamps.com/login?invite=${token}`;
-    await sendInviteMail(env, email, 'Your Netamps staff invitation',
+    const mailed = await sendInviteMail(env, email, 'Your Netamps staff invitation',
       [`You've been invited to join Netamps as <strong>${escapeHtml(role)}</strong>. Your account <strong>'${escapeHtml(email)}'</strong> will activate on acceptance.`,
        `Accept within 48 hours: <a href="${escapeHtml(link)}">accept invitation</a>.`,
-       needsSecond ? 'Admin-role grants additionally require a second admin approval before activation.' : 'No further approval needed — your account activates on acceptance.'], 'invite-issued');
-    return json({ success: true, id, inviteLink: link, needsSecondApproval: needsSecond });
+       needsSecond ? 'Admin-role grants additionally require a second admin approval before activation.' : 'No further approval needed — your account activates on acceptance.'], 'invite-issued', id);
+    // Persist the send outcome (activation truth starts here — a refused send
+    // must never look identical to a delivered one in the console).
+    try {
+      await env.DB.prepare('UPDATE invites SET email_status = ?, email_sent_at = ? WHERE id = ?')
+        .bind(mailed ? 'sent' : 'failed', new Date().toISOString(), id).run();
+    } catch {}
+    return json({ success: true, id, inviteLink: link, needsSecondApproval: needsSecond, emailSent: mailed });
   }
 
   // ── approve (admin, second pair of eyes for admin grants) ──
@@ -243,10 +273,10 @@ export async function onRequestPost({ request, env }) {
     await env.DB.prepare('UPDATE invites SET status = ?, accepted_at = CURRENT_TIMESTAMP WHERE id = ?').bind('accepted', invite.id).run();
     await auditInvite(env, 'INVITE_ACCEPTED', { ...invite, status: 'accepted' }, invite.email);
     await sendInviteMail(env, invite.email, 'Your Netamps account is active',
-      [`Your <strong>${escapeHtml(invite.role)}</strong> account is active. Sign in at netamps.com/login.`], 'invite-accepted');
+      [`Your <strong>${escapeHtml(invite.role)}</strong> account is active. Sign in at netamps.com/login.`], 'invite-accepted', invite.id);
     if (invite.invited_by) {
       await sendInviteMail(env, invite.invited_by, 'Invitation accepted',
-        [`${escapeHtml(invite.email)} accepted your invitation (${escapeHtml(invite.role)}).`], 'invite-accepted-admin');
+        [`${escapeHtml(invite.email)} accepted your invitation (${escapeHtml(invite.role)}).`], 'invite-accepted-admin', invite.id);
     }
     // Admin grants notify FELLOW admins too (dual-control visibility): the
     // direct-create path cannot mint admins, so this is the only birthplace
@@ -257,7 +287,7 @@ export async function onRequestPost({ request, env }) {
         for (const row of (peers && peers.results) || []) {
           if (row.email && row.email !== invite.email && EMAIL_RE_INVITE.test(row.email)) {
             await sendInviteMail(env, row.email, `Admin account activated: ${invite.email}`,
-              [`${escapeHtml(invite.email)} activated an <strong>admin</strong> account. Review in User Management if unexpected.`], 'admin-grant-notice');
+              [`${escapeHtml(invite.email)} activated an <strong>admin</strong> account. Review in User Management if unexpected.`], 'admin-grant-notice', invite.id);
           }
         }
       } catch {}
@@ -278,7 +308,7 @@ export async function onRequestPost({ request, env }) {
     await env.DB.prepare('UPDATE invites SET status = ? WHERE id = ?').bind('revoked', id).run();
     await auditInvite(env, 'INVITE_REVOKED', { ...invite, status: 'revoked' }, admin.email);
     await sendInviteMail(env, invite.email, 'Your Netamps invitation was withdrawn',
-      [`Your pending invitation was withdrawn. Reason: ${escapeHtml(reason)}. Contact your administrator to appeal.`], 'invite-revoked');
+      [`Your pending invitation was withdrawn. Reason: ${escapeHtml(reason)}. Contact your administrator to appeal.`], 'invite-revoked', id);
     return json({ success: true });
   }
 
@@ -295,9 +325,11 @@ export async function onRequestPost({ request, env }) {
       : allowed.has(wanted) ? [wanted] : ['pending-second', 'approved'];
     const placeholders = states.map(() => '?').join(',');
     const { results } = await env.DB.prepare(
-      `SELECT id, email, role, status, invited_by, approved_by, created_at, expires_at, accepted_at FROM invites WHERE status IN (${placeholders}) ORDER BY created_at DESC`
+      `SELECT id, email, role, status, invited_by, approved_by, created_at, expires_at, accepted_at, email_status, email_sent_at FROM invites WHERE status IN (${placeholders}) ORDER BY created_at DESC`
     ).bind(...states).all();
-    return json({ success: true, invites: results || [] });
+    // Server-derived activation truth per row (console renders it verbatim).
+    const invites = (results || []).map((inv) => ({ ...inv, ...activationOf(inv) }));
+    return json({ success: true, invites });
   }
 
   return json({ success: false, message: 'Unknown action.' }, 400);
