@@ -111,6 +111,91 @@ function escapeLike(s) {
   return String(s ?? '').replace(/[\\%_]/g, (c) => '\\' + c);
 }
 
+// ── FTS5 tier ────────────────────────────────────────────────────────────────
+// Catalog index mode is ON by default: it is the only path that can reach
+// mid-string terms in spec_template. Kept behind a constant (not an env flag)
+// so the fallback is exercised by tests rather than by production surprise.
+
+export const CATALOG_INDEX_MODE = true;
+
+/**
+ * FTS5 tier. Returns null when the index is unavailable or empty, which tells
+ * the caller to fall through to legacy — never an empty-array "no results".
+ */
+async function searchFtsTier(env, qcmp, limit) {
+  if (!CATALOG_INDEX_MODE) return null;
+  if (!(await ensureFtsIndex(env))) return null;
+  let tokens;
+  try {
+    const { tokenize } = await import('./etl.js');
+    tokens = tokenize(qcmp);
+  } catch {
+    return null;
+  }
+  if (!tokens.length) return null;
+
+  try {
+    const match = tokens.map((t) => `"${String(t).replace(/"/g, '')}"*`).join(' OR ');
+    const { results } = await env.DB.prepare(
+      'SELECT p.id, p.category, p.model, p.spec_template, p.verification_status, bm25(products_fts) AS rank ' +
+      'FROM products_fts JOIN products p ON p.id = products_fts.id ' +
+      'WHERE products_fts MATCH ? ORDER BY rank LIMIT ?'
+    ).bind(match, limit).all();
+
+    if (!results || !results.length) return null;
+
+    // Exact model prefix outranks BM25 (a visitor typing "r750" wants the
+    // R750 first, not whatever bm25 scores highest). Stable partition.
+    const q = qcmp;
+    const exact = [];
+    const rest = [];
+    for (const r of results) {
+      const item = {
+        id: r.id,
+        category: r.category,
+        model: r.model,
+        specTemplate: r.spec_template || '',
+        verificationStatus: r.verification_status || 'unverified',
+        matchType: normalizeFold(r.model).startsWith(q) ? 'prefix' : 'fuzzy'
+      };
+      (item.matchType === 'prefix' ? exact : rest).push(item);
+    }
+    return [...exact, ...rest].slice(0, limit);
+  } catch {
+    // Missing table, bad MATCH syntax, or an unbuilt index: fall through.
+    return null;
+  }
+}
+
+/**
+ * Ensure the FTS index exists and reflects `products`.
+ *
+ * Self-healing on first call so the index cannot be "forgotten": if the table
+ * is missing we build it. We deliberately do NOT rebuild on every request —
+ * a rebuild scans every row and would turn typeahead into a full-table write.
+ * Staleness after a catalog edit is handled by rebuildIndex() at the edit site.
+ *
+ * @returns {Promise<boolean>} true if an index is available for querying.
+ */
+export async function ensureFtsIndex(env) {
+  if (!env.DB || typeof env.DB.prepare !== 'function') return false;
+  try {
+    const probe = await env.DB.prepare('SELECT COUNT(*) AS n FROM products_fts').bind().first();
+    if ((probe?.n ?? 0) > 0) return true;
+  } catch {
+    // Table absent — build it.
+  }
+  try {
+    const { rebuildIndex } = await import('./etl.js');
+    const report = await rebuildIndex(env);
+    console.log('[catalog] fts index built', JSON.stringify(report));
+    return report.indexed > 0;
+  } catch (err) {
+    console.error('[catalog] fts index build failed', err?.message);
+    return false;
+  }
+}
+
 /**
  * @returns {Promise<Array<{id,category,model,specTemplate,matchType}>>}
  */
@@ -123,7 +208,16 @@ export async function searchCatalog(env, q, limit) {
   const qcmp = folded.slice(0, MAX_FOLD_QUERY);
   const qsql = escapeLike(qcmp);
 
-  // Exact prefix matches first (fast path).
+  // ── FTS5 PRIMARY (catalog index mode) ──
+  // Recovers substring/token recall the legacy path structurally cannot reach:
+  // spec_template was never searched and Jaro-Winkler is a whole-string metric,
+  // so 'ssd', 'nvme', '2u', 'proliant' returned 0 despite 22/19/31/14 real
+  // matches. Gated on the index existing, so a missing/failed index degrades
+  // to legacy rather than to zero results.
+  const fts = await searchFtsTier(env, qcmp, limit);
+  if (fts && fts.length) return fts.map((r) => ({ ...r, source: 'fts' }));
+
+  // Exact prefix matches (legacy fast path).
   // The `%` rides inside the BOUND PARAMETER, never after the ESCAPE clause:
   // `LIKE ? ESCAPE '\' || '%'` folds the escape char and '%' into a 2-char
   // escape expression and SQLite throws "ESCAPE expression must be a single

@@ -282,6 +282,8 @@ export async function normalizeLine(env, { category, details, model: modelHint }
     // construction. Specs are NOT claimed — the catalog row carries no parsed
     // spec columns yet, and inferring them here would be fabrication.
     d.grounded = true;
+    flags.push('CATALOG_ANCHORED');
+    if (strong.source === 'fts') flags.push('CATALOG_FTS');
 
     // ── Unverified catalog rows are NOT trusted ground truth ──
     // Bulk-generated rows carry verification_status='unverified': the part
