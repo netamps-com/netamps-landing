@@ -50,6 +50,9 @@ interface ProductItem {
   lineConsiderationPaise?: number | null;
   // Base unit price for lot-mode breakdowns (raw editable string).
   basePrice: string;
+  // Last catalog composition written into `details` by the typeahead. Lets a
+  // second selection replace it while preserving hand-typed specs.
+  selectedModel?: string;
 }
 
 // ── Money contract lives in app/lib/money.ts (paise integers end-to-end,
@@ -168,12 +171,23 @@ export default function ReturnsPage() {
     setProducts(products.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
 
+  // Catalog selection fills category + Details & Specs only. Pricing is NEVER
+  // derived from a catalog row: a suggestion is a spec, not a valuation, so
+  // every ₹ field stays blank until the visitor types it (BUY exposes no ₹
+  // fields at all). The full spec lands in `details`, which stays editable so
+  // the visitor can add or correct custom specs after selecting.
   const handleSuggestionSelect = (suggestion: { id: string; category: string; model: string; specTemplate: string }, productId: string) => {
-    setProducts(products.map(p => 
-      p.id === productId 
-        ? { ...p, category: suggestion.category, details: suggestion.model }
-        : p
-    ));
+    const spec = (suggestion.specTemplate || '').trim();
+    const composed = spec ? `${suggestion.model} — ${spec}` : suggestion.model;
+    setProducts(products.map(p => {
+      if (p.id !== productId) return p;
+      // Never discard specs the visitor typed by hand before selecting: append
+      // to existing non-catalog text, otherwise replace the previous selection.
+      const current = (p.details || '').trim();
+      const isFresh = current === '' || current === p.selectedModel;
+      const details = isFresh ? composed : `${current}\n${composed}`;
+      return { ...p, category: suggestion.category, details, selectedModel: composed };
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -206,7 +220,10 @@ export default function ReturnsPage() {
       // Consideration validation: paise-integer contract (empty = unstated, never 0).
       // The sanitizer makes invalid input nearly impossible; this is defense in depth.
       // Base prices live on per-product lines only; lot mode takes no base input.
-      if (pricingBasis === 'per_product') {
+      // BUY collects no stated pricing (no ₹ inputs render), so nothing to
+      // validate — we evaluate. Values carried over from a SELL toggle are
+      // nulled at manifest time and can never reach the API as a BUY ask.
+      if (intent === 'sell' && pricingBasis === 'per_product') {
         for (let i = 0; i < products.length; i++) {
           const raw = (products[i].lineConsideration || '').trim();
           if (raw !== '' && moneyStringToPaise(raw) === null) {
@@ -221,7 +238,7 @@ export default function ReturnsPage() {
             return;
           }
         }
-      } else if (lotConsideration.trim() !== '' && moneyStringToPaise(lotConsideration) === null) {
+      } else if (intent === 'sell' && lotConsideration.trim() !== '' && moneyStringToPaise(lotConsideration) === null) {
         setCaptchaError('Lot consideration is not a valid amount (0 – ₹99,99,99,999, max 2 decimals).');
         setIsSubmitting(false);
         return;
@@ -420,8 +437,15 @@ export default function ReturnsPage() {
       // per-product mode, single lot total in lot mode — mutually exclusive,
       // null = unstated (never 0). Manifest v3 covers pricing + base prices;
       // v2 records (no basePricePaise) verify under the v2 shape.
-      const basis = pricingBasis;
-      const lotPaise = basis === 'lot' ? moneyStringToPaise(lotConsideration) : null;
+      //
+      // BUY states no pricing at all. The ₹ inputs don't render in BUY mode,
+      // but intent toggling preserves whatever SELL left in state, so null
+      // here at the single write point instead of trusting the UI. This keeps
+      // `ask_paise` NULL for every BUY line (indexLinesFor reads it back as
+      // null) so a BUY request can never carry a budget we didn't ask for.
+      const isBuy = intent === 'buy';
+      const basis = isBuy ? 'per_product' : pricingBasis;
+      const lotPaise = (!isBuy && basis === 'lot') ? moneyStringToPaise(lotConsideration) : null;
       const manifestProducts = products.map((p) => {
         const mine = queueSnapshot
           .filter((f) => f.productId === p.id && f.status === 'verified' && f.objectKey)
@@ -440,15 +464,21 @@ export default function ReturnsPage() {
           category: p.category,
           details: p.details,
           quantity: p.quantity,
-          lineConsiderationPaise: basis === 'per_product' ? moneyStringToPaise(p.lineConsideration || '') : null,
-          basePricePaise: moneyStringToPaise(p.basePrice || ''),
+          lineConsiderationPaise: (!isBuy && basis === 'per_product') ? moneyStringToPaise(p.lineConsideration || '') : null,
+          basePricePaise: isBuy ? null : moneyStringToPaise(p.basePrice || ''),
           attachments: mine
         };
       });
       const manifestHash = await sha256Json({ requestId: newId, pricingBasis: basis, lotConsiderationPaise: lotPaise, products: manifestProducts });
       const manifest = { requestId: newId, hash: manifestHash, generatedAt: new Date().toISOString(), version: 3 };
+      // Raw price strings are blanked for BUY as well as the parsed integers —
+      // otherwise the persisted products JSON keeps whatever SELL left in
+      // component state, and a future buyer-side reader would see a budget we
+      // never asked for.
       const productsWithAttachments = products.map((p, i) => ({
         ...p,
+        lineConsideration: isBuy ? '' : p.lineConsideration,
+        basePrice: isBuy ? '' : p.basePrice,
         lineConsiderationPaise: manifestProducts[i].lineConsiderationPaise,
         basePricePaise: manifestProducts[i].basePricePaise,
         attachedFiles: manifestProducts[i].attachments.map((a) => a.objectKey)
@@ -544,9 +574,7 @@ export default function ReturnsPage() {
           {buyListExpanded && (
             <div className="space-y-2">
               {products.map((product, index) => {
-                const basePaise = moneyStringToPaise(product.basePrice || '');
                 const qty = product.quantity || 1;
-                const lineTotal = (basePaise !== null && Number.isSafeInteger(qty * basePaise)) ? qty * basePaise : null;
                 const isVerified = product.category && product.details && product.category.trim() !== '' && product.details.trim() !== '';
                 return (
                   <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -564,20 +592,6 @@ export default function ReturnsPage() {
                       </div>
                       <div className="text-[11px] text-slate-500 font-mono">
                         Qty: {qty}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 shrink-0">
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500 uppercase tracking-wider">Line Budget</div>
-                        <div className="font-mono font-bold text-slate-900">{formatPaise(moneyStringToPaise(product.lineConsideration || ''))}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500 uppercase tracking-wider">Base Price</div>
-                        <div className="font-mono font-bold text-slate-900">{moneyStringToPaise(product.basePrice || '') !== null ? formatPaise(moneyStringToPaise(product.basePrice || '')) + '/unit' : '—'}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500 uppercase tracking-wider">Line Total</div>
-                        <div className="font-mono font-bold text-indigo-600">{lineTotal !== null ? formatPaise(lineTotal) : '—'}</div>
                       </div>
                     </div>
                   </div>
@@ -627,7 +641,7 @@ export default function ReturnsPage() {
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Request Submitted Successfully</h3>
               <p className="text-slate-500 mb-2">Your request has been securely recorded.</p>
               {intent === 'buy' && (
-                <p className="text-sm text-slate-500 mb-2 max-w-md mx-auto">Budgets noted are indicative; confirmed pricing depends on product and stock availability at processing time. We will revert with options at the soonest possible.</p>
+                <p className="text-sm text-slate-500 mb-2 max-w-md mx-auto">We'll match your requirement against live stock and revert with availability and options at the soonest possible.</p>
               )}
               <p className="text-xl font-mono text-indigo-600 font-bold mb-8">Tracking ID: {generatedId}</p>
               
@@ -862,8 +876,10 @@ export default function ReturnsPage() {
                     </button>
                   </div>
 
-                  {/* Pricing basis — visitor chooses per-product or whole-request consideration.
+                  {/* Pricing basis — SELL only. BUY carries no stated pricing at all:
+                      the visitor supplies equipment + quantity only, and we evaluate.
                       Inactive side's values are preserved, never cleared. */}
+                  {intent === 'sell' && (
                   <div className="mb-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0">Consideration Basis</span>
@@ -907,6 +923,7 @@ export default function ReturnsPage() {
                       <p className="text-[11px] text-slate-500 mt-3">Enter a line total per product below (all units included). Switch to lot for a single request-wide total — per-product values are preserved.</p>
                     )}
                     </div>
+                  )}
 
                     {buyListStrip}
 
@@ -1021,7 +1038,7 @@ export default function ReturnsPage() {
                               className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm" 
                             />
                           </div>
-                          {pricingBasis === 'per_product' ? (
+                          {intent === 'sell' && pricingBasis === 'per_product' ? (
                             <div>
                               <label className="block text-xs font-medium text-slate-700 mb-1">Base Price (₹/Per Unit)</label>
                               <input
@@ -1072,16 +1089,23 @@ export default function ReturnsPage() {
                           ) : null}
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-700 mb-1">Details & Specs *</label>
-                          <textarea 
-                            rows={2} 
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Details &amp; Specs *</label>
+                          <textarea
+                            rows={2}
                             required
                             maxLength={500}
                             value={product.details}
                             onChange={(e) => updateProduct(product.id, 'details', e.target.value)}
-                            className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm resize-none shadow-sm" 
-                            placeholder="e.g. 25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition"
+                            className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm resize-none shadow-sm"
+                            placeholder={intent === 'sell'
+                              ? 'e.g. 25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition'
+                              : 'Describe the equipment you need — model, configuration, condition. Free-form and editable.'}
                           />
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            {intent === 'sell'
+                              ? 'Add condition, quantity breakdown, or any custom specs.'
+                              : 'Describe what you need. We evaluate availability and pricing — no budget required.'}
+                          </p>
                         </div>
                         
                         {intent === 'sell' && (
