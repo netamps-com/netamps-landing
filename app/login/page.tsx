@@ -214,6 +214,10 @@ export default function LoginPage() {
   const [resetBusy, setResetBusy] = useState(false);
   const [resetRequestMsg, setResetRequestMsg] = useState('');
   const [resetRequestBusy, setResetRequestBusy] = useState(false);
+  // Idle-timeout arrival (?expired=1): the watchdog revoked the session after
+  // 30 minutes without activity. Informational only — never alongside
+  // invite/reset views (those render instead of the sign-in form).
+  const [expiredNotice, setExpiredNotice] = useState(false);
 
   useEffect(() => {
     document.title = 'Netamps Connect';
@@ -234,6 +238,8 @@ export default function LoginPage() {
       if (inv) setInviteToken(inv);
       const rst = new URL(window.location.href).searchParams.get('reset');
       if (rst) setResetToken(rst);
+      const exp = new URL(window.location.href).searchParams.get('expired');
+      if (exp === '1') setExpiredNotice(true);
     } catch {
       // URL manipulation unavailable
     }
@@ -568,6 +574,12 @@ export default function LoginPage() {
             </div>
           ) : (
           <form className="space-y-6" onSubmit={handleSubmit}>
+            {expiredNotice && (
+              <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-3 flex items-center gap-2 text-amber-600 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                Signed out after 30 minutes of inactivity. Sign in again to continue.
+              </div>
+            )}
             {errorMsg && (
               <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-400 text-sm">
                 <AlertCircle className="w-4 h-4" />

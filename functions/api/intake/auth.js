@@ -21,6 +21,34 @@ export async function signDemoSession(secret, token, expiresAtMs) {
 
 const EMAIL_RE_AUTH = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 
+// MANDATE: uniform 30-minute idle termination for every session,
+// irrespective of role or policy (no exemptions, no per-role branches).
+// Keep in sync with app/lib/idle-timeout.tsx IDLE_LIMIT_MS. last_seen NULL
+// (pre-deploy rows) is treated as "just now" — at most one 30-minute grace
+// window, after which the touch endpoint has written a real value and
+// enforcement is identical. Unparsable values fail open (never lockout).
+const IDLE_LIMIT_MS = 30 * 60 * 1000;
+
+async function lookupSessionRow(env, sessionToken) {
+  const query = `
+        SELECT s.email, u.role, s.expires_at, s.last_seen
+        FROM sessions s
+        LEFT JOIN users u ON s.email = u.email
+        WHERE s.token = ?
+      `;
+  try {
+    return await env.DB.prepare(query).bind(sessionToken).first();
+  } catch (err) {
+    // Pre-deploy tables lack last_seen: add the column once and retry. Any
+    // other error (missing table, etc.) preserves the old null behavior.
+    if (!/no such column/i.test(String((err && err.message) || err))) throw err;
+    try {
+      await env.DB.prepare('ALTER TABLE sessions ADD COLUMN last_seen DATETIME').run();
+    } catch {}
+    return await env.DB.prepare(query).bind(sessionToken).first();
+  }
+}
+
 export async function verifySession(env, request) {
   const cookie = request.headers.get('Cookie') || '';
   const cookies = Object.fromEntries(cookie.split(';').map(c => c.trim().split('=')));
@@ -28,19 +56,23 @@ export async function verifySession(env, request) {
 
   if (sessionToken && env.DB) {
     try {
-      const row = await env.DB.prepare(`
-        SELECT s.email, u.role, s.expires_at 
-        FROM sessions s 
-        LEFT JOIN users u ON s.email = u.email 
-        WHERE s.token = ?
-      `).bind(sessionToken).first();
+      const row = await lookupSessionRow(env, sessionToken);
       if (row) {
         const expiresAt = new Date(row.expires_at).getTime();
         if (Date.now() > expiresAt) {
           // Session expired
           await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(sessionToken).run();
         } else {
-          return { email: row.email, role: row.role || 'user' };
+          // Idle mandate: uniform for every role and policy. NULL last_seen
+          // (legacy rows) counts as just-now — one grace window at most.
+          const lastSeenMs = row.last_seen ? new Date(row.last_seen).getTime() : Date.now();
+          if (Number.isFinite(lastSeenMs) && Date.now() - lastSeenMs > IDLE_LIMIT_MS) {
+            try {
+              await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(sessionToken).run();
+            } catch {}
+          } else {
+            return { email: row.email, role: row.role || 'user' };
+          }
         }
       }
     } catch (err) {

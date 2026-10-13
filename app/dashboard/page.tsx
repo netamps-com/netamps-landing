@@ -8,6 +8,7 @@ import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
 import EvidenceGallery from './EvidenceGallery';
+import { useIdleTimeout, IdleTimeoutModal } from '../lib/idle-timeout';
 import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise, lineFinalOf } from '../lib/money';
 
 interface ProductItem {
@@ -95,6 +96,9 @@ export default function DashboardPage() {
   // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
+  // Mandatory idle watchdog: uniform 30-min termination for every role.
+  // No props — the mandate cannot be disabled or retimed per caller.
+  const idle = useIdleTimeout();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Approval snapshot draft (per-request). Approving writes a FinalPriceSnapshot
@@ -272,8 +276,13 @@ export default function DashboardPage() {
     } catch {}
   };
 
-  const handleLogout = () => {
-    // Securely terminate session by destroying cookies
+  const handleLogout = async () => {
+    // Full server revocation first (D1 row + HttpOnly cookie — cookies alone
+    // leave the session usable until expiry), then local cleanup + redirect.
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      await fetch(`${API_URL}/api/users/logout`, { method: 'POST', credentials: 'same-origin' });
+    } catch {}
     document.cookie = 'session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     router.push('/login');
@@ -575,6 +584,14 @@ export default function DashboardPage() {
         <UserManagementModal 
           onClose={() => setShowPasswordModal(false)} 
           currentUserRole={userRole} 
+        />
+      )}
+
+      {idle.warning && (
+        <IdleTimeoutModal
+          remainingMs={idle.remainingMs}
+          onStay={idle.stay}
+          onTerminate={idle.terminateNow}
         />
       )}
 

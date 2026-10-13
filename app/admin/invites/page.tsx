@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, UserPlus, CheckCircle, XCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import NetampsLogo from '../../NetampsLogo';
+import { useIdleTimeout, IdleTimeoutModal } from '../../lib/idle-timeout';
 
 // Admin invite console: the website surface for invite-only provisioning.
 // Every action hits /api/invites (proven 22/22); the server enforces admin
@@ -54,6 +55,9 @@ export default function AdminInvitesPage() {
   const [role, setRole] = useState<'staff' | 'admin'>('staff');
   const [creating, setCreating] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  // Mandatory idle watchdog: uniform 30-min termination for every role.
+  // No props — the mandate cannot be disabled or retimed per caller.
+  const idle = useIdleTimeout();
 
   useEffect(() => {
     document.title = 'Invite Console — Netamps';
@@ -165,6 +169,13 @@ export default function AdminInvitesPage() {
 
   return (
     <div className="min-h-screen bg-[#020817] text-white font-sans flex flex-col">
+      {idle.warning && (
+        <IdleTimeoutModal
+          remainingMs={idle.remainingMs}
+          onStay={idle.stay}
+          onTerminate={idle.terminateNow}
+        />
+      )}
       <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">

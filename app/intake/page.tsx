@@ -7,6 +7,7 @@ import { ArrowLeft, UploadCloud, FileJson, CheckCircle, AlertTriangle, Play, Dat
 import NetampsLogo from '../NetampsLogo';
 import { moneyStringToPaise, formatPaise } from '../lib/money';
 import { downloadIntakeTemplate } from '../lib/intake-template';
+import { useIdleTimeout, IdleTimeoutModal } from '../lib/idle-timeout';
 import { Turnstile } from '@marsidev/react-turnstile';
 
 // ── Schema-gated ingestion contract (ALL / PARTIAL / INSUFFICIENT) ──
@@ -395,6 +396,9 @@ export default function IntakeWorkbench() {
   const [storedBusy, setStoredBusy] = useState(false);
   const [storedPreview, setStoredPreview] = useState<any | null>(null);
   const [parsingKey, setParsingKey] = useState<string | null>(null);
+  // Mandatory idle watchdog: uniform 30-min termination for every role.
+  // No props — the mandate cannot be disabled or retimed per caller.
+  const idle = useIdleTimeout();
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   // Sales-escalation state per match id (idempotent: sending/sent block re-send)
   const [escalateState, setEscalateState] = useState<Record<string, { status: 'sending' | 'sent' | 'failed'; error?: string }>>({});
@@ -1412,6 +1416,13 @@ export default function IntakeWorkbench() {
 
   return (
     <div className="min-h-screen bg-[#020817] text-white font-sans flex flex-col">
+      {idle.warning && (
+        <IdleTimeoutModal
+          remainingMs={idle.remainingMs}
+          onStay={idle.stay}
+          onTerminate={idle.terminateNow}
+        />
+      )}
       {/* Navbar */}
       <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
