@@ -4,9 +4,10 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2 } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2, ChevronUp, ChevronDown } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
+import ProductTypeahead from '../components/ProductTypeahead';
 import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
 
 function hexOfBytes(bytes: Uint8Array) {
@@ -104,6 +105,7 @@ export default function ReturnsPage() {
   const [uploadReset, setUploadReset] = useState(0);
   const [dragOverCard, setDragOverCard] = useState<string | null>(null);
   const [requestScope, setRequestScope] = useState('');
+  const [buyListExpanded, setBuyListExpanded] = useState(true);
   const handleQueueChange = useCallback((snap: AttachmentSnapshot[]) => {
     setQueueSnapshot(snap);
   }, []);
@@ -164,6 +166,14 @@ export default function ReturnsPage() {
 
   const updateProduct = (id: string, field: keyof ProductItem, value: any) => {
     setProducts(products.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const handleSuggestionSelect = (suggestion: { id: string; category: string; model: string; specTemplate: string }, productId: string) => {
+    setProducts(products.map(p => 
+      p.id === productId 
+        ? { ...p, category: suggestion.category, details: suggestion.model, basePrice: suggestion.specTemplate || p.basePrice }
+        : p
+    ));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -505,6 +515,81 @@ export default function ReturnsPage() {
     }
   };
 
+  // BUY List Strip component (computed to avoid JSX parsing issues)
+  const buyListStrip = (
+    <div>
+      {intent === 'sell' && (
+        <p className="text-[11px] text-slate-500 mt-3">Stated considerations are asks, not concluded prices. Evaluated values vary by product, condition, and prevailing secondary-market demand.</p>
+      )}
+      {intent === 'buy' && products.length > 0 && (
+        <div className="mb-6 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Box className="w-4 h-4 text-indigo-500" />
+              Your BUY List
+            </h4>
+            <button
+              type="button"
+              onClick={() => setBuyListExpanded(!buyListExpanded)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              aria-label={buyListExpanded ? 'Collapse BUY list' : 'Expand BUY list'}
+            >
+              {buyListExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          {buyListExpanded && (
+            <div className="space-y-2">
+              {products.map((product, index) => {
+                const basePaise = moneyStringToPaise(product.basePrice || '');
+                const qty = product.quantity || 1;
+                const lineTotal = (basePaise !== null && Number.isSafeInteger(qty * basePaise)) ? qty * basePaise : null;
+                const isVerified = product.category && product.details && product.category.trim() !== '' && product.details.trim() !== '';
+                return (
+                  <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="w-6 text-center text-slate-500 font-mono text-xs">{index + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900 truncate">{product.category || '—'}</span>
+                        <span className="text-sm text-slate-500 truncate">{product.details || '—'}</span>
+                        {isVerified && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded border border-emerald-200">Verified</span>
+                        )}
+                        {!isVerified && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 rounded border border-amber-200">Custom</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono">
+                        Qty: {qty}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <div className="text-xs text-slate-500 uppercase tracking-wider">Line Budget</div>
+                        <div className="font-mono font-bold text-slate-900">{formatPaise(moneyStringToPaise(product.lineConsideration || ''))}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-slate-500 uppercase tracking-wider">Base Price</div>
+                        <div className="font-mono font-bold text-slate-900">{moneyStringToPaise(product.basePrice || '') !== null ? formatPaise(moneyStringToPaise(product.basePrice || '')) + '/unit' : '—'}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-slate-500 uppercase tracking-wider">Line Total</div>
+                        <div className="font-mono font-bold text-indigo-600">{lineTotal !== null ? formatPaise(lineTotal) : '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       
@@ -821,15 +906,11 @@ export default function ReturnsPage() {
                     ) : (
                       <p className="text-[11px] text-slate-500 mt-3">Enter a line total per product below (all units included). Switch to lot for a single request-wide total — per-product values are preserved.</p>
                     )}
-                    {intent === 'buy' && (
-                      <p className="text-[11px] text-slate-500 mt-3">Indicative budgets only. Final pricing varies by product, configuration, and live stock availability. Requests are processed on a best-effort basis at the earliest possible — our team will revert with confirmed options.</p>
-                    )}
-                    {intent === 'sell' && (
-                      <p className="text-[11px] text-slate-500 mt-3">Stated considerations are asks, not concluded prices. Evaluated values vary by product, condition, and prevailing secondary-market demand.</p>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="space-y-4">
+                    {buyListStrip}
+
+                    <div className="space-y-4">
                     {pendingDelete && (
                       <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm flex flex-wrap items-center gap-3">
                         <p className="text-red-700 flex-1 min-w-[200px]">
@@ -919,20 +1000,15 @@ export default function ReturnsPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-700 mb-1">Equipment Category *</label>
-                            <select 
-                              required
+                            <ProductTypeahead
                               value={product.category}
-                              onChange={(e) => updateProduct(product.id, 'category', e.target.value)}
-                              className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm appearance-none shadow-sm"
-                            >
-                              <option value="">Select...</option>
-                              <option value="servers">Enterprise Servers & Storage</option>
-                              <option value="network">Networking Gear (Switches, Routers)</option>
-                              <option value="workstations">Laptops & Workstations</option>
-                              <option value="peripherals">Components & Peripherals</option>
-                              <option value="telecom">Telecom Equipment</option>
-                              <option value="mixed">Mixed Pallet (Various)</option>
-                            </select>
+                              onChange={(value) => updateProduct(product.id, 'category', value)}
+                              onSelect={(suggestion) => handleSuggestionSelect(suggestion, product.id)}
+                              placeholder="Type to search catalog… (min 2 chars)"
+                              disabled={false}
+                              className="w-full"
+                              productId={product.id}
+                            />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-700 mb-1">Quantity *</label>
