@@ -262,6 +262,11 @@ export async function rebuildIndex(env, { source = 'products:rebuild' } = {}) {
     'INSERT INTO products_fts (id, model_tok, cat_tok, spec_tok, alias_tok) VALUES (?1, ?2, ?3, ?4, ?5)'
   );
 
+  // Full replace. Without this, every re-run appends and each product appears
+  // N times in results — observed live as "Samsung SSD 860 EVO" returned twice.
+  // The index is derived state, so a rebuild must be deterministic.
+  await env.DB.prepare('DELETE FROM products_fts').run();
+
   for (const r of all) {
     const { ok, errors, value } = validateRow(r);
     const dup = ok ? findDuplicate(r, seenModel) : null;
@@ -307,23 +312,44 @@ export async function rebuildIndex(env, { source = 'products:rebuild' } = {}) {
  *
  * This is the replacement candidate for the LIMIT-200 fuzzy scan. It returns
  * MATCHING rows only, so recall no longer degrades as the catalog grows.
+ *
+ * PREFIX MATCHING IS REQUIRED, not optional. The legacy path matched aliases
+ * by prefix, so query "r750" reached "R750xa", "R750" and "PowerEdge R750".
+ * Plain FTS token equality does NOT: "r750" and "r750xa" are distinct tokens,
+ * which regressed alias recall by 7 rows on a live query. We therefore emit
+ * `token*` for every query token so prefix reach is preserved.
+ *
+ * The trailing `*` is safe because each term is a quoted literal — the only
+ * wildcard is the one we add.
  */
 export async function ftsSearch(env, tokens, limit) {
   if (!tokens.length) return [];
-  const match = tokens.map((t) => `"${t.replace(/"/g, '')}"`).join(' OR ');
+  const match = tokens
+    .map((t) => `"${String(t).replace(/"/g, '')}"*`)
+    .join(' OR ');
   try {
     const { results } = await env.DB.prepare(
       'SELECT p.id, p.category, p.model, p.spec_template, bm25(products_fts) AS rank ' +
       'FROM products_fts JOIN products p ON p.id = products_fts.id ' +
       'WHERE products_fts MATCH ? ORDER BY rank LIMIT ?'
     ).bind(match, limit).all();
-    return (results || []).map((r) => ({
-      id: r.id,
-      category: r.category,
-      model: r.model,
-      specTemplate: r.spec_template || '',
-      rank: r.rank,
-    }));
+
+    // Defensive de-dupe: the JOIN can repeat a product if the index ever holds
+    // more than one row per id. Cheap insurance against a bad rebuild.
+    const seen = new Set();
+    const out = [];
+    for (const r of results || []) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push({
+        id: r.id,
+        category: r.category,
+        model: r.model,
+        specTemplate: r.spec_template || '',
+        rank: r.rank,
+      });
+    }
+    return out;
   } catch {
     return [];
   }

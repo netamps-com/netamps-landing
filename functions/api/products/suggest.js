@@ -25,6 +25,24 @@ import {
   ensureCatalog,
   searchCatalog
 } from './catalog.js';
+import { compareAndRecord } from './shadow.js';
+
+/**
+ * Shadow comparison switch. Default OFF, same match_meta gate convention as
+ * the normalizer. Absence of the key means no comparison and no writes.
+ */
+async function shadowEnabled(env) {
+  if (!env.DB || typeof env.DB.prepare !== 'function') return false;
+  try {
+    const row = await env.DB
+      .prepare("SELECT value FROM match_meta WHERE key = 'shadow_enabled'")
+      .bind()
+      .first();
+    return !!row && row.value === '1';
+  } catch {
+    return false;
+  }
+}
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -50,7 +68,7 @@ function suggestRateLimited(ip) {
   return rec.count > SUGGEST_RL_PER_IP;
 }
 
-export async function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env, context }) {
   try {
     const ip = request.headers.get('cf-connecting-ip') ||
       (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() ||
@@ -78,6 +96,20 @@ export async function onRequestGet({ request, env }) {
     }
 
     const suggestions = await searchCatalog(env, q, limit);
+
+    // Step 3 shadow comparison (docs/catalog-retrieval-etl.md §10).
+    // Returns the LEGACY result untouched; FTS5 only records what it would
+    // have returned, so we can prove the extra recall is correct before
+    // cutover. Gated by match_meta 'shadow_enabled' (default OFF) and always
+    // fire-and-forget: it can never alter or delay this response.
+    if (await shadowEnabled(env)) {
+      const work = compareAndRecord(env, q, suggestions, { limit })
+        .catch((err) => console.error('[shadow] compare failed', err?.message));
+      if (context && typeof context.waitUntil === 'function') {
+        context.waitUntil(work);
+      }
+    }
+
     return json({ success: true, suggestions });
   } catch (err) {
     console.error('[products/suggest]', err);

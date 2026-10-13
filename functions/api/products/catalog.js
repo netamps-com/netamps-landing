@@ -13,6 +13,11 @@ export const CATALOG_MAX_RESULTS = 20;
 export const CATALOG_MIN_QUERY = 2;
 export const CATALOG_MAX_QUERY = 64;
 
+// Minimum similarity for a whole-string fuzzy hit. Raised from 0.85 after
+// shadow comparison found 0.85 admitted wrong products on short aliases
+// (e.g. "firewall" -> "Seagate FireCuda"). See searchCatalog.
+export const CATALOG_FUZZY_MIN = 0.92;
+
 export function normalizeFold(s) {
   return String(s ?? '')
     .toLowerCase()
@@ -164,11 +169,19 @@ export async function searchCatalog(env, q, limit) {
       extras.push({ ...base, matchType: 'prefix', score: 1 });
       continue;
     }
-    // Fuzzy: best Jaro-Winkler over canonical model + aliases, threshold 0.85.
+    // Fuzzy: best Jaro-Winkler over canonical model + aliases.
+    //
+    // Threshold raised 0.85 -> 0.92 after shadow comparison (step 3) against
+    // real queries showed the old value produced FALSE POSITIVES, not extra
+    // recall:
+    //   "r750"   -> R650/R700/R720/R730/R740/R760 via alias JW 0.883
+    //   "firewall" -> "Seagate FireCuda" (an HDD) via JW 0.850
+    // Short aliases are near-collisions ("r750"/"r740", "fire"/"firewall"),
+    // so 0.85 admitted products that are NOT the thing searched for.
     const modelFold = normalizeFold(r.model);
     let best = jaroWinkler(qcmp, modelFold);
     for (const a of aliases) best = Math.max(best, jaroWinkler(qcmp, a));
-    if (best >= 0.85) extras.push({ ...base, matchType: 'fuzzy', score: best });
+    if (best >= CATALOG_FUZZY_MIN) extras.push({ ...base, matchType: 'fuzzy', score: best });
   }
   extras.sort((a, b) => (b.score - a.score) || (a.model < b.model ? -1 : 1));
 
