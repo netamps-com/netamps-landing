@@ -138,8 +138,7 @@ export default function AdminInvitesPage() {
     return () => clearInterval(t);
   }, [isAuthenticated, fetchInvites]);
 
-  const createInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const createInvite = async (e: React.FormEvent) => {    e.preventDefault();
     setNotice('');
     setErrorMsg('');
     setCreating(true);
@@ -151,7 +150,14 @@ export default function AdminInvitesPage() {
         body: JSON.stringify({ action: 'create', email, role })
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok || !data || !data.success) throw new Error((data && data.message) || 'Invite creation failed.');
+      if (!res.ok || !data || !data.success) {
+        if (data && data.code === 'DUPLICATE_INVITE') {
+          setNotice('An active invitation already exists for this mailbox — use Resend on its row below instead of creating another.');
+          await fetchInvites();
+          return;
+        }
+        throw new Error((data && data.message) || 'Invite creation failed.');
+      }
       setNotice(`Invitation sent to ${email}${data.needsSecondApproval ? ' — a second admin must approve before activation.' : ''}`);
       setEmail('');
       await fetchInvites();
@@ -159,6 +165,34 @@ export default function AdminInvitesPage() {
       setErrorMsg(e?.message || 'Invite creation failed.');
     } finally {
       setCreating(false);
+    }
+  };
+
+  // Prune duplicate live invites for one mailbox (keeps newest, revokes the
+  // rest). Twins predate the duplicate-create guard; collapsing them is what
+  // makes the per-mailbox activation binary agree with itself again.
+  const dedupeInvite = async () => {
+    if (!email.trim() || !isAdmin) return;
+    setActingId('dedupe');
+    setNotice('');
+    setErrorMsg('');
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dedupe', email: email.trim() })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) throw new Error((data && data.message) || 'Dedupe failed.');
+      setNotice((data.revoked || []).length === 0
+        ? 'No duplicates for this mailbox — single live invitation.'
+        : `Pruned ${data.revoked.length} duplicate${data.revoked.length > 1 ? 's' : ''} — newest invitation kept.`);
+      await fetchInvites();
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'Dedupe failed.');
+    } finally {
+      setActingId(null);
     }
   };
 
@@ -272,6 +306,15 @@ export default function AdminInvitesPage() {
             </button>
           </form>
           <p className="text-xs text-slate-500 mt-3">48-hour single-use link, bound to the invited mailbox. Admin grants activate only after a second admin approves.</p>
+          <button
+            type="button"
+            onClick={dedupeInvite}
+            disabled={!isAdmin || !email.trim() || actingId === 'dedupe'}
+            title="Revoke older live invitations for the address above, keeping the newest"
+            className="mt-2 text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
+          >
+            {actingId === 'dedupe' ? 'Pruning…' : 'Prune duplicate invitations for this mailbox'}
+          </button>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">

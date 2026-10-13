@@ -185,6 +185,15 @@ export async function onRequestPost({ request, env }) {
     if (!VALID_ROLES.has(role)) return json({ success: false, message: 'Role must be staff or admin.' }, 400);
     const existing = await env.DB.prepare('SELECT email FROM users WHERE email = ?').bind(email).first().catch(() => null);
     if (existing) return json({ success: false, message: 'An account with this email already exists — no invite needed.' }, 409);
+    // Duplicate-create guard: one mailbox ⇒ one live row, or the console
+    // binary can disagree with itself (accepted twin + pending twin for the
+    // same address). Re-send via Resend (rotation) instead of re-creating.
+    const liveTwin = await env.DB.prepare(
+      "SELECT id FROM invites WHERE email = ? AND status IN ('pending-second','approved') ORDER BY created_at DESC LIMIT 1"
+    ).bind(email).first().catch(() => null);
+    if (liveTwin) {
+      return json({ success: false, message: 'An active invitation already exists for this mailbox — use Resend on the existing row instead.', code: 'DUPLICATE_INVITE', inviteId: liveTwin.id }, 409);
+    }
     const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, '');
     const id = `inv-${Date.now().toString(36)}`;
     const needsSecond = role === 'admin';
@@ -272,11 +281,27 @@ export async function onRequestPost({ request, env }) {
     await env.DB.prepare('INSERT INTO users (email, hash, role) VALUES (?, ?, ?)').bind(invite.email, await hashNewSecret(passwordHash), invite.role).run();
     await env.DB.prepare('UPDATE invites SET status = ?, accepted_at = CURRENT_TIMESTAMP WHERE id = ?').bind('accepted', invite.id).run();
     await auditInvite(env, 'INVITE_ACCEPTED', { ...invite, status: 'accepted' }, invite.email);
+    // Holder confirmation: the password was set inside the accept form — no
+    // second secret-by-mail channel is ever opened. The reset pointer below
+    // reuses the existing single-use reset flow (mirrors the login notice).
     await sendInviteMail(env, invite.email, 'Your Netamps account is active',
-      [`Your <strong>${escapeHtml(invite.role)}</strong> account is active. Sign in at netamps.com/login.`], 'invite-accepted', invite.id);
-    if (invite.invited_by) {
+      [`Your <strong>${escapeHtml(invite.role)}</strong> account <strong>'${escapeHtml(invite.email)}'</strong> is now active. You set your password during acceptance — sign in at netamps.com/login.`,
+       `If this was not you, use <strong>Locked out? Email me a reset link</strong> on the login page immediately.`], 'invite-accepted', invite.id);
+    // Acceptance fan-out (approval-aware): inviter always learns; the
+    // approver learns when one exists (dual-control outcome visibility);
+    // admin grants additionally notify every fellow admin. Recipient list is
+    // audited as INVITE_ACCEPT_NOTIFIED so the fan-out itself is provable.
+    // Role language only in templates — identities stay in the audit log.
+    const notified = [];
+    if (invite.invited_by && EMAIL_RE_INVITE.test(invite.invited_by)) {
       await sendInviteMail(env, invite.invited_by, 'Invitation accepted',
-        [`${escapeHtml(invite.email)} accepted your invitation (${escapeHtml(invite.role)}).`], 'invite-accepted-admin', invite.id);
+        [`${escapeHtml(invite.email)} accepted the invitation (${escapeHtml(invite.role)}).`], 'invite-accepted-admin', invite.id);
+      notified.push(invite.invited_by);
+    }
+    if (invite.approved_by && EMAIL_RE_INVITE.test(invite.approved_by) && !notified.includes(invite.approved_by)) {
+      await sendInviteMail(env, invite.approved_by, 'Approved invitation accepted',
+        [`${escapeHtml(invite.email)} accepted the invitation you approved (${escapeHtml(invite.role)}).`], 'invite-accepted-admin', invite.id);
+      notified.push(invite.approved_by);
     }
     // Admin grants notify FELLOW admins too (dual-control visibility): the
     // direct-create path cannot mint admins, so this is the only birthplace
@@ -285,13 +310,15 @@ export async function onRequestPost({ request, env }) {
       try {
         const peers = await env.DB.prepare("SELECT email FROM users WHERE role = 'admin'").all();
         for (const row of (peers && peers.results) || []) {
-          if (row.email && row.email !== invite.email && EMAIL_RE_INVITE.test(row.email)) {
+          if (row.email && row.email !== invite.email && EMAIL_RE_INVITE.test(row.email) && !notified.includes(row.email)) {
             await sendInviteMail(env, row.email, `Admin account activated: ${invite.email}`,
               [`${escapeHtml(invite.email)} activated an <strong>admin</strong> account. Review in User Management if unexpected.`], 'admin-grant-notice', invite.id);
+            notified.push(row.email);
           }
         }
       } catch {}
     }
+    await auditInvite(env, 'INVITE_ACCEPT_NOTIFIED', { ...invite, status: 'accepted', notified }, invite.email);
     return json({ success: true });
   }
 
@@ -310,6 +337,31 @@ export async function onRequestPost({ request, env }) {
     await sendInviteMail(env, invite.email, 'Your Netamps invitation was withdrawn',
       [`Your pending invitation was withdrawn. Reason: ${escapeHtml(reason)}. Contact your administrator to appeal.`], 'invite-revoked', id);
     return json({ success: true });
+  }
+
+  // ── dedupe (admin): collapse duplicate live invites per mailbox ──
+  // Legacy twins (created before the duplicate-create guard by re-inviting
+  // instead of resending) make the console binary disagree with itself.
+  // Keeps the newest live row, revokes the rest. Audited per revoked row.
+  if (action === 'dedupe') {
+    const admin = await requireAdmin(env, request);
+    if (!admin) return json({ success: false, message: 'Forbidden' }, 403);
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    if (!EMAIL_RE_INVITE.test(email)) return json({ success: false, message: 'A valid email is required.' }, 400);
+    const { results } = await env.DB.prepare(
+      "SELECT * FROM invites WHERE email = ? AND status IN ('pending-second','approved') ORDER BY created_at DESC"
+    ).bind(email).all().catch(() => ({ results: [] }));
+    const rows = results || [];
+    if (rows.length <= 1) {
+      return json({ success: true, kept: rows.length === 1 ? rows[0].id : null, revoked: [] });
+    }
+    const revoked = [];
+    for (const twin of rows.slice(1)) {
+      await env.DB.prepare('UPDATE invites SET status = ? WHERE id = ?').bind('revoked', twin.id).run();
+      await auditInvite(env, 'INVITE_REVOKED', { ...twin, status: 'revoked', reason: 'duplicate pruned' }, admin.email);
+      revoked.push(twin.id);
+    }
+    return json({ success: true, kept: rows[0].id, revoked });
   }
 
   // ── resend (admin): rotate token + fresh 48h window + re-mail ──

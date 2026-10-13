@@ -520,7 +520,7 @@ export default function LoginPage() {
               </div>
               {inviteDone ? (
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center">
-                  <p className="text-sm font-bold text-emerald-700">Account active — sign in below with your new password.</p>
+                  <p className="text-sm font-bold text-emerald-700">Account active — sign in below with the password you just set. If this was not you, use “Locked out? Email me a reset link” on the sign-in form immediately.</p>
                   <button
                     type="button"
                     onClick={() => { setInviteToken(null); setInvitePassword(''); setInviteConfirm(''); setInviteMsg(''); }}
