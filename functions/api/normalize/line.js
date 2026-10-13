@@ -32,6 +32,12 @@ export const NORMALIZER_VERSION = 'llm-norm-v1';
 // extraction must never merge two unrelated products or split a good pair.
 export const PROMOTE_MIN_CONFIDENCE = 0.80;
 
+// Hard ceiling for catalog rows that are not staff-verified. Deliberately set
+// BELOW PROMOTE_MIN_CONFIDENCE so an unverified row can never be promoted to a
+// normalized match key, while still being displayed and matched via its raw
+// text. Raise to 1 (or flip rows to 'verified') only after human review.
+export const UNVERIFIED_CATALOG_MAX_CONFIDENCE = 0.75;
+
 // Verified live against the Workers AI catalog 2026-10-14. The unsuffixed
 // `@cf/meta/llama-3.1-8b-instruct` was DEPRECATED 2026-05-30 (error 5028) and
 // `@cf/meta/llama-3.3-70b-instruct` never existed under that name (error 5007).
@@ -276,7 +282,21 @@ export async function normalizeLine(env, { category, details, model: modelHint }
     // construction. Specs are NOT claimed — the catalog row carries no parsed
     // spec columns yet, and inferring them here would be fabrication.
     d.grounded = true;
-    return { descriptor: d, flags: ['CATALOG_ANCHORED'], model: null };
+
+    // ── Unverified catalog rows are NOT trusted ground truth ──
+    // Bulk-generated rows carry verification_status='unverified': the part
+    // numbers are plausible but not vendor-confirmed. An anchored line is
+    // trusted BY CONSTRUCTION, so an unverified SKU would otherwise be able to
+    // anchor a line to the wrong product with near-certainty — the exact
+    // failure mode the catalog spec warns about ("a wrong seed is worse than an
+    // empty one"). Capping confidence below PROMOTE_MIN_CONFIDENCE keeps these
+    // rows usable for DISPLAY while making them ineligible to become a match
+    // key until staff confirm them.
+    if (strong.verificationStatus !== 'verified') {
+      d.confidence = Math.min(d.confidence, UNVERIFIED_CATALOG_MAX_CONFIDENCE);
+      flags.push('CATALOG_UNVERIFIED');
+    }
+    return { descriptor: d, flags, model: null };
   }
 
   // 2. Model path.

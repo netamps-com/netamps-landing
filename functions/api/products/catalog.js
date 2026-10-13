@@ -78,10 +78,17 @@ export async function ensureCatalog(env) {
       model TEXT NOT NULL,
       spec_template TEXT,
       aliases TEXT,         -- JSON array of aliases
+      verification_status TEXT DEFAULT 'unverified',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`
   ).run();
+  // Pre-existing rows predate the column: mark them 'verified' ONLY if they
+  // came from the hand-reviewed seed (ids ending in -001..-009 are the original
+  // curated set). Everything else added later defaults to 'unverified'.
+  await env.DB.prepare(
+    "UPDATE products SET verification_status = 'verified' WHERE verification_status IS NULL AND id GLOB '*-00[0-9]'"
+  ).run().catch(() => {});
   await env.DB.prepare(
     'CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)'
   ).run();
@@ -122,7 +129,7 @@ export async function searchCatalog(env, q, limit) {
   // escape expression and SQLite throws "ESCAPE expression must be a single
   // character", turning every catalog lookup into a 500.
   const rows = await env.DB.prepare(
-    `SELECT id, category, model, spec_template
+    `SELECT id, category, model, spec_template, verification_status
      FROM products
      WHERE lower(model) LIKE ? ESCAPE '\\'
         OR lower(category) LIKE ? ESCAPE '\\'
@@ -134,6 +141,7 @@ export async function searchCatalog(env, q, limit) {
     category: r.category,
     model: r.model,
     specTemplate: r.spec_template || '',
+    verificationStatus: r.verification_status || 'unverified',
     matchType: 'prefix'
   }));
 
@@ -144,13 +152,13 @@ export async function searchCatalog(env, q, limit) {
   const prefixIds = [...new Set(results.map((r) => r.id))];
   const remaining = prefixIds.length > 0
     ? await env.DB.prepare(
-      `SELECT id, category, model, spec_template, aliases
+      `SELECT id, category, model, spec_template, aliases, verification_status
        FROM products
        WHERE id NOT IN (${prefixIds.map(() => '?').join(',')})
        LIMIT 200`
     ).bind(...prefixIds).all()
     : await env.DB.prepare(
-      `SELECT id, category, model, spec_template, aliases
+      `SELECT id, category, model, spec_template, aliases, verification_status
        FROM products
        LIMIT 200`
     ).all();
@@ -162,7 +170,8 @@ export async function searchCatalog(env, q, limit) {
       id: r.id,
       category: r.category,
       model: r.model,
-      specTemplate: r.spec_template || ''
+      specTemplate: r.spec_template || '',
+      verificationStatus: r.verification_status || 'unverified'
     };
     // Alias-prefix ranks as an exact-tier hit (buyer typed "r740", not the full model).
     if (aliases.some((a) => a.startsWith(qcmp))) {
