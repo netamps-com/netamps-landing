@@ -1,4 +1,4 @@
-name: Enterprise Production Deploy (Cloudflare + Firebase)
+name: Enterprise Production Deploy (Firebase backend)
 
 on:
   push:
@@ -31,31 +31,16 @@ jobs:
         run: echo "Code clear. Proceeding to deployment."
 
   # 2. FRONTEND DEPLOYMENT TO CLOUDFLARE PAGES
-  deploy-frontend-cloudflare:
-    name: Deploy Landing to Cloudflare Pages
-    needs: security-and-quality
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-      - name: Install Frontend Dependencies
-        run: npm ci
-      - name: Build Next.js for Cloudflare Pages (OpenNext)
-        env:
-          NEXT_ON_PAGES: '1'
-        run: npm run build
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: 'netamps-landing'
-          directory: '.open-next/assets'
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+  # REMOVED 2026-10-14: the "Deploy Landing to Cloudflare Pages" job here used
+  # the OpenNext path (NEXT_ON_PAGES=1, deploying .open-next/assets). It could
+  # never succeed here — this project is a static export (next.config.mjs has
+  # output: 'export', wrangler.toml pages_build_output_dir = "out") and there is
+  # no open-next.config.ts, so `npm run build` aborted on every push and the
+  # job failed red on every commit.
+  #
+  # cloudflare-pages.yml is the canonical frontend deploy: same secrets, but it
+  # builds the standard static export and uploads `out/` via wrangler-action@v4.
+  # Do NOT reintroduce an OpenNext frontend job here.
 
   # 3. BACKEND DEPLOYMENT TO FIREBASE FUNCTIONS
   deploy-backend-firebase:
