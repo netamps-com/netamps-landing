@@ -171,7 +171,7 @@ export default function ReturnsPage() {
   const handleSuggestionSelect = (suggestion: { id: string; category: string; model: string; specTemplate: string }, productId: string) => {
     setProducts(products.map(p => 
       p.id === productId 
-        ? { ...p, category: suggestion.category, details: suggestion.model, basePrice: suggestion.specTemplate || p.basePrice }
+        ? { ...p, category: suggestion.category, details: suggestion.model }
         : p
     ));
   };
