@@ -1,0 +1,349 @@
+/**
+ * Tier-2 product-line normalization.
+ *
+ * Design: docs/llm-product-line-normalization.md (decisions D1-D5).
+ *  D1 async post-submit  D2 fixed spec schema  D3 catalog-anchored
+ *  D4 Llama on Workers AI  D5 normalized lines become the match key
+ *
+ * Resolution order per line — DETERMINISTIC FIRST, MODEL LAST:
+ *  1. Tier-1 catalog match (products/catalog.js). If it resolves, that catalog
+ *     row IS the normalization and the model is never called. D3.
+ *  2. Llama extraction (Workers AI) for lines Tier-1 cannot resolve.
+ *  3. Catalog re-check: a descriptor that lands on an existing row snaps to
+ *     that row's canonical category/model.
+ *
+ * NO-FABRICATION CONTRACT (the part that matters):
+ *   The model's output is untrusted input until the validator clears it.
+ *   Every populated value must be traceable to the visitor's own words.
+ *   manufacturer/model must be substrings of the source text — a model that
+ *   invents a part number is rejected wholesale, not partially trusted.
+ *   Unstated spec => null / [] . Never "unknown", never a guess.
+ *
+ * Failure is non-fatal by construction: a line that fails to normalize keeps
+ * its raw match key and stays fully matchable. Normalization can only ADD a
+ * better key, never remove one.
+ */
+
+import { searchCatalog, normalizeFold, ensureCatalog } from '../products/catalog.js';
+
+export const NORMALIZER_VERSION = 'llm-norm-v1';
+
+// Promotion gate (§7). Below this, the line keeps its raw key — a bad
+// extraction must never merge two unrelated products or split a good pair.
+export const PROMOTE_MIN_CONFIDENCE = 0.80;
+
+const MODEL_SMALL = '@cf/meta/llama-3.1-8b-instruct';
+const MODEL_LARGE = '@cf/meta/llama-3.3-70b-instruct';
+
+const CATEGORIES = [
+  'servers', 'storage', 'networking', 'laptops',
+  'components', 'peripherals', 'telecom'
+];
+
+export async function ensureNormTables(env) {
+  if (!env.DB || typeof env.DB.prepare !== 'function') return;
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS product_line_norm (
+      requestId         TEXT NOT NULL,
+      lineIdx           INTEGER NOT NULL,
+      intent            TEXT NOT NULL,
+      productId         TEXT,
+      payload           TEXT,
+      catalogId         TEXT,
+      confidence        REAL,
+      grounded          INTEGER DEFAULT 0,
+      flags             TEXT,
+      normalizerVersion TEXT,
+      createdAt         DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (requestId, lineIdx)
+    )`
+  ).run();
+  await env.DB.prepare(
+    'CREATE INDEX IF NOT EXISTS idx_pln_catalog ON product_line_norm(catalogId)'
+  ).run();
+}
+
+function emptyDescriptor() {
+  return {
+    category: null,
+    manufacturer: null,
+    model: null,
+    formFactor: null,
+    cpu: [],
+    memoryGb: null,
+    storage: [],
+    ports: null,
+    catalogId: null,
+    confidence: 0,
+    grounded: false
+  };
+}
+
+// ── Validator ────────────────────────────────────────────────────────────────
+// Everything here is deliberately conservative: it may REMOVE a field the model
+// produced, never add one. Emptying is always safe; inventing is not.
+
+/** Is `value` recoverable from the source text? Allows case/space/unit folding. */
+function isGrounded(value, sourceFold) {
+  if (value === null || value === undefined) return true;
+  if (Array.isArray(value)) return value.every((v) => isGrounded(v, sourceFold));
+  const v = normalizeFold(String(value));
+  if (!v) return true;
+  if (sourceFold.includes(v)) return true;
+  // Token-wise fallback: "Intel Xeon Gold 6130" grounded by "Xeon Gold 6130".
+  return v.split(' ').filter((t) => t.length > 2).every((t) => sourceFold.includes(t));
+}
+
+function clampInt(n) {
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+}
+
+function asStringArray(v) {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => (typeof x === 'string' ? x.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+/**
+ * Validate + ground a raw model payload against the visitor's own text.
+ * @returns {{d: object, rejected: string|null}}
+ */
+export function validateDescriptor(raw, { source }) {
+  const d = emptyDescriptor();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { d, rejected: 'NOT_AN_OBJECT' };
+  }
+  const src = normalizeFold(source);
+
+  // ── Category: must come from the controlled vocabulary ──
+  const cat = normalizeFold(raw.category);
+  if (cat && CATEGORIES.includes(cat)) d.category = cat;
+
+  // ── Identity fields: SUBSTRING of source or they are invention ──
+  // `fabricated` records that the model DID assert an identity sharing no token
+  // with the visitor's words. The field is dropped either way; this flag also
+  // marks the line ungrounded, so the audit trail shows the model tried to
+  // invent a part number instead of silently reporting success.
+  let fabricated = false;
+  for (const field of ['manufacturer', 'model']) {
+    const v = typeof raw[field] === 'string' ? raw[field].trim() : '';
+    if (!v) continue;
+    const folded = normalizeFold(v);
+    // Catalog names legitimately differ from visitor prose; only treat as
+    // fabrication when the value shares NO token with the source.
+    const sharesToken = folded.split(' ').filter((t) => t.length > 1).some((t) => src.includes(t));
+    if (sharesToken || src.includes(folded)) d[field] = v;
+    else fabricated = true;
+  }
+
+  // ── Form factor: controlled tokens only ──
+  const ff = normalizeFold(raw.formFactor);
+  if (/^(1u|2u|4u|tower|rack|blade|rackmount|desktop|laptop|small form factor|sff)$/.test(ff)) {
+    d.formFactor = raw.formFactor;
+  }
+
+  // ── Specs: grounded or dropped ──
+  const cpu = asStringArray(raw.cpu).filter((c) => isGrounded(c, src));
+  if (cpu.length) d.cpu = cpu;
+
+  const mem = clampInt(raw.memoryGb);
+  if (mem !== null && (src.includes(String(mem)) || src.includes(`${mem}gb`))) d.memoryGb = mem;
+
+  const storage = asStringArray(raw.storage).filter((s) => isGrounded(s, src));
+  if (storage.length) d.storage = storage;
+
+  const ports = clampInt(raw.ports);
+  if (ports !== null && src.includes(String(ports))) d.ports = ports;
+
+  // Confidence is the MODEL's self-report; clamp but never trust past 0.99.
+  const conf = Number(raw.confidence);
+  d.confidence = Number.isFinite(conf) ? Math.max(0, Math.min(conf, 0.99)) : 0;
+
+  // A line with no grounded identity — or one where the model invented an
+  // identity — is not promotable.
+  d.grounded = !fabricated && Boolean(d.model || d.category) &&
+    (!d.model || isGrounded(d.model, src));
+
+  if (!d.grounded) return { d, rejected: fabricated ? 'FABRICATED_IDENTITY' : 'UNGROUNDED' };
+  return { d, rejected: null };
+}
+
+// ── Model call ───────────────────────────────────────────────────────────────
+
+function buildPrompt(source) {
+  return `Extract IT hardware specs from the text below. Use ONLY facts stated in the text. If a spec is not stated, use null (or [] for lists). Never guess, never infer, never add a part number that is not present.
+
+Return ONLY a JSON object with exactly these keys:
+{"category": string|null, "manufacturer": string|null, "model": string|null, "formFactor": string|null, "cpu": string[], "memoryGb": number|null, "storage": string[], "ports": number|null, "confidence": number}
+
+category must be one of: ${CATEGORIES.join(', ')} or null.
+confidence: 1.0 only if every field is directly stated in the text.
+
+TEXT:
+"""${source}"""`;
+}
+
+async function callModel(env, source) {
+  if (!env.AI || typeof env.AI.run !== 'function') {
+    return { ok: false, reason: 'NO_AI_BINDING' };
+  }
+  for (const model of [MODEL_SMALL, MODEL_LARGE]) {
+    try {
+      const res = await env.AI.run(model, {
+        messages: [
+          { role: 'system', content: 'You are a precise hardware data extractor. You output only JSON.' },
+          { role: 'user', content: buildPrompt(source) }
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 400
+      });
+      const text = typeof res?.response === 'string' ? res.response : '';
+      if (!text) continue;
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        continue; // escalate to the larger model
+      }
+      return { ok: true, payload: parsed, model };
+    } catch (err) {
+      console.error('[normalize] model call failed', model, err?.message);
+      continue;
+    }
+  }
+  return { ok: false, reason: 'MODEL_FAILED' };
+}
+
+// ── Per-line normalization ───────────────────────────────────────────────────
+
+/**
+ * Normalize ONE product line. Never throws — a failure returns a flag-only
+ * result and the caller leaves the line on its raw key.
+ */
+export async function normalizeLine(env, { category, details, model: modelHint }) {
+  const source = [category, details].filter(Boolean).join(' — ').trim();
+  const flags = [];
+
+  // 1. Deterministic first (D3): catalog hit means NO model call.
+  let hits = [];
+  try {
+    await ensureCatalog(env);
+    hits = await searchCatalog(env, details || category || '', 5);
+  } catch (err) {
+    console.error('[normalize] catalog lookup failed', err?.message);
+  }
+
+  const strong = hits.find((h) => h.matchType === 'prefix') || hits[0];
+  if (strong && strong.id) {
+    const d = emptyDescriptor();
+    d.category = strong.category;
+    d.model = strong.model;
+    d.formFactor = /^[124]U\b/i.test(strong.specTemplate || '') ? `${strong.specTemplate[0]}U Rack` : null;
+    d.catalogId = strong.id;
+    d.confidence = strong.matchType === 'prefix' ? 0.99 : 0.9;
+    // Catalog-anchored: identity comes from OUR catalog, so it is trusted by
+    // construction. Specs are NOT claimed — the catalog row carries no parsed
+    // spec columns yet, and inferring them here would be fabrication.
+    d.grounded = true;
+    return { descriptor: d, flags: ['CATALOG_ANCHORED'], model: null };
+  }
+
+  // 2. Model path.
+  const call = await callModel(env, source);
+  if (!call.ok) {
+    flags.push(call.reason === 'NO_AI_BINDING' ? 'NO_AI_BINDING' : 'MODEL_FAILED');
+    return { descriptor: emptyDescriptor(), flags, model: null };
+  }
+
+  const { d, rejected } = validateDescriptor(call.payload, { source });
+  if (rejected) {
+    flags.push(rejected);
+    return { descriptor: emptyDescriptor(), flags, model: call.model };
+  }
+
+  // 3. Catalog re-check: snap a proposed descriptor onto a real catalog row.
+  if (!d.catalogId && d.model) {
+    try {
+      const re = await searchCatalog(env, d.model, 3);
+      const snap = re.find((h) => h.matchType === 'prefix') || re[0];
+      if (snap && snap.id) {
+        d.catalogId = snap.id;
+        d.category = snap.category;
+        d.model = snap.model;
+        flags.push('SNAPPED_TO_CATALOG');
+      }
+    } catch {}
+  }
+
+  d.confidence = Math.max(d.confidence, 0.5);
+  return { descriptor: d, flags, model: call.model };
+}
+
+/** Is this line safe to promote from raw key to normalized key? (§7) */
+export function isPromotable(descriptor) {
+  return Boolean(
+    descriptor &&
+    descriptor.grounded &&
+    descriptor.confidence >= PROMOTE_MIN_CONFIDENCE &&
+    descriptor.category &&
+    descriptor.model
+  );
+}
+
+// ── Order-level driver ───────────────────────────────────────────────────────
+
+/**
+ * Normalize every line of one submitted order and persist to product_line_norm.
+ * Additive only: never mutates `returns.products`. Never throws.
+ */
+export async function normalizeOrder(env, { requestId, intent, products }) {
+  const summary = { requestId, lines: 0, catalog: 0, promoted: 0, review: 0 };
+  if (!env.DB || typeof env.DB.prepare !== 'function') return summary;
+  try {
+    await ensureNormTables(env);
+  } catch (err) {
+    console.error('[normalize] table init failed', err?.message);
+    return summary;
+  }
+
+  for (let i = 0; i < (products || []).length; i++) {
+    const p = products[i] || {};
+    try {
+      const { descriptor, flags } = await normalizeLine(env, {
+        category: p.category,
+        details: p.details
+      });
+      const promotable = isPromotable(descriptor);
+      if (descriptor.catalogId) summary.catalog++;
+      if (promotable) summary.promoted++;
+      if (!descriptor.grounded) summary.review++;
+
+      await env.DB.prepare(
+        `INSERT INTO product_line_norm
+           (requestId, lineIdx, intent, productId, payload, catalogId, confidence, grounded, flags, normalizerVersion)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+         ON CONFLICT(requestId, lineIdx) DO UPDATE SET
+           payload=excluded.payload, catalogId=excluded.catalogId,
+           confidence=excluded.confidence, grounded=excluded.grounded,
+           flags=excluded.flags, normalizerVersion=excluded.normalizerVersion`
+      ).bind(
+        requestId,
+        i,
+        intent,
+        p.id ?? null,
+        JSON.stringify(descriptor),
+        descriptor.catalogId,
+        descriptor.confidence,
+        descriptor.grounded ? 1 : 0,
+        JSON.stringify(flags),
+        NORMALIZER_VERSION
+      ).run();
+      summary.lines++;
+    } catch (err) {
+      console.error('[normalize] line failed', requestId, i, err?.message);
+    }
+  }
+  return summary;
+}

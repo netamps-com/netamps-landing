@@ -42,6 +42,50 @@ export async function writeMatchLines(env, orderId, intent, products, pricingBas
   return lines.length;
 }
 
+/**
+ * Tier-2 normalization switch. Default OFF — enrichment is opt-in until the
+ * operator has reviewed shadow-mode output. Uses the same match_meta key/value
+ * gate the indexed matcher already uses (no new flag mechanism).
+ */
+async function normalizeEnabled(env) {
+  if (!env.DB || typeof env.DB.prepare !== 'function') return false;
+  try {
+    const row = await env.DB
+      .prepare("SELECT value FROM match_meta WHERE key = 'norm_enabled'")
+      .bind()
+      .first();
+    return !!row && row.value === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Queue-first with inline fallback — mirrors the intake precedent
+ * (intake/sessions.js). Fire-and-forget via context.waitUntil: the visitor's
+ * response never waits on the model, and a normalization failure can never
+ * fail, delay, or roll back a submission.
+ */
+function scheduleNormalization(context, env, order) {
+  const work = (async () => {
+    if (env.NORMALIZE_QUEUE && typeof env.NORMALIZE_QUEUE.send === 'function') {
+      await env.NORMALIZE_QUEUE.send({ requestId: order.id });
+      return;
+    }
+    const { normalizeOrder } = await import('./normalize/line.js');
+    const summary = await normalizeOrder(env, order);
+    console.log('[returns] normalization complete', JSON.stringify(summary));
+  })().catch((err) => {
+    // Enrichment is strictly additive; a failure here leaves every line on its
+    // raw match key, which is still fully matchable.
+    console.error('[normalize] scheduled normalization failed', order?.id, err?.message);
+  });
+
+  if (context && typeof context.waitUntil === 'function') {
+    context.waitUntil(work);
+  }
+}
+
 async function purgeMatchLines(env, orderId) {
   // Best-effort: index hygiene must never fail a deletion.
   try {
@@ -60,7 +104,7 @@ async function purgeMatchLines(env, orderId) {
   } catch {}
 }
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, context }) {
   try {
     const returnReq = await request.json();
 
@@ -256,6 +300,18 @@ export async function onRequestPost({ request, env }) {
       confirmEmail = result.status;
     } catch {
       confirmEmail = 'failed';
+    }
+
+    // Tier-2 enrichment (D1 async): scheduled AFTER the row is committed and
+    // indexed, so the visitor is already unblocked. Additive by construction —
+    // it never rewrites the stored order and never touches match keys here.
+    // Promotion to normalized keys is a separate, still-unimplemented step.
+    if (await normalizeEnabled(env)) {
+      scheduleNormalization(context, env, {
+        id: returnReq.id,
+        intent: returnReq.intent,
+        products: returnReq.products || []
+      });
     }
 
     return new Response(JSON.stringify({ success: true, confirmEmail }), { headers: { 'Content-Type': 'application/json' } });

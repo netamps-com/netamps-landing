@@ -22,7 +22,16 @@ bucket_name = "netamps-quarantine"
 binding = "PRODUCTION_BUCKET"
 bucket_name = "netamps-evidence"
 
+# Workers AI — Llama for Tier-2 product-line normalization (spec D4).
+# Account-native: same Cloudflare account as D1/R2, no third-party vendor and no
+# API key to store or leak. Consumed only by functions/api/normalize/line.js,
+# and only when the match_meta 'norm_enabled' flag is '1' (default OFF), so
+# this binding existing costs nothing until enrichment is switched on.
+[ai]
+binding = "AI"
+
 # NOTE: [[kv_namespaces]] / [[queues.*]] stay out until those resources are created
 # in the account (the old id = "cache-kv-id" placeholder and the uncreated queue were
 # never validated live). Code using CACHE_KV / INTAKE_QUEUE guards with truthiness
 # checks and falls back to direct D1, so absence is runtime-safe.
+# NORMALIZE_QUEUE is guarded the same way (functions/api/returns.js).
