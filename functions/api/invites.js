@@ -157,6 +157,16 @@ async function getInvite(env, id) {
   return row || null;
 }
 
+// Normalize legacy 'pending' status (pre-rename schema default) to 'pending-second'.
+// Any row inserted before the rename carries 'pending', which the app never wrote —
+// leaving it unnormalized makes the Approve button unreachable and the row
+// invisible to the Active filter.
+function normalizeStatus(row) {
+  if (!row) return row;
+  if (row.status === 'pending') row.status = 'pending-second';
+  return row;
+}
+
 export async function onRequestPost({ request, env }) {
   if (!env.DB || typeof env.DB.prepare !== 'function') {
     return json({ success: false, message: 'Verification store misconfigured.' }, 503);
@@ -255,7 +265,7 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Invalid invitation.' }, 404);
     }
     const tokenHash = await sha256hex(token);
-    const invite = await env.DB.prepare('SELECT * FROM invites WHERE token_hash = ?').bind(tokenHash).first().catch(() => null);
+    const invite = normalizeStatus(await env.DB.prepare('SELECT * FROM invites WHERE token_hash = ?').bind(tokenHash).first().catch(() => null));
     // Unknown, expired, revoked, already-used deny IDENTICALLY — no
     // enumeration oracle. One deliberate exception below: a VALID token for
     // a not-yet-approved invite reveals only "waiting for approval" — the
@@ -409,7 +419,9 @@ export async function onRequestPost({ request, env }) {
       `SELECT id, email, role, status, invited_by, approved_by, created_at, expires_at, accepted_at, email_status, email_sent_at FROM invites WHERE status IN (${placeholders}) ORDER BY created_at DESC`
     ).bind(...states).all();
     // Server-derived activation truth per row (console renders it verbatim).
-    const invites = (results || []).map((inv) => ({ ...inv, ...activationOf(inv) }));
+    // Normalize legacy 'pending' → 'pending-second' so the Approve button
+    // remains reachable for pre-rename rows.
+    const invites = (results || []).map((inv) => ({ ...normalizeStatus(inv), ...activationOf(inv) }));
     return json({ success: true, invites });
   }
 

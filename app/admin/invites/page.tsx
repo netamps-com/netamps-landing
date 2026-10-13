@@ -378,7 +378,14 @@ export default function AdminInvitesPage() {
                         </span>
                         {life.sub && <span className="block text-[11px] text-slate-500 font-mono mt-0.5 ml-4">{life.sub}</span>}
                       </td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">{inv.invited_by}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">
+                        <div>{inv.invited_by}</div>
+                        {inv.approved_by && (
+                          <div className="text-[10px] text-slate-500 mt-0.5" title={inv.approved_by}>
+                            approved by {inv.approved_by.includes('(bootstrap') ? 'sole admin (bootstrap)' : inv.approved_by}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-slate-500 text-xs font-mono">{inv.expires_at ? new Date(inv.expires_at).toLocaleString() : '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
