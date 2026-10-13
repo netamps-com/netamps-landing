@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import {
-  Activity,
   Server,
   CheckCircle2,
   XCircle,
@@ -17,152 +16,45 @@ import NetampsLogo from '../NetampsLogo';
 
 type StatusType = 'operational' | 'degraded' | 'outage' | 'maintenance';
 
-type ServiceCategory = 'Core Infrastructure' | 'Edge/CDN' | 'Monitoring Services';
+type ServiceCategory = 'Core Infrastructure' | 'Edge/CDN';
 
 interface Service {
   id: string;
   name: string;
   category: ServiceCategory;
   status: StatusType;
-  uptime: number;
-  latency: number;
+  latency: number | null; // measured per request; null = probe failed
   lastChecked: Date;
   description: string;
+  note?: string; // probe error detail (e.g. binding not attached)
 }
 
 const CATEGORIES: Array<'All' | ServiceCategory> = [
   'All',
   'Core Infrastructure',
-  'Edge/CDN',
-  'Monitoring Services'
+  'Edge/CDN'
 ];
 
 const CATEGORY_META: Record<ServiceCategory, { icon: string; blurb: string }> = {
   'Core Infrastructure': {
     icon: 'server',
-    blurb: 'Origin APIs, databases and queues that power the platform.'
+    blurb: 'Functions runtime, database and mail delivery — probed live.'
   },
   'Edge/CDN': {
     icon: 'globe',
-    blurb: 'Cloudflare edge delivery, DDoS mitigation and WAF.'
-  },
-  'Monitoring Services': {
-    icon: 'activity',
-    blurb: 'Synthetic checks, logs, metrics and traces that watch the platform.'
+    blurb: 'Edge storage and bot defense — probed live.'
   }
 };
-
-function buildInitialServices(): Service[] {
-  const now = new Date();
-  return [
-    {
-      id: 'core-1',
-      name: 'API Gateway',
-      category: 'Core Infrastructure',
-      status: 'operational',
-      uptime: 99.998,
-      latency: 45,
-      lastChecked: now,
-      description: 'Primary API endpoint for all client requests'
-    },
-    {
-      id: 'core-2',
-      name: 'Database Cluster',
-      category: 'Core Infrastructure',
-      status: 'operational',
-      uptime: 99.995,
-      latency: 12,
-      lastChecked: now,
-      description: 'Multi-region PostgreSQL cluster with automatic failover'
-    },
-    {
-      id: 'core-3',
-      name: 'Message Queue',
-      category: 'Core Infrastructure',
-      status: 'operational',
-      uptime: 99.999,
-      latency: 8,
-      lastChecked: now,
-      description: 'Redis-based pub/sub for async processing'
-    },
-    {
-      id: 'edge-1',
-      name: 'Cloudflare CDN',
-      category: 'Edge/CDN',
-      status: 'operational',
-      uptime: 99.999,
-      latency: 23,
-      lastChecked: now,
-      description: 'Global edge network for static assets and caching'
-    },
-    {
-      id: 'edge-2',
-      name: 'DDoS Protection',
-      category: 'Edge/CDN',
-      status: 'operational',
-      uptime: 99.999,
-      latency: 0,
-      lastChecked: now,
-      description: 'Layer 3/4/7 DDoS mitigation'
-    },
-    {
-      id: 'edge-3',
-      name: 'WAF Rules Engine',
-      category: 'Edge/CDN',
-      status: 'operational',
-      uptime: 99.998,
-      latency: 5,
-      lastChecked: now,
-      description: 'Web Application Firewall rule evaluation'
-    },
-    {
-      id: 'monitor-1',
-      name: 'Uptime Monitoring',
-      category: 'Monitoring Services',
-      status: 'operational',
-      uptime: 99.999,
-      latency: 12,
-      lastChecked: now,
-      description: 'Synthetic checks for all public endpoints'
-    },
-    {
-      id: 'monitor-2',
-      name: 'Log Aggregation',
-      category: 'Monitoring Services',
-      status: 'operational',
-      uptime: 99.995,
-      latency: 28,
-      lastChecked: now,
-      description: 'Centralized logging pipeline'
-    },
-    {
-      id: 'monitor-3',
-      name: 'Metrics Pipeline',
-      category: 'Monitoring Services',
-      status: 'operational',
-      uptime: 99.998,
-      latency: 18,
-      lastChecked: now,
-      description: 'Prometheus metrics collection and alerting'
-    },
-    {
-      id: 'monitor-4',
-      name: 'Distributed Tracing',
-      category: 'Monitoring Services',
-      status: 'operational',
-      uptime: 99.997,
-      latency: 35,
-      lastChecked: now,
-      description: 'OpenTelemetry trace collection and analysis'
-    }
-  ];
-}
 
 export default function StatusPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<'All' | ServiceCategory>('All');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  // Feed health: false until the first successful /api/status read. While
+  // false with zero services the banner renders neutral "unavailable" —
+  // never green-by-default. Cached rows (if any) are marked stale.
+  const [feedOk, setFeedOk] = useState(false);
   const [sessionId] = useState(() =>
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
@@ -174,23 +66,27 @@ export default function StatusPage() {
       const res = await fetch('/api/status', { cache: 'no-store' });
       if (!res.ok) throw new Error('status api failed');
       const data = await res.json();
-      const allowed: ServiceCategory[] = ['Core Infrastructure', 'Edge/CDN', 'Monitoring Services'];
+      const allowed: ServiceCategory[] = ['Core Infrastructure', 'Edge/CDN'];
       const mapped: Service[] = (data.services ?? [])
         .filter((s: Service) => allowed.includes(s.category))
         .map((s: Service & { lastChecked: string }) => ({
           ...s,
+          latency: typeof s.latency === 'number' ? s.latency : null,
           lastChecked: new Date(s.lastChecked)
         }));
       if (mapped.length > 0) {
         setServices(mapped);
+        setFeedOk(true);
         setLastRefresh(new Date());
         return;
       }
+      throw new Error('status feed empty');
     } catch {
-      // Fall through to static snapshot so page never goes blank
+      // No static fallback: an unreachable feed renders "unavailable", never
+      // a green snapshot. Previously cached rows (if any) stay with a stale flag.
+      setFeedOk(false);
+      setLastRefresh(new Date());
     }
-    setServices(buildInitialServices());
-    setLastRefresh(new Date());
   }, []);
 
   useEffect(() => {
@@ -249,13 +145,14 @@ export default function StatusPage() {
     }
   };
 
-  const calculateOverallUptime = () => {
-    if (services.length === 0) return '100.000';
-    const avgUptime = services.reduce((sum, s) => sum + s.uptime, 0) / services.length;
-    return avgUptime.toFixed(3);
-  };
+  const operationalCount = services.filter((s) => s.status === 'operational').length;
 
-  const grouped = (['Core Infrastructure', 'Edge/CDN', 'Monitoring Services'] as ServiceCategory[])
+  const bannerTone =
+    !feedOk && services.length === 0
+      ? 'bg-slate-800/60 text-slate-300 border-slate-700'
+      : getStatusColor(overallStatus());
+
+  const grouped = (['Core Infrastructure', 'Edge/CDN'] as ServiceCategory[])
     .map((cat) => ({
       category: cat,
       items: filteredServices.filter((s) => s.category === cat)
@@ -294,8 +191,19 @@ export default function StatusPage() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`mb-8 p-6 rounded-2xl border backdrop-blur-xl ${getStatusColor(overallStatus())}`}
+          className={`mb-8 p-6 rounded-2xl border backdrop-blur-xl ${bannerTone}`}
         >
+          {!feedOk && services.length === 0 ? (
+            <div className="flex items-center gap-4">
+              <Clock className="w-8 h-8 text-slate-400 shrink-0" />
+              <div>
+                <h2 className="text-2xl font-bold">Status feed unavailable</h2>
+                <p className="text-sm opacity-80 mt-1">
+                  Live checks unreachable — retrying. Last attempt: {lastRefresh.toLocaleTimeString()} · Source: /api/status · Refresh: 30s
+                </p>
+              </div>
+            </div>
+          ) : (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="scale-150">{getStatusIcon(overallStatus())}</div>
@@ -307,15 +215,16 @@ export default function StatusPage() {
                   {overallStatus() === 'maintenance' && 'Scheduled Maintenance'}
                 </h2>
                 <p className="text-sm opacity-80 mt-1">
-                  Last updated: {lastRefresh.toLocaleTimeString()} · Source: /api/status · Refresh: 30s
+                  Last updated: {lastRefresh.toLocaleTimeString()} · Source: /api/status · Refresh: 30s{!feedOk ? ' · showing last known (stale)' : ''}
                 </p>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold">{calculateOverallUptime()}%</div>
-              <div className="text-sm opacity-80">Overall Uptime</div>
+              <div className="text-3xl font-bold">{operationalCount}/{services.length}</div>
+              <div className="text-sm opacity-80">Services Operational</div>
             </div>
           </div>
+          )}
         </motion.div>
 
         <motion.div
@@ -376,14 +285,15 @@ export default function StatusPage() {
                           </span>
                         </div>
                         <p className="text-sm text-slate-400 mb-3">{service.description}</p>
+                        {service.note && (
+                          <p className="text-[11px] font-mono text-amber-300/80 mb-3 truncate" title={service.note}>
+                            Probe note: {service.note}
+                          </p>
+                        )}
                         <div className="flex items-center gap-6 text-xs text-slate-500 flex-wrap">
                           <div className="flex items-center gap-1">
-                            <Activity className="w-3 h-3" />
-                            {service.uptime.toFixed(3)}% uptime
-                          </div>
-                          <div className="flex items-center gap-1">
                             <Zap className="w-3 h-3" />
-                            {service.latency}ms latency
+                            {service.latency === null || service.latency === undefined ? 'latency unknown' : `${service.latency}ms latency (measured)`}
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />

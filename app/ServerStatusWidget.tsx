@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Server, Activity, Zap, Globe, Wifi, WifiOff, Radio, ExternalLink } from 'lucide-react';
+import { Zap, Wifi, WifiOff, Radio, ExternalLink } from 'lucide-react';
 
 type InfraStatus = 'ONLINE' | 'DEGRADED' | 'OFFLINE' | 'CHECKING';
 
@@ -13,8 +13,6 @@ interface InfraNode {
 }
 
 export default function ServerStatusWidget() {
-  const [cfHistory, setCfHistory] = useState<number[]>(Array(8).fill(12));
-  const [fbHistory, setFbHistory] = useState<number[]>(Array(8).fill(24));
   const [loadTime, setLoadTime] = useState<number | string>('---');
 
   // Real browser online/offline state
@@ -94,27 +92,17 @@ export default function ServerStatusWidget() {
       document.readyState === 'complete' ? updateLoadTime() : window.addEventListener('load', updateLoadTime);
     }
 
-    // 3. Sparkline simulation for WAF & DB telemetry
-    const sparkInterval = setInterval(() => {
-      setCfHistory(prev => [...prev.slice(1), Math.floor(Math.random() * 11 + 8)]);
-      setFbHistory(prev => [...prev.slice(1), Math.floor(Math.random() * 17 + 19)]);
-    }, 2500);
-
-    // 4. Active server health probing every 30 seconds
+    // 3. Active server health probing every 30 seconds
     runInfraCheck();
     pingRef.current = setInterval(runInfraCheck, 30000);
 
     return () => {
       window.removeEventListener('online', updateOnlineStatus);
       window.removeEventListener('offline', updateOnlineStatus);
-      clearInterval(sparkInterval);
       if (pingRef.current) clearInterval(pingRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const cfLatency = cfHistory[cfHistory.length - 1];
-  const fbLatency = fbHistory[fbHistory.length - 1];
 
   const statusColor: Record<InfraStatus, string> = {
     ONLINE:   'text-emerald-400',
@@ -168,50 +156,11 @@ export default function ServerStatusWidget() {
         </div>
       ))}
 
-      {/* ── BROWSER PERFORMANCE API (DOM LOAD) ── */}
+      {/* ── BROWSER PERFORMANCE API (DOM LOAD, measured) ── */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 group bg-slate-800/40">
         <Zap className="w-3 h-3 text-fuchsia-500 group-hover:text-fuchsia-400 transition-colors" />
         <span className="font-black text-slate-500 group-hover:text-slate-300 transition-colors">DOM_LOAD:</span>
         <span className="text-fuchsia-500 font-bold tracking-tighter drop-shadow-md group-hover:text-fuchsia-400">{loadTime}ms</span>
-      </div>
-
-      {/* ── WAF EDGE SPARKLINE ── */}
-      <div className="flex items-center gap-2 px-3 py-1.5 text-slate-400 group">
-        <Globe className="w-3 h-3 group-hover:text-cyan-400 transition-colors" />
-        <span className="font-black text-slate-500 group-hover:text-slate-300 transition-colors">WAF_EDGE</span>
-        <div className="flex items-end h-3 gap-[1px]">
-          {cfHistory.map((val, i) => (
-            <div
-              key={i}
-              className="w-1 bg-cyan-500/80 rounded-t-[1px] transition-all duration-300 group-hover:bg-cyan-400"
-              style={{ height: `${Math.max(20, 100 - (val * 2))}%` }}
-            />
-          ))}
-        </div>
-        <span className="text-cyan-400 font-bold w-6 text-right">{cfLatency}ms</span>
-      </div>
-
-      {/* ── DB CORE SPARKLINE ── */}
-      <div className="flex items-center gap-2 px-3 py-1.5 text-slate-400 group">
-        <Server className="w-3 h-3 group-hover:text-amber-400 transition-colors" />
-        <span className="font-black text-slate-500 group-hover:text-slate-300 transition-colors">DB_CORE</span>
-        <div className="flex items-end h-3 gap-[1px]">
-          {fbHistory.map((val, i) => (
-            <div
-              key={i}
-              className="w-1 bg-amber-500/80 rounded-t-[1px] transition-all duration-300 group-hover:bg-amber-400"
-              style={{ height: `${Math.max(20, 100 - (val * 1.5))}%` }}
-            />
-          ))}
-        </div>
-        <span className="text-amber-400 font-bold w-6 text-right">{fbLatency}ms</span>
-      </div>
-
-      {/* ── SLA UPTIME ── */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/50">
-        <Activity className="w-3 h-3 text-emerald-500" />
-        <span className="text-slate-400 font-bold">SLA:</span>
-        <span className="text-emerald-500 font-black tracking-tighter drop-shadow-md">99.999%</span>
       </div>
 
       {/* ── STATUS PAGE LINK ── */}
