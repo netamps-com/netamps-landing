@@ -227,7 +227,7 @@ export default function ProductTypeahead({
         >
           {suggestions.length === 0 && !loading && !error && (
             <li className="px-3 py-2 text-sm text-slate-500 text-center">
-              No matches in catalog. Try different terms or enter custom details below.
+              No matches in catalog. Enter custom details below — unmatched lines are checked against external references async after submit, never blocking you.
             </li>
           )}
           {suggestions.map((s, i) => (

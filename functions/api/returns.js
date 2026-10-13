@@ -75,6 +75,20 @@ function scheduleNormalization(context, env, order) {
     const { normalizeOrder } = await import('./normalize/line.js');
     const summary = await normalizeOrder(env, order);
     console.log('[returns] normalization complete', JSON.stringify(summary));
+
+    // External no-match enrichment (hint-only, async, quarantined).
+    // Runs AFTER normalization, still inside waitUntil, so zero user latency.
+    // Gated by match_meta 'enrich_enabled' (default OFF). Never throws into
+    // the request path; a failure leaves user text untouched and matchable.
+    try {
+      const { enrichEnabled, enrichUnmatchedLines } = await import('./products/enrich.js');
+      if (await enrichEnabled(env)) {
+        const es = await enrichUnmatchedLines(env, { requestId: order.requestId, intent: order.intent });
+        console.log('[returns] enrichment complete', JSON.stringify(es));
+      }
+    } catch (err) {
+      console.error('[enrich] scheduled enrichment failed', order?.requestId, err?.message);
+    }
   })().catch((err) => {
     // Enrichment is strictly additive; a failure here leaves every line on its
     // raw match key, which is still fully matchable.
