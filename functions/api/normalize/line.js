@@ -25,6 +25,7 @@
  */
 
 import { searchCatalog, normalizeFold, ensureCatalog } from '../products/catalog.js';
+import { runJson } from '../llm/client.js';
 
 export const NORMALIZER_VERSION = 'llm-norm-v1';
 
@@ -38,12 +39,8 @@ export const PROMOTE_MIN_CONFIDENCE = 0.80;
 // text. Raise to 1 (or flip rows to 'verified') only after human review.
 export const UNVERIFIED_CATALOG_MAX_CONFIDENCE = 0.75;
 
-// Verified live against the Workers AI catalog 2026-10-14. The unsuffixed
-// `@cf/meta/llama-3.1-8b-instruct` was DEPRECATED 2026-05-30 (error 5028) and
-// `@cf/meta/llama-3.3-70b-instruct` never existed under that name (error 5007).
-// Both live variants are the FP8 builds.
-const MODEL_SMALL = '@cf/meta/llama-3.1-8b-instruct-fp8';
-const MODEL_LARGE = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+// Model identities live in the shared gateway (functions/api/llm/client.js) —
+// one definition for every model-backed feature, no drift.
 
 const CATEGORIES = [
   'servers', 'storage', 'networking', 'laptops',
@@ -221,34 +218,15 @@ TEXT:
 }
 
 async function callModel(env, source) {
-  if (!env.AI || typeof env.AI.run !== 'function') {
-    return { ok: false, reason: 'NO_AI_BINDING' };
-  }
-  for (const model of [MODEL_SMALL, MODEL_LARGE]) {
-    try {
-      const res = await env.AI.run(model, {
-        messages: [
-          { role: 'system', content: 'You are a precise hardware data extractor. You output only JSON.' },
-          { role: 'user', content: buildPrompt(source) }
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 400
-      });
-      const text = typeof res?.response === 'string' ? res.response : '';
-      if (!text) continue;
-      let parsed;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        continue; // escalate to the larger model
-      }
-      return { ok: true, payload: parsed, model };
-    } catch (err) {
-      console.error('[normalize] model call failed', model, err?.message);
-      continue;
-    }
-  }
-  return { ok: false, reason: 'MODEL_FAILED' };
+  // Delegates to the shared gateway: model escalation, timeout, JSON parse and
+  // telemetry all live there. Same {ok, payload, model, reason} contract.
+  return runJson(env, {
+    system: 'You are a precise hardware data extractor. You output only JSON.',
+    user: buildPrompt(source),
+    maxTokens: 400,
+    feature: 'normalize',
+    promptVersion: NORMALIZER_VERSION
+  });
 }
 
 // ── Per-line normalization ───────────────────────────────────────────────────
@@ -304,7 +282,7 @@ export async function normalizeLine(env, { category, details, model: modelHint }
   // 2. Model path.
   const call = await callModel(env, source);
   if (!call.ok) {
-    flags.push(call.reason === 'NO_AI_BINDING' ? 'NO_AI_BINDING' : 'MODEL_FAILED');
+    flags.push(call.reason === 'NO_AI_BINDING' ? 'NO_AI_BINDING' : call.reason === 'LLM_DISABLED' ? 'LLM_DISABLED' : 'MODEL_FAILED');
     return { descriptor: emptyDescriptor(), flags, model: null };
   }
 

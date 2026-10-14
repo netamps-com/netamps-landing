@@ -339,8 +339,75 @@ export async function onRequestPost({ request, env }) {
     }
     const { limit, offset, unmatchedLimit, unmatchedOffset } = pageParams(body);
     const action = !body.action || body.action === 'match' ? 'match' : String(body.action);
-    if (action !== 'match' && action !== 'backfill') {
+    const ALLOWED_ACTIONS = new Set(['match', 'backfill', 'candidates', 'accept', 'candidates-backfill']);
+    if (!ALLOWED_ACTIONS.has(action)) {
       return json({ success: false, message: 'Unknown action.' }, 400);
+    }
+
+    // ── candidates (read): cached best-match suggestions for BUY order(s).
+    // Read-only and cache-only — this path NEVER calls a model. Any session may
+    // read (candidates carry no price; the order rows themselves carry PII and
+    // are already auth-gated). ──
+    if (action === 'candidates') {
+      if (!env.DB || typeof env.DB.prepare !== 'function') {
+        return json({ success: false, message: 'Returns database is not attached.' }, 503);
+      }
+      const { readCandidates } = await import('./matching/ranker.js');
+      const ids = Array.isArray(body.buyOrderIds)
+        ? body.buyOrderIds.slice(0, 200).filter((x) => typeof x === 'string' && x)
+        : (typeof body.buyOrderId === 'string' && body.buyOrderId ? [body.buyOrderId] : []);
+      if (ids.length === 0) return json({ success: true, results: {} });
+      if (ids.length === 1) {
+        const one = await readCandidates(env, { buyOrderId: ids[0] });
+        return json({ success: true, ...one });
+      }
+      const results = {};
+      for (const id of ids) results[id] = await readCandidates(env, { buyOrderId: id });
+      return json({ success: true, results });
+    }
+
+    // ── candidates-backfill (admin): regenerate the candidate cache for BUY orders.
+    // Used after a SELL-book change (sell_book_version bump) makes caches stale. ──
+    if (action === 'candidates-backfill') {
+      if (user.role !== 'admin' && user.email !== 'admin@netamps.com') {
+        return json({ success: false, message: 'Forbidden' }, 403);
+      }
+      if (!env.DB || typeof env.DB.prepare !== 'function') {
+        return json({ success: false, message: 'Returns database is not attached.' }, 503);
+      }
+      const { generateCandidatesForOrder, sellBookVersion } = await import('./matching/ranker.js');
+      const { results } = await env.DB
+        .prepare("SELECT id FROM returns WHERE LOWER(intent) = 'buy' ORDER BY date DESC LIMIT 500")
+        .all();
+      let processed = 0;
+      for (const row of results || []) {
+        await generateCandidatesForOrder(env, { requestId: row.id });
+        processed++;
+      }
+      return json({ success: true, processed, sellBookVersion: await sellBookVersion(env) });
+    }
+
+    // ── accept (admin): a human accepts a candidate as a real match. The only
+    // path that writes match_lines, and it reuses the existing exact-match
+    // semantics (aligns the BUY key to the SELL key). Audited. ──
+    if (action === 'accept') {
+      if (user.role !== 'admin' && user.email !== 'admin@netamps.com') {
+        return json({ success: false, message: 'Forbidden' }, 403);
+      }
+      if (!env.DB || typeof env.DB.prepare !== 'function') {
+        return json({ success: false, message: 'Returns database is not attached.' }, 503);
+      }
+      const { acceptCandidate } = await import('./matching/ranker.js');
+      const toInt = (v) => (Number.isInteger(v) ? v : (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : NaN));
+      const r = await acceptCandidate(env, {
+        buyOrderId: body.buyOrderId,
+        buyLineIdx: toInt(body.buyLineIdx),
+        sellOrderId: body.sellOrderId,
+        sellLineIdx: toInt(body.sellLineIdx),
+        actor: user.email || 'unknown'
+      });
+      if (!r.ok) return json({ success: false, message: r.reason || 'Accept failed.' }, 400);
+      return json({ success: true });
     }
 
     // ── backfill (admin): rebuild the line index from stored orders ──

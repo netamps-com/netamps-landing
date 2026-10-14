@@ -1,0 +1,55 @@
+{
+  "version": "match-golden-v1",
+  "k": 3,
+  "cases": [
+    {
+      "name": "positive: server generation drift (DL380 Gen10 vs Gen9)",
+      "buy": { "category": "servers", "details": "HPE ProLiant DL380 Gen10 Xeon Gold", "qty": 2 },
+      "sell": [
+        { "orderId": "S-DL380G9", "lineIdx": 0, "category": "servers", "details": "HPE ProLiant DL380 Gen9", "qty": 1 },
+        { "orderId": "S-LAT", "lineIdx": 0, "category": "laptops", "details": "Dell Latitude 5420", "qty": 5 }
+      ],
+      "relevant": ["S-DL380G9:0"]
+    },
+    {
+      "name": "negative: unrelated classes (ASUS laptop vs DELL server)",
+      "buy": { "category": "laptops", "details": "ASUS Laptop i5 11th Gen 16GB 512 GB", "qty": 5 },
+      "sell": [
+        { "orderId": "S-DELL", "lineIdx": 0, "category": "servers", "details": "DELL", "qty": 1 }
+      ],
+      "relevant": []
+    },
+    {
+      "name": "negative: firewall is not storage",
+      "buy": { "category": "networking", "details": "FortiGate 100F firewall", "qty": 1 },
+      "sell": [
+        { "orderId": "S-FC", "lineIdx": 0, "category": "storage", "details": "Seagate FireCuda 530 1TB NVMe", "qty": 10 }
+      ],
+      "relevant": []
+    },
+    {
+      "name": "positive: same model family, capacity differs (PowerVault ME4 vs ME5)",
+      "buy": { "category": "storage", "details": "Dell PowerVault ME4 storage array", "qty": 1 },
+      "sell": [
+        { "orderId": "S-ME5", "lineIdx": 0, "category": "storage", "details": "Dell PowerVault ME5 storage array", "qty": 2 },
+        { "orderId": "S-SSD", "lineIdx": 0, "category": "components", "details": "Samsung SSD 870 EVO 1TB", "qty": 20 }
+      ],
+      "relevant": ["S-ME5:0"]
+    },
+    {
+      "name": "positive: laptop variant suffix (ThinkPad T14 vs T14s)",
+      "buy": { "category": "laptops", "details": "Lenovo ThinkPad T14 Gen 3 i7", "qty": 3 },
+      "sell": [
+        { "orderId": "S-T14S", "lineIdx": 0, "category": "laptops", "details": "Lenovo ThinkPad T14s Gen 3 i7", "qty": 4 },
+        { "orderId": "S-MAC", "lineIdx": 0, "category": "laptops", "details": "Apple MacBook Air M2", "qty": 2 }
+      ],
+      "relevant": ["S-T14S:0"]
+    },
+    {
+      "name": "negative: empty SELL book (must abstain)",
+      "buy": { "category": "networking", "details": "Cisco Catalyst 9300-48P", "qty": 1 },
+      "sell": [],
+      "relevant": []
+    }
+  ]
+}

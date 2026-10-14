@@ -100,6 +100,30 @@ function scheduleNormalization(context, env, order) {
   }
 }
 
+/**
+ * BUY → SELL best-match candidates (advisory, cached, flag-gated).
+ *
+ * Runs in the same async post-submit window as normalization — never in the
+ * request path, so the submitter never waits. Completely independent of the
+ * exact matcher: it only ever writes the `match_candidates` cache. Gated by
+ * match_meta `candidates_enabled` (default OFF), checked inside the module so
+ * the flag can also be flipped off without a deploy.
+ */
+function scheduleCandidateGeneration(context, env, order) {
+  const work = (async () => {
+    const { candidatesEnabled, generateCandidatesForOrder } = await import('./matching/ranker.js');
+    if (!(await candidatesEnabled(env))) return;
+    const summary = await generateCandidatesForOrder(env, { requestId: order.requestId });
+    console.log('[returns] candidate generation complete', JSON.stringify(summary));
+  })().catch((err) => {
+    // Advisory only: a failure here can never affect the order or its matches.
+    console.error('[match-rank] scheduled candidate generation failed', order?.requestId, err?.message);
+  });
+  if (context && typeof context.waitUntil === 'function') {
+    context.waitUntil(work);
+  }
+}
+
 async function purgeMatchLines(env, orderId) {
   // Best-effort: index hygiene must never fail a deletion.
   try {
@@ -326,6 +350,24 @@ export async function onRequestPost({ request, env, context }) {
         intent: returnReq.intent,
         products: returnReq.products || []
       });
+    }
+
+    // BUY → SELL best-match candidates: compute + cache, advisory only. Runs
+    // async and independently of normalization (its own flag). Only BUY orders
+    // produce candidates; a new SELL order instead bumps sell_book_version so
+    // existing caches are seen as stale.
+    if (String(returnReq.intent).toLowerCase() === 'buy') {
+      scheduleCandidateGeneration(context, env, {
+        requestId: returnReq.id,
+        intent: returnReq.intent
+      });
+    } else {
+      try {
+        const { bumpSellBookVersion } = await import('./matching/ranker.js');
+        await bumpSellBookVersion(env);
+      } catch (err) {
+        console.error('[match-rank] sell-book version bump failed', err?.message);
+      }
     }
 
     return new Response(JSON.stringify({ success: true, confirmEmail }), { headers: { 'Content-Type': 'application/json' } });

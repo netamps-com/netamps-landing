@@ -24,13 +24,14 @@ import {
   validateRow, findDuplicate, fold, tokenize, ensureEtlTables,
 } from './etl.js';
 import { validateDescriptor } from '../normalize/line.js';
+import { runJson } from '../llm/client.js';
 
 export const ENRICH_VERSION = 'ext-enrich-v1';
 const DDG_TIMEOUT_MS = 8000;
 const DDG_MAX_TEXT = 1500;
 
-const MODEL_SMALL = '@cf/meta/llama-3.1-8b-instruct-fp8';
-const MODEL_LARGE = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+// Model identities live in the shared gateway (functions/api/llm/client.js).
+
 
 export async function enrichEnabled(env) {
   if (!env.DB || typeof env.DB.prepare !== 'function') return false;
@@ -125,32 +126,14 @@ EXTERNAL HINT (untrusted, may be empty or irrelevant):
 }
 
 async function callLlamaExternal(env, userSource, externalText) {
-  if (!env.AI || typeof env.AI.run !== 'function') {
-    return { ok: false, reason: 'NO_AI_BINDING' };
-  }
-  for (const model of [MODEL_SMALL, MODEL_LARGE]) {
-    try {
-      const res = await env.AI.run(model, {
-        messages: [
-          { role: 'system', content: 'You are a precise hardware data extractor. You output only JSON.' },
-          { role: 'user', content: buildExternalPrompt(userSource, externalText) },
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 400,
-      });
-      const text = typeof res?.response === 'string' ? res.response : '';
-      if (!text) continue;
-      try {
-        return { ok: true, payload: JSON.parse(text), model };
-      } catch {
-        continue;
-      }
-    } catch (err) {
-      console.error('[enrich] model call failed', model, err?.message);
-      continue;
-    }
-  }
-  return { ok: false, reason: 'MODEL_FAILED' };
+  // Delegates to the shared gateway (model escalation, timeout, telemetry).
+  return runJson(env, {
+    system: 'You are a precise hardware data extractor. You output only JSON.',
+    user: buildExternalPrompt(userSource, externalText),
+    maxTokens: 400,
+    feature: 'enrich',
+    promptVersion: ENRICH_VERSION
+  });
 }
 
 function sharesTokenWithUser(value, userFold) {

@@ -7,6 +7,7 @@ import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCi
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
+import MatchCandidates from './MatchCandidates';
 import EvidenceGallery from './EvidenceGallery';
 import { useIdleTimeout, IdleTimeoutModal } from '../lib/idle-timeout';
 import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise, lineFinalOf } from '../lib/money';
@@ -828,6 +829,15 @@ export default function DashboardPage() {
                                   })()}
                                 </div>
                                 
+                                {/* BUY → SELL best-match suggestions (advisory, cached, admin-acceptable) */}
+                                {req.intent === 'buy' && (
+                                  <MatchCandidates
+                                    requestId={req.id}
+                                    isAdmin={userRole === 'admin@netamps.com'}
+                                    products={req.products || []}
+                                  />
+                                )}
+
                                 {/* Attached evidence — renders nothing when empty (zero pixels reclaimed) */}
                                 <div className="mt-6">
                                   <EvidenceGallery
