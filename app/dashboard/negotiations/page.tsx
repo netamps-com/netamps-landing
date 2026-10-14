@@ -211,7 +211,7 @@ export default function NegotiationsPage() {
                     {n.rounds.map((r) => (
                       <li key={r.id} className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-sm">
                         <span className="text-slate-700">
-                          <strong className={r.side === 'buyer' ? 'text-indigo-700' : 'text-emerald-700'}>{r.side === 'buyer' ? 'Buyer' : 'Staff'}</strong>
+                          <strong className={r.side === 'buyer' ? 'text-indigo-700' : 'text-emerald-700'}>{r.side === 'buyer' ? (n.order?.name || 'Buyer') : 'Staff'}</strong>
                           {' · '}{kindLabel(r.kind)}{r.note ? <span className="text-slate-400"> — {r.note}</span> : null}
                         </span>
                         <span className="font-mono text-slate-800 shrink-0 ml-3">{r.totalPaise === null ? '—' : formatPaise(r.totalPaise)}</span>
@@ -231,6 +231,7 @@ export default function NegotiationsPage() {
                       <div className="flex-1 min-w-[12rem]">
                         <label className="block text-xs font-semibold text-slate-600" htmlFor={`note-${n.id}`}>Note (optional)</label>
                         <input id={`note-${n.id}`} value={d.note} onChange={(e) => setDraft(n.id, { note: e.target.value })} maxLength={500}
+                          placeholder="e.g. Can we close at ₹82,000 by Friday?"
                           className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 text-sm focus:ring-2 focus:ring-amber-500" />
                       </div>
                       <div className="flex gap-2 flex-wrap">
