@@ -174,17 +174,6 @@ export default function ProductTypeahead({
     setTimeout(() => setIsOpen(false), 200);
   };
 
-  // Render match type badge
-  const MatchTypeBadge = ({ type }: { type: 'prefix' | 'fuzzy' }) => (
-    <span className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${
-      type === 'prefix'
-        ? 'bg-emerald-500/20 text-emerald-400'
-        : 'bg-amber-500/20 text-amber-400'
-    }`}>
-      {type === 'prefix' ? 'exact' : 'fuzzy'}
-    </span>
-  );
-
   return (
     <div className={`relative ${className}`}>
       <div className="relative">
@@ -245,9 +234,8 @@ export default function ProductTypeahead({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-white truncate">{s.model}</p>
-                  <p className="text-xs text-slate-400 truncate">{s.category}</p>
+                  <p className="text-xs text-slate-400 truncate">{s.specTemplate}</p>
                 </div>
-                <MatchTypeBadge type={s.matchType} />
               </div>
             </li>
           ))}

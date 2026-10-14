@@ -667,7 +667,7 @@ export default function ReturnsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-8 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
@@ -675,81 +675,24 @@ export default function ReturnsPage() {
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl relative z-10">
-        <div className="flex justify-center mb-8">
-          <Link href="/" className="scale-125 transform origin-center transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl">
+        <div className="flex justify-center mb-5">
+          <Link href="/" className="scale-110 transform origin-center transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl">
             <NetampsLogo />
           </Link>
         </div>
         <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-slate-900">
           Enterprise IT Liquidation, Simplified
         </h2>
-        <p className="mt-3 text-center text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
+        <p className="mt-2 text-center text-base sm:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
           The all-in-one portal to sell, source, and track your IT assets with total transparency.
         </p>
       </div>
 
-      {/* Banner visual: light abstract space — floating server racks / hardware
-          components connected by smooth lines. Pure inline SVG, decorative only. */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-2xl relative z-10 mt-6" aria-hidden="true">
-        <svg viewBox="0 0 640 180" className="w-full h-auto" role="presentation">
-          <defs>
-            <linearGradient id="retBannerBg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#ffffff" />
-              <stop offset="100%" stopColor="#eef2f7" />
-            </linearGradient>
-            <linearGradient id="retRackFace" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f8fafc" />
-              <stop offset="100%" stopColor="#dbe3ee" />
-            </linearGradient>
-          </defs>
-          <rect x="8" y="8" width="624" height="164" rx="20" fill="url(#retBannerBg)" stroke="#e2e8f0" strokeWidth="1.5" />
-          {/* smooth connector lines */}
-          <path d="M150 90 C 230 40, 300 140, 390 84 S 520 70, 556 92" fill="none" stroke="#c7d2fe" strokeWidth="2.5" strokeLinecap="round" />
-          <path d="M118 120 C 210 150, 330 60, 430 118 S 540 128, 560 110" fill="none" stroke="#bbf7d0" strokeWidth="2.5" strokeLinecap="round" />
-          <path d="M170 60 C 260 90, 360 50, 470 96" fill="none" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" strokeDasharray="6 6" />
-          {/* server rack 1 */}
-          <g>
-            <rect x="96" y="52" width="72" height="88" rx="8" fill="url(#retRackFace)" stroke="#94a3b8" strokeWidth="1.5" />
-            <rect x="104" y="62" width="56" height="10" rx="2.5" fill="#cbd5e1" />
-            <rect x="104" y="78" width="56" height="10" rx="2.5" fill="#cbd5e1" />
-            <rect x="104" y="94" width="56" height="10" rx="2.5" fill="#cbd5e1" />
-            <circle cx="110" cy="67" r="2.4" fill="#34d399" />
-            <circle cx="110" cy="83" r="2.4" fill="#34d399" />
-            <circle cx="110" cy="99" r="2.4" fill="#fbbf24" />
-            <rect x="104" y="110" width="56" height="10" rx="2.5" fill="#e0e7ff" />
-            <rect x="104" y="124" width="34" height="8" rx="2" fill="#e2e8f0" />
-          </g>
-          {/* server rack 2 */}
-          <g>
-            <rect x="284" y="44" width="72" height="88" rx="8" fill="url(#retRackFace)" stroke="#94a3b8" strokeWidth="1.5" />
-            <rect x="292" y="54" width="56" height="10" rx="2.5" fill="#cbd5e1" />
-            <rect x="292" y="70" width="56" height="10" rx="2.5" fill="#cbd5e1" />
-            <circle cx="298" cy="59" r="2.4" fill="#34d399" />
-            <circle cx="298" cy="75" r="2.4" fill="#34d399" />
-            <rect x="292" y="86" width="56" height="10" rx="2.5" fill="#e0e7ff" />
-            <rect x="292" y="102" width="56" height="10" rx="2.5" fill="#cbd5e1" />
-            <rect x="292" y="118" width="34" height="8" rx="2" fill="#e2e8f0" />
-          </g>
-          {/* hardware component: drive / chip */}
-          <g>
-            <rect x="472" y="62" width="64" height="48" rx="8" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" />
-            <rect x="482" y="72" width="44" height="12" rx="2.5" fill="#dbe3ee" />
-            <circle cx="488" cy="96" r="3" fill="#6366f1" />
-            <circle cx="500" cy="96" r="3" fill="#94a3b8" />
-            <circle cx="512" cy="96" r="3" fill="#34d399" />
-          </g>
-          {/* floating nodes */}
-          <circle cx="228" cy="60" r="5" fill="#ffffff" stroke="#6366f1" strokeWidth="2" />
-          <circle cx="412" cy="128" r="5" fill="#ffffff" stroke="#10b981" strokeWidth="2" />
-          <circle cx="540" cy="52" r="4" fill="#ffffff" stroke="#94a3b8" strokeWidth="2" />
-        </svg>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-3xl relative z-10">
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-3xl relative z-10">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl border border-slate-200/60 overflow-hidden"
+          className="bg-white/90 backdrop-blur-xl py-6 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl border border-slate-200/60 overflow-hidden"
         >
           {isSuccess ? (
             <div className="p-12 text-center">
@@ -769,70 +712,68 @@ export default function ReturnsPage() {
               </Link>
             </div>
           ) : (
-            <div className="p-8 sm:p-10">
+            <div className="p-5 sm:p-7">
               
               {/* Intent Toggle */}
-              <div role="radiogroup" aria-label="Request type" className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-8 border border-slate-200 gap-1">
+              <div role="radiogroup" aria-label="Request type" className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200 gap-1">
                 <button 
                   type="button"
                   role="radio"
                   aria-checked={intent === 'sell'}
                   onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
-                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  SELL Equipment
+                  One-Click Liquidation
                 </button>
                 <button 
                   type="button"
                   role="radio"
                   aria-checked={intent === 'buy'}
                   onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
-                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  BUY Equipment
+                  Buy with Absolute Confidence
                 </button>
                 <button 
                   type="button"
                   role="radio"
                   aria-checked={intent === 'track'}
                   onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}
-                  className={`flex-1 py-3 px-2 text-sm font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Track Request
                 </button>
               </div>
 
               {intent === 'buy' && (
-                <section aria-label="Buy with absolute confidence" className="mb-8 rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-6 sm:p-7 relative overflow-hidden">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-black tracking-tight text-slate-900">Buy with Absolute Confidence</h3>
-                      <ul className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
-                        {['Fast Quotes', 'Zero Risk', 'Fully Tested Hardware', 'Enterprise-Grade Quality', 'Custom sourcing'].map((t) => (
-                          <li key={t} className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            {t}
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-4 text-sm text-slate-600 leading-relaxed">
-                        <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
-                      </p>
-                    </div>
-                    <div className="shrink-0 mx-auto sm:mx-0" aria-hidden="true">
-                      <svg viewBox="0 0 120 120" className="w-28 h-28" role="presentation">
-                        <circle cx="60" cy="60" r="54" fill="#ffffff" stroke="#a7f3d0" strokeWidth="2" />
-                        <circle cx="60" cy="60" r="44" fill="#ecfdf5" />
-                        <rect x="42" y="38" width="36" height="44" rx="5" fill="#ffffff" stroke="#059669" strokeWidth="2" />
-                        <rect x="47" y="44" width="26" height="6" rx="1.5" fill="#a7f3d0" />
-                        <rect x="47" y="53" width="26" height="6" rx="1.5" fill="#a7f3d0" />
-                        <rect x="47" y="62" width="26" height="6" rx="1.5" fill="#a7f3d0" />
-                        <circle cx="86" cy="86" r="16" fill="#059669" />
-                        <path d="M79 86 l5 5 l9 -10" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
+                <motion.section
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22 }}
+                  aria-label="Buy with absolute confidence"
+                  className="mb-4 rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-white to-teal-50 px-5 py-4"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </span>
+                    <h3 className="text-lg font-black tracking-tight text-slate-900">Buy with Absolute Confidence</h3>
                   </div>
-                </section>
+                  <ul className="mt-3 flex flex-wrap gap-2">
+                    {['Fast Quotes', 'Zero Risk', 'Fully Tested Hardware', 'Enterprise-Grade Quality', 'Custom sourcing'].map((t) => (
+                      <li
+                        key={t}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white/90 px-3 py-1.5 text-[13px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700 hover:shadow-md cursor-default"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2.5 text-[13px] text-slate-600">
+                    <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
+                  </p>
+                </motion.section>
               )}
 
               {intent === 'track' ? (
@@ -967,7 +908,7 @@ export default function ReturnsPage() {
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         {isUploading ? 'Uploading securely to R2...' : 'Verifying...'}
                       </div>
-                    ) : (intent === 'sell' ? 'Verify & Generate One-Click Liquidation' : 'Verify & Generate BUY Request')}
+                    ) : (intent === 'sell' ? 'Verify & Generate One-Click Liquidation' : 'Verify & Buy with Absolute Confidence')}
                   </button>
                   <button type="button" onClick={() => { setShowOtp(false); resetRetToken(); }} className="text-sm text-indigo-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded">
                     Cancel and return to form
@@ -1427,7 +1368,7 @@ export default function ReturnsPage() {
                       {isSubmitting ? (
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       ) : (
-                        intent === 'sell' ? 'One-Click Liquidation' : 'Generate BUY Request'
+                        intent === 'sell' ? 'One-Click Liquidation' : 'Buy with Absolute Confidence'
                       )}
                     </button>
                     <button
@@ -1448,7 +1389,7 @@ export default function ReturnsPage() {
         {/* Compliance & handling trust strip — every claim traceable to code:
             TLS/HSTS headers, owner-or-admin CDN RBAC, quarantine-scan upload
             pipeline, D1 audit trail. No attestation badges without a CPA letter. */}
-        <div className="mt-8 flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-500 relative z-10 pb-8">
+        <div className="mt-5 flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-500 relative z-10 pb-6">
           <div className="flex items-center gap-2">
             <Lock className="w-5 h-5 text-indigo-600" />
             <span>TLS 1.3 Enforced</span>
