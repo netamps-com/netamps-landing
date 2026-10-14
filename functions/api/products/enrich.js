@@ -24,13 +24,13 @@ import {
   validateRow, findDuplicate, fold, tokenize, ensureEtlTables,
 } from './etl.js';
 import { validateDescriptor } from '../normalize/line.js';
-import { runJson } from '../llm/client.js';
+import { runJson } from '../llm/client.mjs';
 
 export const ENRICH_VERSION = 'ext-enrich-v1';
 const DDG_TIMEOUT_MS = 8000;
 const DDG_MAX_TEXT = 1500;
 
-// Model identities live in the shared gateway (functions/api/llm/client.js).
+// Model identities live in the shared gateway (functions/api/llm/client.mjs).
 
 
 export async function enrichEnabled(env) {

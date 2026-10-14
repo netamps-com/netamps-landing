@@ -1,6 +1,10 @@
 /**
  * Shared Workers AI gateway — the ONE place model calls happen.
  *
+ * Named `.mjs` because it IS an ES module: the extension lets the Node test
+ * harnesses import the real gateway instead of a stand-in for it, and it is
+ * what the bundler already assumed. Callers import `'../llm/client.mjs'`.
+ *
  * Why this module exists:
  *   Before it, both `normalize/line.js` and `products/enrich.js` each carried
  *   their own copy of the model constants and their own escalation loop, and a

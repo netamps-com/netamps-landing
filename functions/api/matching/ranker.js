@@ -29,7 +29,7 @@
  * own prompt version. Cannot alter norm_/enrich_/shadow_ behaviour.
  */
 
-import { runJson } from '../llm/client.js';
+import { runJson } from '../llm/client.mjs';
 import { buildShortlist, BLOCK_LIMIT } from './blocking.js';
 import { normalizeFold } from '../products/catalog.js';
 

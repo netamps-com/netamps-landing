@@ -12,7 +12,7 @@
  *   typeahead works before the table is seeded.
  *
  * Tier 2 — Workers AI, ONLY when Tier 1 finds nothing: calls go through the
- *   shared gateway (../llm/client.js — model identity, small→large
+ *   shared gateway (../llm/client.mjs — model identity, small→large
  *   escalation, telemetry and the `llm_enabled` emergency brake live there)
  *   and every returned id is re-validated against the same catalog universe
  *   Tier 1 serves (validateLLMResponse in ./catalog.mjs). A poisoned or
@@ -41,7 +41,7 @@ import {
   searchCatalog
 } from './catalog.js';
 import { compareAndRecord } from './shadow.js';
-import { runJson } from '../llm/client.js';
+import { runJson } from '../llm/client.mjs';
 import { SEED_UNIQUE, matchCatalog, validateLLMResponse, foldText } from './catalog.mjs';
 
 /**

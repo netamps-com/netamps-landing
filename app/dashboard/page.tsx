@@ -828,6 +828,16 @@ export default function DashboardPage() {
                 <span className="hidden sm:inline">Negotiations</span>
               </Link>
 
+              {/* Order search — deterministic filters, model-assisted free text */}
+              <Link
+                href="/dashboard/search"
+                className="flex items-center gap-2 text-sm text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 px-3 py-1.5 rounded-lg transition-colors border border-sky-500/20"
+                title="Search orders by email, order id, date range or free text"
+              >
+                <Search className="w-4 h-4" />
+                <span className="hidden sm:inline">Search</span>
+              </Link>
+
               {/* Price Tracker — the permanent final-price audit trail, kept
                   out of the order list entirely (own module, read-only). */}
               <Link

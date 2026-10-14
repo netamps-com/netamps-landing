@@ -25,7 +25,7 @@
  */
 
 import { searchCatalog, normalizeFold, ensureCatalog } from '../products/catalog.js';
-import { runJson } from '../llm/client.js';
+import { runJson } from '../llm/client.mjs';
 
 export const NORMALIZER_VERSION = 'llm-norm-v1';
 
@@ -39,7 +39,7 @@ export const PROMOTE_MIN_CONFIDENCE = 0.80;
 // text. Raise to 1 (or flip rows to 'verified') only after human review.
 export const UNVERIFIED_CATALOG_MAX_CONFIDENCE = 0.75;
 
-// Model identities live in the shared gateway (functions/api/llm/client.js) —
+// Model identities live in the shared gateway (functions/api/llm/client.mjs) —
 // one definition for every model-backed feature, no drift.
 
 const CATEGORIES = [
