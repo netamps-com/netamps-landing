@@ -56,6 +56,7 @@ export default function MatchCandidates({
   const [data, setData] = useState<CandidateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -79,6 +80,27 @@ export default function MatchCandidates({
   useEffect(() => {
     load();
   }, [load]);
+
+  const regenerate = async () => {
+    if (regenerating) return;
+    setRegenerating(true);
+    setError(null);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'candidates-backfill', buyOrderId: requestId }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || 'Regeneration failed.');
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Regeneration failed.');
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const accept = async (c: Candidate) => {
     const key = `${c.buyLineIdx}:${c.sellOrderId}:${c.sellLineIdx}`;
@@ -138,14 +160,28 @@ export default function MatchCandidates({
             <Info className="w-3 h-3" /> stock changed since computed
           </span>
         )}
-        <button
-          type="button"
-          onClick={load}
-          title="Refresh suggestions"
-          className="ml-auto text-slate-400 hover:text-white transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
+        <div className="ml-auto flex items-center gap-3">
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={regenerating}
+              onClick={regenerate}
+              title="Recompute these suggestions now (runs the ranker again)"
+              className="text-[11px] font-semibold text-indigo-300 hover:text-white inline-flex items-center gap-1 disabled:opacity-60"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+              {regenerating ? 'Regenerating…' : 'Regenerate'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={load}
+            title="Refresh (read cache)"
+            className="text-slate-400 hover:text-white transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {lineIndexes.length === 0 ? (

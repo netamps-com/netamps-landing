@@ -366,8 +366,10 @@ export async function onRequestPost({ request, env }) {
       return json({ success: true, results });
     }
 
-    // ── candidates-backfill (admin): regenerate the candidate cache for BUY orders.
-    // Used after a SELL-book change (sell_book_version bump) makes caches stale. ──
+    // ── candidates-backfill (admin): regenerate the candidate cache for BUY
+    // orders. With `buyOrderId` → regenerate just that order (dashboard
+    // "Regenerate” button); without → sweep every BUY order (after a SELL-book
+    // change makes caches stale). ──
     if (action === 'candidates-backfill') {
       if (user.role !== 'admin' && user.email !== 'admin@netamps.com') {
         return json({ success: false, message: 'Forbidden' }, 403);
@@ -376,6 +378,15 @@ export async function onRequestPost({ request, env }) {
         return json({ success: false, message: 'Returns database is not attached.' }, 503);
       }
       const { generateCandidatesForOrder, sellBookVersion } = await import('./matching/ranker.js');
+
+      // Single-order regenerate: explicit admin action, run inline so the
+      // refresh immediately after has fresh data to render.
+      const one = typeof body.buyOrderId === 'string' && body.buyOrderId ? body.buyOrderId : null;
+      if (one) {
+        const summary = await generateCandidatesForOrder(env, { requestId: one });
+        return json({ success: true, orderId: one, summary, sellBookVersion: await sellBookVersion(env) });
+      }
+
       const { results } = await env.DB
         .prepare("SELECT id FROM returns WHERE LOWER(intent) = 'buy' ORDER BY date DESC LIMIT 500")
         .all();
