@@ -13,6 +13,8 @@
  * onboarding@resend.dev test sender (it only delivers to the account owner).
  */
 
+import { logOrderEmail } from '../audit/order-emails.mjs';
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -226,8 +228,21 @@ export async function onRequestPost({ request, env }) {
     `;
 
     const apiKey = env.RESEND_API_KEY;
+    const ledger = (outcome, detail, messageId = null) => logOrderEmail(env, {
+      // Raw id, not the HTML-escaped display copy: this is a foreign key back
+      // to the order row, and escaping it would silently break the join.
+      requestId,
+      intent: safeIntent.toLowerCase(),
+      cause: 'staff_notification',
+      outcome,
+      recipient: email,
+      subject: `Update on Request ${safeRequestId}`,
+      messageId,
+      detail
+    });
     if (!apiKey) {
       console.error('[email] RESEND_API_KEY is not configured');
+      await ledger('failed', 'email service not configured');
       return json({ success: false, message: 'Email service is not configured. Please contact support.' }, 503);
     }
 
@@ -259,9 +274,17 @@ export async function onRequestPost({ request, env }) {
 
     if (!rsRes.ok) {
       console.error('[email] Resend send failed:', rsRes.status, await rsRes.text().catch(() => ''));
+      await ledger('failed', `provider rejected the send (HTTP ${rsRes.status})`);
       // NOTE: never HTTP 502 — Pages rewrites function 502s into a generic text page.
       return json({ success: false, message: 'Failed to deliver notification email. Please try again shortly.' }, 503);
     }
+
+    let providerId = null;
+    try {
+      const body = await rsRes.json();
+      providerId = body && typeof body.id === 'string' ? body.id : null;
+    } catch { /* unparseable body does not negate an accepted send */ }
+    await ledger('sent', 'accepted by provider', providerId);
 
     return json({ success: true, message: 'Push email sent successfully', emailDeliveryStatus: 'Sent' });
   } catch (err) {

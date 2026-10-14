@@ -31,6 +31,8 @@ import {
 } from './negotiate/store.mjs';
 import { validateRound, applyRound, summarize, capturePriceSnapshot, explainGate, normalizeStatus, isClosed, STATUS } from './negotiate/core.mjs';
 import { publicOrder } from './track/verify-otp.js';
+import { readOrderEventsFor, deriveLadder } from './audit/order-events.mjs';
+import { summarizeOrderEmails } from './audit/order-emails.mjs';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -62,6 +64,11 @@ export async function onRequestGet({ request, env }) {
 
     await ensureNegotiationSchema(env);
     const rows = await listNegotiations(env, { status });
+    // One batched read for the whole page: each thread draws its ladder from
+    // the same append-only rows the dashboard and Track page render, and a
+    // 100-row list must not turn into 100 extra queries to do it.
+    const timelines = await readOrderEventsFor(env, rows.map((r) => r.request_id));
+    const emailCounts = await summarizeOrderEmails(env, rows.map((r) => r.request_id));
     const items = [];
     for (const n of rows) {
       const order = await getOrderById(env, n.request_id);
@@ -70,8 +77,13 @@ export async function onRequestGet({ request, env }) {
       // the projection here so the monitor, the dashboard and the buyer's Track
       // page all read one story out of one field.
       const { order: healed } = await reconcileOrder(env, order, summary.status);
+      const events = timelines.get(n.request_id) || [];
+      const mails = emailCounts.get(n.request_id) || { total: 0, byCause: {}, byOutcome: {}, lastAt: null };
       items.push({
         ...summary,
+        ladder: deriveLadder(events, summary.status),
+        emailCount: mails.total,
+        emailByCause: mails.byCause,
         order: healed ? publicOrder(healed) : null
       });
     }
@@ -115,7 +127,7 @@ export async function onRequestPost({ request, env }) {
           orderStatus: normalizeStatus(order.status)
         }, 409);
       }
-      const negotiation = await findOrCreateNegotiation(env, order);
+      const negotiation = await findOrCreateNegotiation(env, order, user.email);
       const summary = await threadFor(env, negotiation, order);
       // Reopen returns the thread's OWN rung, never a hard-coded one: if the
       // thread has already progressed to "Negotiation in Progress" (or
@@ -144,7 +156,7 @@ export async function onRequestPost({ request, env }) {
     } else if (body.requestId) {
       const order = await getOrderById(env, String(body.requestId));
       if (!order) return json({ success: false, message: 'Request not found.' }, 404);
-      negotiation = await findOrCreateNegotiation(env, order);
+      negotiation = await findOrCreateNegotiation(env, order, user.email);
     } else {
       return json({ success: false, message: 'A negotiationId or requestId is required.' }, 400);
     }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Handshake, AlertTriangle, RefreshCw, ArrowLeft, CheckCircle2, XCircle, Clock, Send, BadgeCheck } from 'lucide-react';
+import { Handshake, AlertTriangle, RefreshCw, ArrowLeft, CheckCircle2, XCircle, Clock, Send, BadgeCheck, Mail } from 'lucide-react';
 import NetampsLogo from '../../NetampsLogo';
 import { formatPaise, sanitizeMoneyInput, moneyStringToPaise } from '../../lib/money';
 import { ORDER_STATUS, normalizeStatus, isClosedStatus, statusChip, kindLabel } from '../../lib/status';
@@ -26,12 +26,18 @@ type Round = {
   kind: string; totalPaise: number | null; note: string;
   priceVersion: number; priceBasis: string; priceTotalPaise: number | null; createdAt: string;
 };
+type LadderStep = { rung: string; at: string | null; by?: string | null; touches?: number };
 type Negotiation = {
   id: string; requestId: string; intent: string; status: string;
   currentTotalPaise: number | null; stale: boolean; updatedAt: string;
   current: { version: number; basis: string; totalPaise: number | null };
   order: { id: string; intent: string; name: string; company: string; status: string } | null;
   rounds: Round[];
+  // Audit context appended by GET /api/negotiations: the same append-only
+  // ladder the dashboard and Track page render, plus this order's email count.
+  ladder?: LadderStep[];
+  emailCount?: number;
+  emailByCause?: Record<string, number>;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
@@ -213,6 +219,44 @@ export default function NegotiationsPage() {
                   </div>
                 </div>
 
+                {/* Ladder with stamps — the negotiation window's own audit strip.
+                    Same rows as the dashboard and Track page: one table, three views. */}
+                {(n.ladder || []).length > 0 && (
+                  <ol className="mt-4 flex flex-wrap gap-x-1 gap-y-2 items-center">
+                    {(n.ladder || []).map((s, i) => {
+                      const isCurrent = s.rung === status;
+                      return (
+                        <li key={`${s.rung}-${i}`} className="flex items-center">
+                          <span className={`inline-flex flex-col rounded-full border px-2 py-0.5 ${
+                            isCurrent ? 'border-amber-300 bg-amber-50 text-amber-800'
+                            : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                            <span className="text-[10px] font-bold">
+                              {s.rung}{isCurrent ? ' · now' : ''}
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-400">
+                              {s.at ? new Date(s.at).toLocaleString() : '—'}
+                            </span>
+                          </span>
+                          {i < (n.ladder || []).length - 1 && <span className="mx-1 text-slate-300 text-xs">→</span>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+
+                <div className="mt-3 flex items-center gap-3 flex-wrap text-[11px] text-slate-500">
+                  <span className="inline-flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5" />
+                    <strong className="text-slate-700 font-mono">{n.emailCount ?? 0}</strong>
+                    email{(n.emailCount ?? 0) === 1 ? '' : 's'} triggered
+                  </span>
+                  {Object.entries(n.emailByCause || {}).map(([cause, count]) => (
+                    <span key={cause} className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono">
+                      {cause} ×{count}
+                    </span>
+                  ))}
+                </div>
+
                 {n.rounds.length > 0 && (
                   <ul className="mt-4 space-y-1.5">
                     {n.rounds.map((r) => (
@@ -221,7 +265,12 @@ export default function NegotiationsPage() {
                           <strong className={r.side === 'buyer' ? 'text-indigo-700' : 'text-emerald-700'}>{r.side === 'buyer' ? (n.order?.name || 'Buyer') : 'Staff'}</strong>
                           {' · '}{kindLabel(r.kind)}{r.note ? <span className="text-slate-400"> — {r.note}</span> : null}
                         </span>
-                        <span className="font-mono text-slate-800 shrink-0 ml-3">{r.totalPaise === null ? '—' : formatPaise(r.totalPaise)}</span>
+                        <span className="flex items-center gap-3 shrink-0 ml-3">
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}
+                          </span>
+                          <span className="font-mono text-slate-800">{r.totalPaise === null ? '—' : formatPaise(r.totalPaise)}</span>
+                        </span>
                       </li>
                     ))}
                   </ul>

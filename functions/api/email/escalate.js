@@ -19,6 +19,8 @@
  * onboarding@resend.dev test sender (it only delivers to the account owner).
  */
 
+import { logOrderEmail } from '../audit/order-emails.mjs';
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -175,12 +177,22 @@ export async function onRequestPost({ request, env }) {
     `;
 
     const apiKey = env.RESEND_API_KEY;
+    // One escalation touches two orders — the BUY side and the SELL side — so
+    // it is recorded against BOTH ledgers. Showing it on neither (the old
+    // behaviour) hides a real trigger; showing it on only one would tell a
+    // half-truth about an event that involves both.
+    const ledger = (outcome, detail, messageId = null) => Promise.all([
+      logOrderEmail(env, { requestId: buyerRequestId, intent: 'buy', cause: 'escalation', outcome, recipient: SALES_ESCALATION_EMAIL, subject: `Match Escalation ${matchId}`, messageId, detail }),
+      logOrderEmail(env, { requestId: sellerRequestId, intent: 'sell', cause: 'escalation', outcome, recipient: SALES_ESCALATION_EMAIL, subject: `Match Escalation ${matchId}`, messageId, detail })
+    ]);
     if (!apiKey) {
       console.error('[escalate] RESEND_API_KEY is not configured');
+      await ledger('failed', 'email service not configured');
       return json({ success: false, message: 'Email service is not configured. Please contact support.' }, 503);
     }
 
     if (escRateLimited()) {
+      await ledger('failed', 'escalation rate limit reached');
       return json({ success: false, message: 'Too many escalations right now. Try again shortly.' }, 429);
     }
 
@@ -201,15 +213,26 @@ export async function onRequestPost({ request, env }) {
         },
         tags: [
           { name: 'kind', value: 'escalation' },
-          { name: 'match', value: String(matchId).slice(0, 64) }
+          { name: 'match', value: String(matchId).slice(0, 64) },
+          // Correlate the delivery webhook back to both order ledgers.
+          { name: 'request', value: String(buyerRequestId).slice(0, 64) },
+          { name: 'seller_request', value: String(sellerRequestId).slice(0, 64) }
         ]
       })
     });
 
     if (!rsRes.ok) {
       console.error('[escalate] Resend send failed:', rsRes.status, await rsRes.text().catch(() => ''));
+      await ledger('failed', `provider rejected the send (HTTP ${rsRes.status})`);
       return json({ success: false, message: 'Failed to deliver escalation email. Please try again shortly.' }, 503);
     }
+
+    let providerId = null;
+    try {
+      const body = await rsRes.json();
+      providerId = body && typeof body.id === 'string' ? body.id : null;
+    } catch { /* unparseable body does not negate an accepted send */ }
+    await ledger('sent', 'accepted by provider', providerId);
 
     return json({ success: true, message: 'Escalation email sent to Sales', emailDeliveryStatus: 'Sent' });
   } catch (err) {

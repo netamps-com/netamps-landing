@@ -24,6 +24,8 @@ import {
   reconcileOrder, readActiveNegotiation
 } from '../negotiate/store.mjs';
 import { validateRound, applyRound, summarize, capturePriceSnapshot, explainGate, normalizeStatus } from '../negotiate/core.mjs';
+import { readOrderEvents, deriveLadder } from '../audit/order-events.mjs';
+import { readOrderEmails, summarizeOrderEmails } from '../audit/order-emails.mjs';
 import { publicOrder } from './verify-otp.js';
 
 function json(body, status = 200) {
@@ -108,13 +110,34 @@ export async function onRequestGet({ request, env }) {
     }
 
     const status = liveStatus || normalizeStatus(view.status);
+
+    // The buyer's own view of the trail: same append-only rows the dashboard
+    // renders, scoped by ownership check above — one order, one history, and
+    // the Track page can never quote a rung the login screen does not show.
+    const events = await readOrderEvents(env, order.id);
+    const emails = await readOrderEmails(env, order.id);
+    const emailCounts = (await summarizeOrderEmails(env, [order.id])).get(order.id)
+      || { total: 0, byCause: {}, byOutcome: {}, lastAt: null };
+
     return json({
       success: true,
       order: publicOrder(view),
       // Chronological truth for the UI: can this buyer speak yet?
       negotiable: liveStatus !== null,
       status,
-      negotiations: threads
+      negotiations: threads,
+      timeline: {
+        ladder: deriveLadder(events, status),
+        events,
+        emails: {
+          count: emailCounts.total,
+          byCause: emailCounts.byCause,
+          byOutcome: emailCounts.byOutcome,
+          lastAt: emailCounts.lastAt,
+          // Delivery outcomes only — recipients and subjects are staff data.
+          items: emails.map((e) => ({ cause: e.cause, outcome: e.outcome, at: e.at, detail: e.detail }))
+        }
+      }
     });
   } catch (err) {
     console.error('[track] negotiate GET error:', err);

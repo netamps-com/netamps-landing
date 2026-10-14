@@ -34,8 +34,62 @@ type CandidateResponse = {
   orderId?: string;
   enabled?: boolean;
   stale?: boolean;
+  intent?: string | null;
+  /** Definitive: this order is not a BUY request, so there is nothing to match. */
+  notBuy?: boolean;
+  lastRun?: {
+    model?: string | null;
+    reason?: string | null;
+    emitted?: number | null;
+    at?: string | null;
+  } | null;
   candidates?: Candidate[];
 };
+
+/**
+ * Turn the last run's machine reason into a sentence a person can act on.
+ *
+ * The whole point is that the empty state never has to guess: each branch
+ * states a fact the server actually recorded. A panel that said "no comparable
+ * stock" when the model had simply never run was telling a confident lie.
+ */
+function emptyState(data: CandidateResponse | null): { title: string; detail: string } {
+  if (data && !data.enabled) {
+    return {
+      title: 'Best-match is switched off for this store.',
+      detail: 'Enable it from the dashboard toggle to generate suggestions.'
+    };
+  }
+  const reason = data?.lastRun?.reason;
+  if (!data?.lastRun && (data?.candidates ?? []).length === 0) {
+    return {
+      title: 'No suggestions generated yet.',
+      detail: 'This request has not been ranked. Suggestions appear after the model runs (submission or the admin sweep).'
+    };
+  }
+  if (reason === 'GENERATION_FAILED' || reason === 'TABLE_INIT_FAILED') {
+    return {
+      title: 'The matching model did not complete.',
+      detail: `No suggestions were produced${data?.lastRun?.at ? ` as of ${new Date(data.lastRun.at).toLocaleString()}` : ''}. Nothing was invented to fill the gap — regenerate to try again.`
+    };
+  }
+  if (reason === 'NO_BUY_LINES') {
+    return { title: 'This request has no priced lines to match.', detail: 'Add lines with details the catalog can index.' };
+  }
+  if (reason === 'DISABLED') {
+    return { title: 'Best-match is switched off for this store.', detail: 'Enable it to generate suggestions.' };
+  }
+  if (data?.lastRun && data.lastRun.emitted === 0) {
+    return {
+      title: 'No comparable stock in current SELL inventory for this request.',
+      detail: `The model cleared the deterministic floor and shortlisted nothing worth showing${data.lastRun.at ? ` (last run ${new Date(data.lastRun.at).toLocaleString()})` : ''}. Weak matches are withheld rather than padded in.`
+    };
+  }
+  return {
+    title: 'No comparable stock in current SELL inventory for this request.',
+    detail: 'Suggestions are advisory and are never fabricated to fill this panel.'
+  };
+}
 
 type ProductLike = { category?: string; details?: string; quantity?: number };
 
@@ -133,6 +187,9 @@ export default function MatchCandidates({
   // feature disabled + no cached rows = zero pixels (no empty chrome on every
   // BUY order in the table).
   if (loading) return null;
+  // Server-confirmed: this is a SELL request. Not an empty result — the
+  // question does not apply, so the panel must not exist on screen.
+  if (data?.notBuy) return null;
   const candidates = data?.candidates || [];
   const enabled = Boolean(data?.enabled);
   const isBuy = (products || []).length > 0;
@@ -185,9 +242,21 @@ export default function MatchCandidates({
       </div>
 
       {lineIndexes.length === 0 ? (
-        <p className="text-xs text-slate-500 italic">
-          No comparable stock in current SELL inventory for this request.
-        </p>
+        (() => {
+          const es = emptyState(data);
+          return (
+            <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/40 px-3 py-3">
+              <p className="text-xs font-semibold text-slate-300">{es.title}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{es.detail}</p>
+              {data?.lastRun?.model && (
+                <p className="mt-1.5 text-[10px] font-mono text-slate-600">
+                  {data.lastRun.model}
+                  {data.lastRun.at ? ` · ${new Date(data.lastRun.at).toLocaleString()}` : ''}
+                </p>
+              )}
+            </div>
+          );
+        })()
       ) : (
         <div className="space-y-4">
           {lineIndexes.map((lineIdx) => {

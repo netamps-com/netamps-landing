@@ -102,30 +102,93 @@ function orderFigure(o: Order): { paise: number | null; label: string } {
   return any ? { paise: total, label: 'evaluated' } : { paise: null, label: '' };
 }
 
-/** The chronological ladder rendered as a stepper — status made visible. */
-function Lifecycle({ status }: { status: string }) {
+/** Human names for the server's closed email-cause vocabulary. */
+const CAUSE_LABEL: Record<string, string> = {
+  order_confirmation: 'Request confirmation',
+  order_confirmation_resend: 'Confirmation resend',
+  staff_notification: 'Netamps update',
+  escalation: 'Sales escalation',
+  delivery_result: 'Delivery update'
+};
+
+/** One rung the order actually stood on, with the stamp it was reached. */
+export interface LadderStep {
+  rung: string;
+  at: string | null;
+  by?: string | null;
+  touches?: number;
+}
+
+export interface OrderTimeline {
+  ladder: LadderStep[];
+  events?: { seq: number; kind: string; rung: string | null; actor: string | null; at: string }[];
+  emails?: {
+    count: number;
+    byCause?: Record<string, number>;
+    byOutcome?: Record<string, number>;
+    lastAt?: string | null;
+    items?: { cause: string; outcome: string; at: string; detail?: unknown }[];
+  };
+}
+
+/** "12 Jan 2026, 14:05" — local, unambiguous, never a relative "2h ago". */
+function stamp(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+/**
+ * The chronological ladder rendered as a stepper — status made visible.
+ *
+ * When `ladder` is supplied each reached rung carries the timestamp it was
+ * first reached, so this is an audit trail and not just a progress bar: the
+ * question "when did this become X, and who did it?" is answerable from the
+ * same widget that answers "where is it now?".
+ */
+function Lifecycle({ status, ladder }: { status: string; ladder?: LadderStep[] }) {
   const current = normalizeStatus(status);
   const rank = statusRank(status);
   const steps = current === ORDER_STATUS.DECLINED ? [ORDER_STATUS.PENDING, ORDER_STATUS.DECLINED] : CHRONOLOGY;
   const done = current === ORDER_STATUS.DECLINED ? 2 : rank;
+  const when = new Map((ladder || []).filter((s) => s && s.rung).map((s) => [s.rung, s]));
   return (
-    <ol className="flex flex-wrap items-center gap-y-2">
-      {steps.map((s, i) => {
-        const state = i < done ? 'done' : i === done ? 'here' : 'todo';
-        return (
-          <li key={s} className="flex items-center">
-            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
-              state === 'done' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-              : state === 'here' ? 'border-amber-300 bg-amber-50 text-amber-800'
-              : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-              {state === 'done' ? <CheckCircle2 className="w-3 h-3" /> : state === 'here' ? <Clock className="w-3 h-3" /> : null}
-              {s}
-            </span>
-            {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 mx-1 text-slate-300" />}
-          </li>
-        );
-      })}
-    </ol>
+    <div>
+      <ol className="flex flex-wrap items-center gap-y-2">
+        {steps.map((s, i) => {
+          const state = i < done ? 'done' : i === done ? 'here' : 'todo';
+          const hit = when.get(s);
+          return (
+            <li key={s} className="flex items-center">
+              <span className={`inline-flex flex-col rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+                state === 'done' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : state === 'here' ? 'border-amber-300 bg-amber-50 text-amber-800'
+                : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                <span className="inline-flex items-center gap-1">
+                  {state === 'done' ? <CheckCircle2 className="w-3 h-3" /> : state === 'here' ? <Clock className="w-3 h-3" /> : null}
+                  {s}
+                </span>
+                {hit?.at && (
+                  <span className={`mt-0.5 text-[9px] font-medium normal-case ${
+                    state === 'todo' ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {stamp(hit.at)}
+                  </span>
+                )}
+              </span>
+              {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 mx-1 text-slate-300" />}
+            </li>
+          );
+        })}
+      </ol>
+      {ladder && ladder.length === 0 && (
+        <p className="mt-2 text-[11px] text-slate-400">
+          No recorded transitions yet — this request has not been opened for negotiation.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -138,6 +201,7 @@ export default function TrackOrderPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [negotiable, setNegotiable] = useState(false);
   const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
+  const [timeline, setTimeline] = useState<OrderTimeline | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -244,6 +308,7 @@ export default function TrackOrderPage() {
       setOrder(data.order);
       setNegotiable(!!data.negotiable);
       setNegotiations(data.negotiations || []);
+      setTimeline(data.timeline || null);
       setStep('view');
     } catch (e: any) {
       setError(e?.message || 'Could not open that request.');
@@ -273,6 +338,7 @@ export default function TrackOrderPage() {
         setOrder(data.order);
         setNegotiable(!!data.negotiable);
         setNegotiations(data.negotiations || []);
+        setTimeline(data.timeline || null);
         setOrders((prev) => prev.map((o) => (o.id === data.order.id ? data.order : o)));
       }
     } catch { /* keep the last good thread on screen */ }
@@ -304,6 +370,7 @@ export default function TrackOrderPage() {
   const reset = () => {
     setStep('identify'); setCode(''); setToken(''); setOrder(null); setOrders([]); setNegotiations([]);
     setNegotiable(false); setError(''); setNotice(''); setAmount(''); setNote('');
+    setTimeline(null);
   };
 
   const startingFresh = !active || active.rounds.length === 0;
@@ -486,7 +553,38 @@ export default function TrackOrderPage() {
                 <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusChip(order.status)}`}>{normalizeStatus(order.status)}</span>
               </div>
 
-              <Lifecycle status={order.status} />
+              <Lifecycle status={order.status} ladder={timeline?.ladder} />
+
+              {/* Email triggers — a count and its causes, per order, so the
+                  buyer can see what was actually sent without asking us. */}
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-slate-700">Email triggers</span>
+                  <span className="text-xs font-mono font-bold text-slate-800">
+                    {timeline?.emails?.count ?? 0}
+                  </span>
+                </div>
+                {timeline?.emails?.count ? (
+                  <ul className="mt-2 space-y-1">
+                    {(timeline.emails.items || []).slice(0, 6).map((m, i) => (
+                      <li key={i} className="flex items-start justify-between gap-3 text-[11px]">
+                        <span className="text-slate-600">
+                          {CAUSE_LABEL[m.cause] || m.cause}
+                          <span className={`ml-1.5 font-semibold ${
+                            m.outcome === 'delivered' || m.outcome === 'sent' ? 'text-emerald-600'
+                            : m.outcome === 'failed' || m.outcome === 'bounced' ? 'text-rose-600'
+                            : 'text-slate-500'}`}>
+                            {m.outcome}
+                          </span>
+                        </span>
+                        <span className="font-mono text-slate-400 whitespace-nowrap">{stamp(m.at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-400">No email has been sent for this request.</p>
+                )}
+              </div>
 
               <p className="mt-4 text-sm text-slate-600"><strong className="text-slate-800">Name:</strong> {order.name}</p>
               <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {order.company}</p>

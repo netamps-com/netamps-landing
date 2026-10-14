@@ -8,6 +8,7 @@
  */
 
 import { STATUS, capturePriceSnapshot, isClosed, normalizeStatus } from './core.mjs';
+import { appendOrderEvent } from '../audit/order-events.mjs';
 
 const BUYER_TOKEN_TTL_SECONDS = 60 * 60; // 60 minutes — one sitting
 export const ORDER_TOKEN_TTL_SECONDS = BUYER_TOKEN_TTL_SECONDS; // legacy alias (tests/readers)
@@ -203,6 +204,16 @@ export async function reconcileOrder(env, order, authoritativeStatus) {
 
   const res = await setOrderStatus(env, order.id, authoritativeStatus);
   if (!res.ok) return { order, reconciled: false, drift: true };
+  // The repair itself goes on the record. A drifted order corrected behind the
+  // scenes with no trace would be exactly the "data changed after capture"
+  // outcome this trail exists to make impossible to hide.
+  await appendOrderEvent(env, {
+    requestId: order.id,
+    kind: 'reconciled',
+    rung: authoritativeStatus,
+    actor: 'system',
+    detail: { from: current, to: authoritativeStatus, reason: 'order status trailed its negotiation thread' }
+  });
   return { order: { ...order, status: authoritativeStatus }, reconciled: true, drift: true };
 }
 
@@ -237,7 +248,7 @@ export const readOpenNegotiation = readActiveNegotiation;
  * Opening is only legal on a non-terminal order: a deal that was approved or
  * declined can only ever get a NEW thread via a new order.
  */
-export async function findOrCreateNegotiation(env, order) {
+export async function findOrCreateNegotiation(env, order, actor = null) {
   const orderStatus = normalizeStatus(order.status);
   if (isClosed(orderStatus)) {
     const err = new Error(
@@ -280,6 +291,19 @@ export async function findOrCreateNegotiation(env, order) {
     row.current_total_paise, row.price_version, row.created_at, row.updated_at
   ).run();
   await setOrderStatus(env, order.id, STATUS.ACCEPTED);
+  // The rung the dashboard's accept button stands on, entered exactly once:
+  // only the creating branch writes it, so reopening a live thread never
+  // duplicates the entry.
+  await appendOrderEvent(env, {
+    requestId: order.id,
+    kind: 'accepted',
+    rung: STATUS.ACCEPTED,
+    // `actor` is the staff member who pressed the accept button. Left null when
+    // unknown: a blank attribution reads as "not recorded", whereas naming the
+    // buyer would claim THEY performed a staff-only rung.
+    actor: actor || null,
+    detail: { negotiationId: row.id }
+  });
   return row;
 }
 
@@ -332,6 +356,26 @@ export async function appendRound(env, negotiation, value, snapshot, actorEmail,
   ).bind(nextState.status, nextState.currentTotalPaise, at, negotiation.id).run();
 
   await setOrderStatus(env, negotiation.request_id, nextState.status);
+
+  // One row per round, carrying the resulting rung — so a staff `accept`
+  // (→ "Accepted Final Price") and a staff `approve` (→ "Order Deal Approved")
+  // are separate, stamped entries rather than a status column that changed
+  // shape after the fact.
+  await appendOrderEvent(env, {
+    requestId: negotiation.request_id,
+    kind: 'round',
+    rung: nextState.status,
+    actor: actorEmail || null,
+    detail: {
+      seq,
+      verb: value.kind,
+      side: value.side,
+      totalPaise: value.totalPaise ?? null,
+      note: value.note || '',
+      negotiationId: negotiation.id
+    },
+    at
+  });
 
   return { ...round, price_version: snapshot.version, price_basis: snapshot.basis, price_total_paise: snapshot.totalPaise };
 }

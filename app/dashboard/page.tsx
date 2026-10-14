@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Download, Handshake, Sparkles } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Download, Handshake, Sparkles, History } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
@@ -55,7 +55,6 @@ interface ReturnRequest {
   lotConsiderationPaise?: number | null;
   manifest?: { requestId: string; hash: string; generatedAt: string; version?: number } | null;
   finalPrice?: FinalPriceSnapshot | null;
-  priceHistory?: { productId: string | null; oldPaise: number | null; newPaise: number | null; actor: string; at: string }[];
 }
 
 // ── Totals math (paise integers; null = unstated, never 0) ──
@@ -90,12 +89,121 @@ function evalTotalOf(req: ReturnRequest): { total: number | null; partial: boole
 }
 
 
+/**
+ * One order's audit trail, rendered inside its expanded row: the ladder with a
+ * stamp on every rung it actually reached, plus the email triggers that belong
+ * to this order alone.
+ *
+ * Sibling rows each fetch their own (`rowTimelines[id]`), so "shown for each
+ * order independently" is structural rather than a promise — there is no
+ * shared or cached-across-orders state to leak one order's history into
+ * another's.
+ */
+function RowTimeline({ data }: { data: any }) {
+  if (!data) {
+    return (
+      <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-xs text-slate-500">
+        Loading audit trail…
+      </div>
+    );
+  }
+  const ladder: { rung: string; at: string | null; by?: string | null; touches?: number }[] = Array.isArray(data.ladder) ? data.ladder : [];
+  const emails = data.emails || { count: 0, items: [] };
+  const stamp = (iso: string | null) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+  };
+  const current: string = data.current || data.status || '';
+
+  return (
+    <div className="mt-4 grid gap-4 md:grid-cols-2">
+      {/* ── Ladder ── */}
+      <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">
+          Chronological audit trail
+        </div>
+        {ladder.length === 0 ? (
+          <p className="text-xs text-slate-500 italic">No recorded transitions yet.</p>
+        ) : (
+          <ol className="space-y-2">
+            {ladder.map((step, i) => {
+              const isCurrent = step.rung === current;
+              const isLast = i === ladder.length - 1;
+              return (
+                <li key={`${step.rung}-${i}`} className="flex items-start gap-2">
+                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
+                    isCurrent ? 'bg-amber-400 ring-2 ring-amber-400/30'
+                    : isLast ? 'bg-emerald-400'
+                    : 'bg-slate-600'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-semibold ${isCurrent ? 'text-amber-300' : 'text-slate-200'}`}>
+                        {step.rung}
+                      </span>
+                      {isCurrent && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400">Current</span>
+                      )}
+                      {typeof step.touches === 'number' && step.touches > 1 && (
+                        <span className="text-[9px] text-slate-500">×{step.touches}</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-500">
+                      {stamp(step.at)}{step.by ? ` · ${step.by}` : ''}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+
+      {/* ── Email triggers ── */}
+      <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email triggers</span>
+          <span className="text-xs font-mono font-bold text-slate-200">{emails.count ?? 0}</span>
+        </div>
+        {emails.count ? (
+          <>
+            <ul className="space-y-1.5 mb-3">
+              {(emails.items || []).slice(0, 6).map((m: any, i: number) => (
+                <li key={i} className="flex items-start justify-between gap-3 text-[11px]">
+                  <span className="text-slate-400 truncate">
+                    {m.cause}
+                    <span className={`ml-1.5 font-semibold ${
+                      m.outcome === 'delivered' || m.outcome === 'sent' ? 'text-emerald-400'
+                      : m.outcome === 'failed' || m.outcome === 'bounced' ? 'text-rose-400'
+                      : 'text-slate-500'}`}>
+                      {m.outcome}
+                    </span>
+                  </span>
+                  <span className="font-mono text-slate-600 whitespace-nowrap">{stamp(m.at)}</span>
+                </li>
+              ))}
+            </ul>
+            {(emails.items || []).length > 6 && (
+              <p className="text-[10px] text-slate-600">+{(emails.items.length - 6)} more</p>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-slate-500 italic">No email has been sent for this order.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState('');
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  // Per-order audit trail, fetched when a row is opened. Keyed by order id so
+  // three open rows never share one timeline.
+  const [rowTimelines, setRowTimelines] = useState<Record<string, any>>({});
   
   // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -389,10 +497,28 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  const loadTimeline = async (id: string) => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/timeline?requestId=${encodeURIComponent(id)}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success) setRowTimelines((prev) => ({ ...prev, [id]: data }));
+    } catch {
+      // The row still expands without a timeline: a failed audit read is a
+      // missing panel, never a blocked row.
+    }
+  };
+
   const toggleRow = (id: string) => {
     const newSet = new Set(expandedRows);
     if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
+    else {
+      newSet.add(id);
+      // Fetched on every expand, not memoised forever: this row's timeline
+      // moves while the user is looking at the rest of the list, and an audit
+      // trail that only refreshes on page reload would show a stale "now".
+      void loadTimeline(id);
+    }
     setExpandedRows(newSet);
   };
 
@@ -701,6 +827,17 @@ export default function DashboardPage() {
                 <Handshake className="w-4 h-4" />
                 <span className="hidden sm:inline">Negotiations</span>
               </Link>
+
+              {/* Price Tracker — the permanent final-price audit trail, kept
+                  out of the order list entirely (own module, read-only). */}
+              <Link
+                href="/dashboard/price-tracker"
+                className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
+                title="Price Tracker"
+              >
+                <History className="w-4 h-4" />
+                <span className="hidden sm:inline">Price Tracker</span>
+              </Link>
               
               <div className="text-sm font-medium text-slate-300">
                 Logged in as <span className="text-white capitalize">{userRole}</span>
@@ -992,27 +1129,18 @@ export default function DashboardPage() {
                                         {row('Total Evaluated Value', paiseToDisplay(ev.total), ev.partial ? 'Partial — some lines unevaluated' : null, 'text-emerald-400')}
                                         <div className="border-t border-slate-700/60 my-1" />
                                         {row('Final', final ? `${paiseToDisplay(final.totalPaise)} (v${final.version})` : '—', null, 'text-white')}
-                                        {(req.priceHistory ?? []).length > 0 && (
-                                          <>
-                                            <div className="border-t border-slate-700/60 my-1" />
-                                            <div className="pt-2">
-                                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Final price (permanent audit trail)</div>
-                                              <ul className="space-y-1">
-                                                {(req.priceHistory ?? []).slice(-5).map((h, i) => (
-                                                  <li key={i} className="text-[11px] font-mono text-slate-400">
-                                                    {h.productId ? <>{h.productId.slice(0, 8)}…: </> : null}
-                                                    {paiseToDisplay(h.oldPaise)} → {paiseToDisplay(h.newPaise)} <span className="text-slate-600">· {h.actor} · {new Date(h.at).toLocaleString()}</span>
-                                                  </li>
-                                                ))}
-                                              </ul>
-                                            </div>
-                                          </>
-                                        )}
+                                        {/* Price history deliberately does NOT render here: it is an
+                                            order-level audit of decisions, and belongs in its own
+                                            Price Tracker rather than scattered through this list. */}
                                       </div>
                                     );
                                   })()}
                                 </div>
                                 
+                                {/* Per-order audit trail: ladder with stamps + this order's
+                                    email triggers. Loaded on expand, scoped to req.id. */}
+                                {isExpanded && <RowTimeline data={rowTimelines[req.id]} />}
+
                                 {/* BUY → SELL best-match suggestions (advisory, cached, admin-acceptable) */}
                                 {req.intent === 'buy' && (
                                   <MatchCandidates

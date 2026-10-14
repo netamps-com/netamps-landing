@@ -16,6 +16,8 @@
  * 500 the webhook — that triggers redelivery storms).
  */
 
+import { logOrderEmail } from '../audit/order-emails.mjs';
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -153,8 +155,39 @@ export async function onRequestPost({ request, env }) {
   const data = (event && event.data) || {};
   const to = data.to || data.email || null;
   const requestId = tagOf(data.tags, 'request');
+  const sellerRequest = tagOf(data.tags, 'seller_request');
   const kind = tagOf(data.tags, 'kind');
   const inviteId = tagOf(data.tags, 'invite');
+
+  // Delivery truth belongs on the order's own ledger: "sent" is only a claim
+  // until the provider says delivered, bounced or complained. These are NEW
+  // rows, never edits to the send row — the send happened, and later learning
+  // how it ended does not change what happened.
+  const CAUSE_BY_KIND = {
+    'owner-push': 'staff_notification',
+    escalation: 'escalation',
+    confirmation: 'order_confirmation'
+  };
+  const ledgerCause = CAUSE_BY_KIND[kind] || 'order_confirmation';
+  const ledgerOutcome = type === 'email.bounced' ? 'bounced'
+    : type === 'email.complained' ? 'complained'
+      : type === 'email.delivered' ? 'delivered'
+        : null;
+  if (ledgerOutcome && apply) {
+    const logDelivery = (rid) => rid && logOrderEmail(env, {
+      requestId: rid,
+      cause: ledgerCause,
+      outcome: ledgerOutcome,
+      recipient: to,
+      subject: null,
+      messageId: data.email_id || data.id || null,
+      detail: { providerEvent: type, kind: kind || null }
+    });
+    await logDelivery(requestId);
+    // An escalation names both orders; each side keeps its own record of what
+    // the provider said about the message it was part of.
+    if (sellerRequest && sellerRequest !== requestId) await logDelivery(sellerRequest);
+  }
 
   if (type === 'email.bounced' || type === 'email.complained') {
     const reason = type === 'email.complained' ? 'complaint' : 'hard-bounce';

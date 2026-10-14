@@ -441,6 +441,45 @@ export async function readCandidates(env, { buyOrderId } = {}) {
   }
   const enabled = await candidatesEnabled(env);
   const current = await sellBookVersion(env);
+
+  // ── Intent gate, server-side ────────────────────────────────────────────
+  // Suggested stock matches SELL inventory against a BUY request. On a SELL
+  // request there is nothing to match against it, and saying "no comparable
+  // stock" would be a misleading answer to a question that should never have
+  // been asked. The panel is hidden by intent in the UI; refusing it here too
+  // means the rule holds for any client that calls this endpoint directly.
+  let intent = null;
+  try {
+    const ord = await env.DB.prepare('SELECT intent FROM returns WHERE id = ?').bind(buyOrderId).first();
+    intent = ord && ord.intent ? String(ord.intent).toLowerCase() : null;
+  } catch { /* unreadable intent → treated as unknown below */ }
+  if (intent && intent !== 'buy') {
+    return { orderId: buyOrderId, enabled, stale: false, candidates: [], notBuy: true, intent };
+  }
+
+  // Why the last run produced what it produced — the difference between
+  // "the model found nothing" and "the model never ran". Without this the
+  // empty state has to guess, and a guess shown as fact is a fabrication.
+  let lastRun = null;
+  try {
+    const run = await env.DB.prepare(
+      'SELECT model, reason, shortlisted, considered, emitted, empty_lines, enabled, created_at ' +
+      'FROM match_candidate_runs WHERE buy_order_id = ? ORDER BY created_at DESC LIMIT 1'
+    ).bind(buyOrderId).first();
+    if (run) {
+      lastRun = {
+        model: run.model || null,
+        reason: run.reason || null,
+        shortlisted: run.shortlisted ?? null,
+        considered: run.considered ?? null,
+        emitted: run.emitted ?? null,
+        emptyLines: run.empty_lines ?? null,
+        enabled: run.enabled ?? null,
+        at: run.created_at || null
+      };
+    }
+  } catch { /* table absent → no run history to report */ }
+
   let rows = [];
   try {
     const res = await env.DB.prepare(
@@ -455,7 +494,9 @@ export async function readCandidates(env, { buyOrderId } = {}) {
   return {
     orderId: buyOrderId,
     enabled,
+    intent,
     stale,
+    lastRun,
     sellBookVersion: current,
     candidates: rows.map((r) => ({
       buyLineIdx: r.buy_line_idx,

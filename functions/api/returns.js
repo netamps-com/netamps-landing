@@ -1,5 +1,7 @@
 import { verifySession } from './intake/auth';
 import { normalizeStatus, isClosed, STATUS } from './negotiate/core.mjs';
+import { appendOrderEvent } from './audit/order-events.mjs';
+import { logOrderEmail } from './audit/order-emails.mjs';
 import { sendConfirmationEmail } from './email/confirm.js';
 import { indexLinesFor, ensureMatchTables } from './match.js';
 import { loadCatalog } from './products/suggest.js';
@@ -7,6 +9,43 @@ import { loadCatalog } from './products/suggest.js';
 // Phase-1 match index maintenance (shared with match.js — one line
 // definition via indexLinesFor, no drift). DELETE + INSERT per order keeps
 // retries idempotent. Throws on failure: callers compensate (see POST).
+
+/**
+ * Who is performing a write, for the timeline. Returns null rather than
+ * 'unknown' when the session cannot be read: an anonymous audit entry is
+ * honest, a fabricated one is not, and 'unknown' reads like a real actor.
+ */
+async function actorEmail(request, env) {
+  try {
+    const u = await verifySession(env, request);
+    if (u && u.email) return String(u.email).slice(0, 254);
+  } catch { /* unauthenticated → null */ }
+  return null;
+}
+
+/**
+ * Freeze the product lines a price decision was actually about.
+ *
+ * Stored WITH the audit row rather than looked up later: if a price row
+ * resolved its products from the live order, editing the order's lines next
+ * month would silently rewrite what last month's decision covered. Names are
+ * captured, never referenced — that is the whole point of an audit trail.
+ */
+function snapshotProductNames(productsJson) {
+  try {
+    const lines = JSON.parse(productsJson || '[]');
+    if (!Array.isArray(lines) || lines.length === 0) return null;
+    const snap = lines.map((p) => ({
+      id: p && p.id ? String(p.id).slice(0, 128) : null,
+      category: p && p.category ? String(p.category).slice(0, 120) : '',
+      details: p && p.details ? String(p.details).slice(0, 300) : '',
+      quantity: Number.isInteger(p && p.quantity) ? p.quantity : 1
+    }));
+    return snap.length ? JSON.stringify(snap).slice(0, 6000) : null;
+  } catch {
+    return null;
+  }
+}
 export async function writeMatchLines(env, orderId, intent, products, pricingBasis) {
   const lines = indexLinesFor({ id: orderId, intent, products, pricingBasis });
   if (env.DB && typeof env.DB.prepare === 'function') {
@@ -350,6 +389,18 @@ export async function onRequestPost({ request, env, context }) {
       await client.end();
     }
 
+    // ── Timeline: the order's first rung ────────────────────────────────────
+    // Recorded before the confirmation send so the ladder's opening entry is
+    // the submission itself, and the email rows that follow hang off an order
+    // that already exists in the trail.
+    await appendOrderEvent(env, {
+      requestId: returnReq.id,
+      kind: 'created',
+      rung: returnReq.status || 'Pending',
+      actor: returnReq.email || null,
+      detail: { intent: returnReq.intent || null, date: returnReq.date || null }
+    });
+
     // Submission confirmation (step 7 of the ordered pipeline): best-effort
     // post-insert send. Mail failure never fails the submission — the outcome
     // persists as confirmemailstatus for the dashboard badge + resend action.
@@ -488,26 +539,12 @@ export async function onRequestGet({ request, env }) {
         pricingBasis: row.pricingBasis === 'lot' ? 'lot' : 'per_product',
         lotConsiderationPaise: Number.isInteger(row.lotConsiderationPaise) ? row.lotConsiderationPaise : null,
         manifest: parseManifest(row.manifest),
-        finalPrice: parseFinalPrice(row.finalPrice),
-        priceHistory: []
+        finalPrice: parseFinalPrice(row.finalPrice)
       }));
-      // Attach append-only price history (best-effort; missing table = no history, never a read failure).
-      try {
-        const ids = returns.map(r => r.id);
-        if (ids.length > 0) {
-          const placeholders = ids.map(() => '?').join(',');
-          const hist = await env.DB.prepare(
-            `SELECT request_id, product_id, old_paise, new_paise, actor, at FROM price_history WHERE request_id IN (${placeholders}) ORDER BY at ASC`
-          ).bind(...ids).all().catch(() => ({ results: [] }));
-          const byReq = new Map();
-          for (const h of ((hist && hist.results) || [])) {
-            const arr = byReq.get(h.request_id) || [];
-            arr.push({ productId: h.product_id, oldPaise: h.old_paise, newPaise: h.new_paise, actor: h.actor, at: h.at });
-            byReq.set(h.request_id, arr);
-          }
-          for (const r of returns) r.priceHistory = byReq.get(r.id) || [];
-        }
-      } catch {}
+      // Price history is deliberately NOT attached here. It is an order-level
+      // audit of decisions that lives in its own Price Tracker, and pulling it
+      // into every list response would both bloat the page load and put a
+      // decision trail where the user asked it not to be.
       if (lookupId) {
         const hit = returns.find((r) => String(r.id).toUpperCase() === lookupId);
         if (!hit) {
@@ -665,6 +702,13 @@ export async function onRequestPut({ request, env }) {
           )`
         ).run();
         await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_price_history_req ON price_history(request_id)').run();
+        // Product names are captured ONCE, at the moment the price was
+        // decided, and stored with the row. Reading them later from the live
+        // order (or worse, from the live catalog) would let a later edit
+        // rewrite what a past decision was about — a retroactive change to
+        // captured data. Snapshot, never reference.
+        try { await env.DB.prepare('ALTER TABLE price_history ADD COLUMN product_names TEXT').run(); } catch {}
+        try { await env.DB.prepare('ALTER TABLE price_history ADD COLUMN basis TEXT').run(); } catch {}
       } catch(e){}
       // Audit posture: price_history records the FINAL price only. Intermediate
       // evaluated-price edits are negotiation fuel, not decisions — they live in
@@ -718,14 +762,32 @@ export async function onRequestPut({ request, env }) {
                 const sessionUser = await verifySession(env, request);
                 if (sessionUser && sessionUser.email) actor = String(sessionUser.email).slice(0, 254);
               } catch {}
+              let productsJson = null;
+              try {
+                const cur = await env.DB.prepare('SELECT products FROM returns WHERE id = ?').bind(update.id).first();
+                productsJson = cur && cur.products ? cur.products : null;
+              } catch {}
               await env.DB.prepare(
-                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
-              ).bind(crypto.randomUUID(), update.id, null, prevTotalPaise, fp.totalPaise, actor, new Date().toISOString()).run();
+                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at, product_names, basis) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)'
+              ).bind(
+                crypto.randomUUID(), update.id, null, prevTotalPaise, fp.totalPaise, actor, new Date().toISOString(),
+                snapshotProductNames(productsJson), fp.basis || null
+              ).run();
             } catch(e){}
           }
         } else {
           await env.DB.prepare('UPDATE returns SET status = ? WHERE id = ?').bind(update.status, update.id).run();
         }
+        // A status write outside the negotiation module still belongs on the
+        // timeline: "who moved this, when" must be answerable for every path,
+        // not only the buttons we happen to trust.
+        await appendOrderEvent(env, {
+          requestId: update.id,
+          kind: update.status === STATUS.DECLINED ? 'declined' : 'status_set',
+          rung: update.status,
+          actor: await actorEmail(request, env),
+          detail: { via: 'returns.status' }
+        });
       } else if (update.action === 'emailDelivery') {
         await env.DB.prepare('UPDATE returns SET emailDeliveryStatus = ? WHERE id = ?').bind(update.emailDeliveryStatus, update.id).run();
       } else if (update.action === 'price') {
@@ -769,6 +831,10 @@ export async function onRequestPut({ request, env }) {
           old_paise NUMERIC, new_paise NUMERIC, actor TEXT, at TEXT
         )`);
         await client.query('CREATE INDEX IF NOT EXISTS idx_price_history_req ON price_history(request_id)');
+        // Snapshot columns — see snapshotProductNames(): names travel WITH the
+        // decision, so a later edit cannot rewrite what it covered.
+        try { await client.query('ALTER TABLE price_history ADD COLUMN product_names TEXT'); } catch(e){}
+        try { await client.query('ALTER TABLE price_history ADD COLUMN basis TEXT'); } catch(e){}
       } catch(e){}
       // Audit posture (mirrors the D1 branch): FINAL price only, terminal rung
       // is permanent.
@@ -818,15 +884,28 @@ export async function onRequestPut({ request, env }) {
                 const sessionUser = await verifySession(env, request);
                 if (sessionUser && sessionUser.email) actorFinalPg = String(sessionUser.email).slice(0, 254);
               } catch {}
+              let productsJsonPg = null;
+              try {
+                const curPg = await client.query('SELECT products FROM returns WHERE id = $1', [update.id]);
+                productsJsonPg = curPg.rows && curPg.rows[0] ? curPg.rows[0].products : null;
+              } catch(e){}
               await client.query(
-                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                [crypto.randomUUID(), update.id, null, prevTotalPaisePg, fp.totalPaise, actorFinalPg, new Date().toISOString()]
+                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at, product_names, basis) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+                [crypto.randomUUID(), update.id, null, prevTotalPaisePg, fp.totalPaise, actorFinalPg, new Date().toISOString(),
+                  snapshotProductNames(productsJsonPg), fp.basis || null]
               );
             } catch(e){}
           }
         } else {
           await client.query('UPDATE returns SET status = $1 WHERE id = $2', [update.status, update.id]);
         }
+        await appendOrderEvent(env, {
+          requestId: update.id,
+          kind: update.status === STATUS.DECLINED ? 'declined' : 'status_set',
+          rung: update.status,
+          actor: await actorEmail(request, env),
+          detail: { via: 'returns.status' }
+        });
       } else if (update.action === 'emailDelivery') {
         await client.query('UPDATE returns SET emailDeliveryStatus = $1 WHERE id = $2', [update.emailDeliveryStatus, update.id]);
       } else if (update.action === 'price') {

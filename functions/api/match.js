@@ -359,6 +359,9 @@ export async function onRequestPost({ request, env }) {
       if (ids.length === 0) return json({ success: true, results: {} });
       if (ids.length === 1) {
         const one = await readCandidates(env, { buyOrderId: ids[0] });
+        // notBuy is a definitive answer, not an empty list: it tells the panel
+        // to render nothing at all rather than "no comparable stock", which
+        // would be a false statement about a SELL request.
         return json({ success: true, ...one });
       }
       const results = {};

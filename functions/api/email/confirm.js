@@ -1,4 +1,5 @@
 import { verifySession } from '../intake/auth';
+import { logOrderEmail, EMAIL_CAUSES } from '../audit/order-emails.mjs';
 
 /**
  * Submission confirmation mailer + resend endpoint.
@@ -191,20 +192,40 @@ async function persistConfirmStatus(env, requestId, status) {
 
 // Core sender: stored request in, outcome out. Never throws — callers treat
 // any failure as status 'failed', never as a submission failure.
-export async function sendConfirmationEmail(env, req) {
+export async function sendConfirmationEmail(env, req, cause = 'order_confirmation') {
   const requestId = req && typeof req.id === 'string' ? req.id : '';
   const email = req && typeof req.email === 'string' ? req.email : '';
   if (!requestId || !EMAIL_RE_CONFIRM.test(email)) {
     return { status: 'failed', error: 'Invalid request identity.' };
   }
+  // Cause is caller-supplied but validated against the closed vocabulary — a
+  // free-text cause would split counts across spellings, and the count is the
+  // thing being reported on.
+  const safeCause = EMAIL_CAUSES.includes(cause) ? cause : 'order_confirmation';
+  // Every branch below lands one row in the order's email ledger, so "how many
+  // emails did this order send, and why did each one fail?" is answerable from
+  // the order itself rather than from Resend's console.
+  const ledger = (outcome, detail, messageId = null) =>
+    logOrderEmail(env, {
+      requestId,
+      intent: req.intent || null,
+      cause: safeCause,
+      outcome,
+      recipient: email,
+      subject: `Your Netamps request ${requestId} is recorded`,
+      messageId,
+      detail
+    });
   if (confirmRateLimited(email)) {
     await auditConfirm(env, 'CONFIRM_EMAIL_FAILED', requestId, email, { reason: 'rate-limited' });
     await persistConfirmStatus(env, requestId, 'failed');
+    await ledger('failed', 'rate-limited');
     return { status: 'failed', error: 'Rate limited.' };
   }
   if (await isSuppressed(env, email)) {
     await auditConfirm(env, 'CONFIRM_EMAIL_FAILED', requestId, email, { reason: 'suppressed' });
     await persistConfirmStatus(env, requestId, 'failed');
+    await ledger('failed', 'suppressed');
     return { status: 'failed', error: 'Recipient suppressed.' };
   }
   const apiKey = env.RESEND_API_KEY;
@@ -212,6 +233,7 @@ export async function sendConfirmationEmail(env, req) {
     console.error('[confirm] RESEND_API_KEY is not configured');
     await auditConfirm(env, 'CONFIRM_EMAIL_FAILED', requestId, email, { reason: 'unconfigured' });
     await persistConfirmStatus(env, requestId, 'failed');
+    await ledger('failed', 'email service not configured');
     return { status: 'failed', error: 'Email service is not configured.' };
   }
   const html = buildConfirmationHtml(req);
@@ -243,14 +265,23 @@ export async function sendConfirmationEmail(env, req) {
     if (!rsRes.ok) {
       await auditConfirm(env, 'CONFIRM_EMAIL_FAILED', requestId, email, { reason: `resend-${rsRes.status}` });
       await persistConfirmStatus(env, requestId, 'failed');
+      await ledger('failed', `provider rejected the send (HTTP ${rsRes.status})`);
       return { status: 'failed', error: 'Delivery failed.' };
     }
+    let providerId = null;
+    try {
+      const body = await rsRes.json();
+      providerId = body && typeof body.id === 'string' ? body.id : null;
+    } catch { /* a body we cannot parse does not stop a send we can see */ }
     await auditConfirm(env, 'CONFIRM_EMAIL_SENT', requestId, email, {});
     await persistConfirmStatus(env, requestId, 'sent');
+    await ledger('sent', 'accepted by provider', providerId);
     return { status: 'sent' };
   } catch (err) {
-    await auditConfirm(env, 'CONFIRM_EMAIL_FAILED', requestId, email, { reason: 'error' });
+    const aborted = err && (err.name === 'AbortError' || err.code === 20);
+    await auditConfirm(env, 'CONFIRM_EMAIL_FAILED', requestId, email, { reason: aborted ? 'timeout' : 'error' });
     await persistConfirmStatus(env, requestId, 'failed');
+    await ledger('failed', aborted ? 'provider timeout after 8s' : 'network error');
     return { status: 'failed', error: 'Delivery failed.' };
   }
 }
@@ -323,7 +354,7 @@ export async function onRequestPost({ request, env }) {
     if (!stored) {
       return json({ success: false, message: 'Request not found.' }, 404);
     }
-    const result = await sendConfirmationEmail(env, stored);
+    const result = await sendConfirmationEmail(env, stored, 'order_confirmation_resend');
     if (result.status !== 'sent') {
       // NOTE: never HTTP 502 — Pages rewrites function 502s into a generic text page.
       return json({ success: false, message: result.error || 'Delivery failed.' }, 503);
