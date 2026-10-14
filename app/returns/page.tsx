@@ -723,7 +723,7 @@ export default function ReturnsPage() {
                   onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
                   className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  One-Click Liquidation
+                  One-Click Liquidation(Sell)
                 </button>
                 <button 
                   type="button"
@@ -732,7 +732,7 @@ export default function ReturnsPage() {
                   onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
                   className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  Buy with Absolute Confidence
+                  Buy with Confidence
                 </button>
                 <button 
                   type="button"
@@ -750,16 +750,10 @@ export default function ReturnsPage() {
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.22 }}
-                  aria-label="Buy with absolute confidence"
+                  aria-label="Buy with confidence"
                   className="mb-4 rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-white to-teal-50 px-5 py-4"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white shrink-0">
-                      <CheckCircle2 className="w-4 h-4" />
-                    </span>
-                    <h3 className="text-lg font-black tracking-tight text-slate-900">Buy with Absolute Confidence</h3>
-                  </div>
-                  <ul className="mt-3 flex flex-wrap gap-2">
+                  <ul className="flex flex-wrap gap-2">
                     {['Fast Quotes', 'Zero Risk', 'Fully Tested Hardware', 'Enterprise-Grade Quality', 'Custom sourcing'].map((t) => (
                       <li
                         key={t}
@@ -770,7 +764,7 @@ export default function ReturnsPage() {
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-2.5 text-[13px] text-slate-600">
+                  <p className="mt-3 text-[13px] text-slate-600">
                     <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
                   </p>
                 </motion.section>
@@ -908,7 +902,7 @@ export default function ReturnsPage() {
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         {isUploading ? 'Uploading securely to R2...' : 'Verifying...'}
                       </div>
-                    ) : (intent === 'sell' ? 'Verify & Generate One-Click Liquidation' : 'Verify & Buy with Absolute Confidence')}
+                    ) : (intent === 'sell' ? 'Verify & Generate One-Click Liquidation' : 'Verify & Buy with Confidence')}
                   </button>
                   <button type="button" onClick={() => { setShowOtp(false); resetRetToken(); }} className="text-sm text-indigo-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded">
                     Cancel and return to form
@@ -1368,7 +1362,7 @@ export default function ReturnsPage() {
                       {isSubmitting ? (
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       ) : (
-                        intent === 'sell' ? 'One-Click Liquidation' : 'Buy with Absolute Confidence'
+                        intent === 'sell' ? 'One-Click Liquidation' : 'Buy with Confidence'
                       )}
                     </button>
                     <button
