@@ -26,7 +26,7 @@ function timingSafeEqual(a, b) {
 // export builds do not refresh underscore-prefixed public files — this
 // middleware is the enforcement point. Hashed _next chunks stay immutable
 // regardless, so this costs zero performance.
-const NO_STORE_PATHS = ['/dashboard', '/intake', '/login'];
+const NO_STORE_PATHS = ['/dashboard', '/intake', '/login', '/returns'];
 
 export async function onRequest(context) {
   const { request, env, next } = context;

@@ -7,6 +7,7 @@ import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
 import { Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalLink, Mail } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
+import { hasHomeEntry, hasInternalReferrer, markHomeEntry } from '../lib/home-entry';
 
 const statusColors = {
   operational: 'bg-emerald-500 text-emerald-400',
@@ -192,6 +193,29 @@ export default function LoginPage() {
 
   const router = useRouter();
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Homepage-only entry gate (UX gate, not a security boundary — see
+  // app/lib/home-entry.ts). Direct deep links land here only after passing
+  // through "/". Email/security flows (invite, reset, expired) are exempt
+  // because they cannot originate from homepage navigation.
+  const [entryChecked, setEntryChecked] = useState(false);
+  const [entryAllowed, setEntryAllowed] = useState(false);
+  useEffect(() => {
+    try {
+      const params = new URL(window.location.href).searchParams;
+      const exempt = params.has('invite') || params.has('reset') || params.get('expired') === '1';
+      if (exempt || hasHomeEntry() || hasInternalReferrer()) {
+        markHomeEntry();
+        setEntryAllowed(true);
+      } else {
+        router.replace('/');
+      }
+    } catch {
+      setEntryAllowed(true);
+    } finally {
+      setEntryChecked(true);
+    }
+  }, [router]);
 
   const [showStatus, setShowStatus] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -425,7 +449,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      
+      {!entryChecked || !entryAllowed ? (
+        <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
+          <p className="text-sm text-slate-500">Checking entry… redirecting to homepage when opened directly.</p>
+        </div>
+      ) : null}
+      {entryChecked && entryAllowed ? (
+      <>
       {/* Floating Status Widget */}
       <HealthStatusWidget />
 
@@ -693,6 +723,8 @@ export default function LoginPage() {
           <span>TLS 1.3 · Verified Sessions · Role-Gated Access · Full Audit Trail</span>
         </div>
       </div>
+      </>
+      ) : null}
     </div>
   );
 }

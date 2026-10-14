@@ -9,6 +9,8 @@ import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import ProductTypeahead from '../components/ProductTypeahead';
 import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
+import { useRouter } from 'next/navigation';
+import { hasHomeEntry, hasInternalReferrer, markHomeEntry } from '../lib/home-entry';
 
 function hexOfBytes(bytes: Uint8Array) {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -60,6 +62,26 @@ interface ProductItem {
 // evaluated price is per-unit. ──
 
 export default function ReturnsPage() {
+  const router = useRouter();
+  // Homepage-only entry gate (UX gate, not a security boundary — see
+  // app/lib/home-entry.ts). No query-param exemptions here: tracking uses
+  // in-page state, and the sid is minted by this page itself after entry.
+  const [entryChecked, setEntryChecked] = useState(false);
+  const [entryAllowed, setEntryAllowed] = useState(false);
+  useEffect(() => {
+    try {
+      if (hasHomeEntry() || hasInternalReferrer()) {
+        markHomeEntry();
+        setEntryAllowed(true);
+      } else {
+        router.replace('/');
+      }
+    } catch {
+      setEntryAllowed(true);
+    } finally {
+      setEntryChecked(true);
+    }
+  }, [router]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [intent, setIntent] = useState<'sell' | 'buy' | 'track'>('sell');
@@ -606,7 +628,13 @@ export default function ReturnsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      
+      {(!entryChecked || !entryAllowed) && (
+        <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
+          <p className="text-sm text-slate-500">Checking entry… redirecting to homepage when opened directly.</p>
+        </div>
+      )}
+      {entryChecked && entryAllowed && (
+      <>
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
@@ -1279,6 +1307,8 @@ export default function ReturnsPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
