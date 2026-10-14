@@ -26,9 +26,10 @@
 import { verifySession } from './intake/auth';
 import {
   dbReady, ensureNegotiationSchema, getOrderById, listNegotiations,
-  readNegotiation, findOrCreateNegotiation, appendRound, readRounds, finalizeDeal
+  readNegotiation, findOrCreateNegotiation, appendRound, readRounds, finalizeDeal,
+  reconcileOrder
 } from './negotiate/store.mjs';
-import { validateRound, applyRound, summarize, capturePriceSnapshot, isNegotiable, isClosed, STATUS } from './negotiate/core.mjs';
+import { validateRound, applyRound, summarize, capturePriceSnapshot, explainGate, normalizeStatus, isClosed, STATUS } from './negotiate/core.mjs';
 import { publicOrder } from './track/verify-otp.js';
 
 function json(body, status = 200) {
@@ -65,9 +66,13 @@ export async function onRequestGet({ request, env }) {
     for (const n of rows) {
       const order = await getOrderById(env, n.request_id);
       const summary = await threadFor(env, n, order);
+      // The thread is the record; the order's status is its projection. Repair
+      // the projection here so the monitor, the dashboard and the buyer's Track
+      // page all read one story out of one field.
+      const { order: healed } = await reconcileOrder(env, order, summary.status);
       items.push({
         ...summary,
-        order: order ? publicOrder(order) : null
+        order: healed ? publicOrder(healed) : null
       });
     }
     return json({ success: true, viewerRole: user.role || 'user', negotiations: items });
@@ -100,20 +105,27 @@ export async function onRequestPost({ request, env }) {
     if (action === 'open') {
       const order = await getOrderById(env, typeof body.requestId === 'string' ? body.requestId : '');
       if (!order) return json({ success: false, message: 'Request not found.' }, 404);
-      if (isClosed(order.status)) {
+      if (isClosed(normalizeStatus(order.status))) {
         return json({
           success: false,
-          message: order.status === STATUS.DECLINED
+          message: normalizeStatus(order.status) === STATUS.DECLINED
             ? 'This request was declined.'
-            : 'This request is already deal-approved.'
+            : 'This request is already deal-approved.',
+          code: normalizeStatus(order.status) === STATUS.DECLINED ? 'DECLINED' : 'DEAL_CLOSED',
+          orderStatus: normalizeStatus(order.status)
         }, 409);
       }
       const negotiation = await findOrCreateNegotiation(env, order);
       const summary = await threadFor(env, negotiation, order);
+      // Reopen returns the thread's OWN rung, never a hard-coded one: if the
+      // thread has already progressed to "Negotiation in Progress" (or
+      // "Accepted Final Price"), reporting "Order Accepted for Negotiation"
+      // here would rewind the status the rest of the system is showing.
+      const { order: healed } = await reconcileOrder(env, order, summary.status);
       return json({
         success: true,
-        negotiation: { ...summary, order: publicOrder({ ...order, status: STATUS.ACCEPTED }) },
-        status: STATUS.ACCEPTED
+        negotiation: { ...summary, order: publicOrder(healed || order) },
+        status: summary.status
       });
     }
 
@@ -137,20 +149,39 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'A negotiationId or requestId is required.' }, 400);
     }
 
-    const order = await getOrderById(env, negotiation.request_id);
-    if (!order) return json({ success: false, message: 'Request not found.' }, 404);
+    const order0 = await getOrderById(env, negotiation.request_id);
+    if (!order0) return json({ success: false, message: 'Request not found.' }, 404);
 
-    // Chronology gate: staff must accept the request for negotiation first.
-    if (!isNegotiable(order.status)) {
+    const rounds0 = await readRounds(env, negotiation.id);
+    const projected = summarize(negotiation, rounds0, order0);
+
+    // ── Chronology gate ────────────────────────────────────────────────────
+    // Gated on the THREAD, not on the order's status field: once a thread
+    // exists its status is the authoritative one (rounds are append-only), so
+    // the chip on this very screen and this refusal can never disagree.
+    // Reconcile first, so an order left behind by a failed mirror write is
+    // repaired and the action proceeds against the rung the thread is really on.
+    const { order } = await reconcileOrder(env, order0, projected.status);
+
+    const gate = explainGate({
+      kind: check.value.kind,
+      side: 'staff',
+      orderStatus: order.status,
+      threadStatus: projected.status
+    });
+    if (!gate.ok) {
       return json({
         success: false,
-        message: isClosed(order.status)
-          ? 'This request is closed — no further negotiation is possible.'
-          : 'Accept this request for negotiation first ("Order Accepted for Negotiation").'
+        code: gate.code,
+        message: gate.message,
+        // Both fields travel with the refusal, so the screen can show exactly
+        // what disagreed instead of presenting one number as a mystery.
+        orderStatus: normalizeStatus(order.status),
+        threadStatus: projected.status
       }, 409);
     }
 
-    const rounds = await readRounds(env, negotiation.id);
+    const rounds = rounds0;
     const next = applyRound(
       {
         status: negotiation.status,
@@ -159,7 +190,7 @@ export async function onRequestPost({ request, env }) {
       },
       check.value
     );
-    if (!next.ok) return json({ success: false, message: next.error }, 409);
+    if (!next.ok) return json({ success: false, message: next.error, code: next.code || 'ILLEGAL_VERB' }, 409);
 
     // Freeze the price staff are acting against, right now (pre-approval, so
     // the closing round records the figure that was actually agreed).

@@ -85,6 +85,74 @@ export function isNegotiable(status) {
   return s === STATUS.ACCEPTED || s === STATUS.IN_PROGRESS || s === STATUS.AGREED;
 }
 
+/* ── Chronology gate ────────────────────────────────────────────────────── */
+
+const VERB_LABEL = Object.freeze({
+  offer: 'make an offer',
+  counter: 'counter',
+  accept: 'accept what is on the table',
+  reject: 'reject this negotiation',
+  withdraw: 'withdraw the offer',
+  approve: 'approve this deal'
+});
+
+/**
+ * Decide AND explain a chronology refusal in one call.
+ *
+ * The gate reads ONE status: the live thread when one exists, otherwise the
+ * order. That distinction is the whole point. A thread is append-only — its
+ * status is the one value that cannot have been edited out from under us —
+ * so once a thread exists it is authoritative and the order's own status is
+ * merely a projection of it. Gating on the order instead is how a screen can
+ * read "Negotiation in Progress" while the button refuses with "accept this
+ * request first": two different fields answering one question.
+ *
+ * Returns { ok:true, status } when the verb may proceed, otherwise
+ * { ok:false, code, message } naming the rung and the verb in the words of the
+ * person who pressed the button.
+ */
+export function explainGate({ kind, side, orderStatus, threadStatus } = {}) {
+  const order = normalizeStatus(orderStatus);
+  const thread = threadStatus ? normalizeStatus(threadStatus) : null;
+  const effective = thread || order;
+
+  if (isNegotiable(effective)) return { ok: true, status: effective };
+
+  const verb = VERB_LABEL[kind] || `perform “${kind}”`;
+  const who = side === 'buyer' ? 'You can' : 'Staff can';
+
+  if (effective === STATUS.PENDING) {
+    return {
+      ok: false,
+      code: 'NOT_ACCEPTED_YET',
+      status: effective,
+      message: `This request is still at “${STATUS.PENDING}”. ${who} not ${verb} until staff press “${STATUS.ACCEPTED}”.`
+    };
+  }
+  if (effective === STATUS.DECLINED) {
+    return {
+      ok: false,
+      code: 'DECLINED',
+      status: effective,
+      message: `This request was declined and the negotiation closed at “${STATUS.DECLINED}”. No further action is possible on it.`
+    };
+  }
+  if (effective === STATUS.DEAL) {
+    return {
+      ok: false,
+      code: 'DEAL_CLOSED',
+      status: effective,
+      message: `This deal is already closed at “${STATUS.DEAL}”. A closed deal cannot be renegotiated — raise a new request instead.`
+    };
+  }
+  return {
+    ok: false,
+    code: 'OFF_LADDER',
+    status: effective,
+    message: `This request sits at “${effective}”, which is not on the negotiation ladder (${CHRONOLOGY.join(' → ')}). Staff should set a valid status before continuing.`
+  };
+}
+
 export const MAX_NOTE = 500;
 
 // Which verbs each side may use.

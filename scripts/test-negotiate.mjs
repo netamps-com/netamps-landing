@@ -13,12 +13,13 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   validateRound, applyRound, capturePriceSnapshot, isStale, summarize,
   orderBaselinePaise, STATUS, MAX_NOTE, MAX_CONSIDERATION_PAISE,
-  normalizeStatus, isClosed, isNegotiable, statusRank, CHRONOLOGY
+  normalizeStatus, isClosed, isNegotiable, statusRank, CHRONOLOGY, explainGate
 } from '../functions/api/negotiate/core.mjs';
 import {
   ensureNegotiationSchema, getOrderById, serializeOrderRow, findOrCreateNegotiation,
   appendRound, readRounds, readNegotiation, listNegotiations, listNegotiationsForOrder,
-  mintBuyerToken, verifyBuyerToken, listOrdersByEmail, finalizeDeal, setOrderStatus
+  mintBuyerToken, verifyBuyerToken, listOrdersByEmail, finalizeDeal, setOrderStatus,
+  reconcileOrder
 } from '../functions/api/negotiate/store.mjs';
 
 let pass = 0, fail = 0;
@@ -262,13 +263,87 @@ function seedOrder(db, { id, intent = 'buy', email = 'buyer@example.com', lines 
   t('an address with no orders returns none', (await listOrdersByEmail(env, 'nobody@example.com')).length === 0);
   t('a blank address never matches everything', (await listOrdersByEmail(env, '')).length === 0);
 
-  // setOrderStatus is best-effort and never throws on an unknown order.
-  await setOrderStatus(env, 'B-NOPE', STATUS.DECLINED);
-  t('setting a missing order status is harmless', true);
+  // setOrderStatus reports its outcome and never throws, even for a missing row.
+  const missingMirror = await setOrderStatus(env, 'B-NOPE', STATUS.DECLINED);
+  t('a missing-order mirror reports success without throwing', missingMirror.ok === true);
 
   // serializeOrderRow handles snake/alt casing from D1.
   const mapped = serializeOrderRow({ id: 'X', products: '[]', attachedfiles: '[]', pricingbasis: 'lot', lotconsiderationpaise: 5, finalprice: JSON.stringify({ version: 1, totalPaise: 5 }) });
   t('serialize handles alternate column casing', mapped.pricingBasis === 'lot' && mapped.lotConsiderationPaise === 5 && mapped.finalPrice.version === 1);
+}
+
+// ── 10. The chronology gate explains itself, and the thread outranks the order
+// ─────────────────────────────────────────────────────────────────────────────
+// Regression guard for the deadlock where the monitor chip read "Negotiation in
+// Progress" while every verb refused with "accept this request for
+// negotiation first": the gate read the ORDER's status field while the chip
+// read the THREAD's, and the two had drifted apart.
+{
+  t('a pending order refuses every verb', explainGate({ kind: 'offer', side: 'buyer', orderStatus: STATUS.PENDING }).code === 'NOT_ACCEPTED_YET');
+  t('the refusal names the verb', /make an offer/.test(explainGate({ kind: 'offer', side: 'buyer', orderStatus: STATUS.PENDING }).message));
+  t('staff and buyer see their own verb named',
+    /press/.test(explainGate({ kind: 'approve', side: 'staff', orderStatus: STATUS.PENDING }).message) ||
+    /Staff can/.test(explainGate({ kind: 'approve', side: 'staff', orderStatus: STATUS.PENDING }).message));
+
+  t('an accepted order lets staff act', explainGate({ kind: 'offer', side: 'staff', orderStatus: STATUS.ACCEPTED }).ok === true);
+  t('an in-progress order lets the buyer act', explainGate({ kind: 'counter', side: 'buyer', orderStatus: STATUS.IN_PROGRESS }).ok === true);
+  t('an agreed order is still negotiable — it is not a closure',
+    explainGate({ kind: 'accept', side: 'buyer', orderStatus: STATUS.AGREED }).ok === true);
+
+  t('a deal-approved order is closed', explainGate({ kind: 'offer', side: 'buyer', orderStatus: STATUS.DEAL }).code === 'DEAL_CLOSED');
+  t('a declined order is closed', explainGate({ kind: 'offer', side: 'staff', orderStatus: STATUS.DECLINED }).code === 'DECLINED');
+  t('the legacy word Approved reads as closed', explainGate({ kind: 'offer', side: 'staff', orderStatus: 'Approved' }).code === 'DEAL_CLOSED');
+
+  // THE regression: order says Pending, thread says in progress. The thread
+  // is append-only and therefore authoritative.
+  const drifted = explainGate({ kind: 'offer', side: 'staff', orderStatus: STATUS.PENDING, threadStatus: STATUS.IN_PROGRESS });
+  t('a live thread outranks a drifted order status', drifted.ok === true);
+  t('the gate reports the rung it decided on', drifted.status === STATUS.IN_PROGRESS);
+  t('a closed thread outranks an open-looking order',
+    explainGate({ kind: 'offer', side: 'staff', orderStatus: STATUS.IN_PROGRESS, threadStatus: STATUS.DEAL }).code === 'DEAL_CLOSED');
+  t('an off-ladder status is refused rather than guessed',
+    explainGate({ kind: 'offer', side: 'staff', orderStatus: 'In Transit' }).code === 'OFF_LADDER');
+}
+
+// ── 11. Reconciliation repairs the projection, never the record ─────────────
+{
+  const { env, db } = makeEnv();
+  await ensureNegotiationSchema(env);
+
+  seedOrder(db, { id: 'B-DRIFT', status: STATUS.PENDING });
+  const drifted = await getOrderById(env, 'B-DRIFT');
+  const fixed = await reconcileOrder(env, drifted, STATUS.IN_PROGRESS);
+  t('a drifted projection is repaired from the thread',
+    fixed.reconciled === true && db.prepare('SELECT status FROM returns WHERE id = ?').get('B-DRIFT').status === STATUS.IN_PROGRESS);
+  t('the repaired order is handed back to the caller', fixed.order.status === STATUS.IN_PROGRESS);
+
+  const already = await getOrderById(env, 'B-DRIFT');
+  const again = await reconcileOrder(env, already, STATUS.IN_PROGRESS);
+  t('an in-step projection is left alone', again.reconciled === false);
+
+  // A terminal rung is permanent — reconciliation must never reopen a deal.
+  seedOrder(db, { id: 'B-CLOSED', status: STATUS.DEAL });
+  const closed = await getOrderById(env, 'B-CLOSED');
+  const refused = await reconcileOrder(env, closed, STATUS.IN_PROGRESS);
+  t('a closed order is never reopened by reconciliation',
+    refused.reconciled === false && refused.drift === true &&
+    db.prepare('SELECT status FROM returns WHERE id = ?').get('B-CLOSED').status === STATUS.DEAL);
+
+  // The heal inside findOrCreateNegotiation mirrors the thread's OWN rung —
+  // an in-progress thread is not rewound to "Order Accepted for Negotiation".
+  seedOrder(db, { id: 'B-REWIND', status: STATUS.PENDING });
+  const order = await getOrderById(env, 'B-REWIND');
+  const thread = await findOrCreateNegotiation(env, order);
+  await appendRound(
+    env, thread,
+    validateRound({ side: 'staff', kind: 'offer', totalPaise: 500000 }).value,
+    capturePriceSnapshot(order), 'staff@netamps.com',
+    applyRound({ status: thread.status, roundCount: 0 }, validateRound({ side: 'staff', kind: 'offer', totalPaise: 500000 }).value)
+  );
+  db.prepare('UPDATE returns SET status = ? WHERE id = ?').run(STATUS.PENDING, 'B-REWIND');
+  await findOrCreateNegotiation(env, await getOrderById(env, 'B-REWIND'));
+  t('reopening a progressed thread does not rewind its history',
+    db.prepare('SELECT status FROM returns WHERE id = ?').get('B-REWIND').status === STATUS.IN_PROGRESS);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

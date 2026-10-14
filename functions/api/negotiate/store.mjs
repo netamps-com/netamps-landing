@@ -150,12 +150,60 @@ export async function listOrdersByEmail(env, email, limit = 50) {
 
 /* ── Negotiation lifecycle ──────────────────────────────────────────────── */
 
-/** Mirror the thread's status onto the order record so both tell one story. */
+/**
+ * Mirror the thread's status onto the order record so both tell one story.
+ *
+ * A D1 write can fail transiently. Swallowing that is precisely how an order
+ * and its thread end up contradicting each other: the head advances to
+ * "Negotiation in Progress" while the order row is left on "Pending", and from
+ * then on every negotiation verb refuses against a status the thread has
+ * already left — with no error anywhere to explain why.
+ *
+ * So: retry once, report the outcome to the caller, and log loudly. Read paths
+ * re-derive the status from the thread (reconcileOrder), so a failure that
+ * survives the retry self-heals on the next load instead of wedging the thread.
+ */
 export async function setOrderStatus(env, requestId, status) {
-  if (!dbReady(env)) return;
-  try {
-    await env.DB.prepare('UPDATE returns SET status = ?1 WHERE id = ?2').bind(status, requestId).run();
-  } catch { /* the order write must never fail the round it mirrors */ }
+  if (!dbReady(env)) return { ok: false, error: 'database unavailable' };
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await env.DB.prepare('UPDATE returns SET status = ?1 WHERE id = ?2').bind(status, requestId).run();
+      return { ok: true };
+    } catch (err) {
+      if (attempt < 2) continue;
+      const message = String((err && err.message) || err);
+      console.error('[negotiate] order-status mirror FAILED', JSON.stringify({ requestId, status, message }));
+      return { ok: false, error: message };
+    }
+  }
+  return { ok: false, error: 'unreachable' };
+}
+
+/**
+ * Repair the projection from the record.
+ *
+ * The rounds are append-only, so the thread is the durable account of what
+ * happened and the order's status field is a projection of it. Where the two
+ * disagree the projection is rewritten to match the thread — one write, always
+ * reported (never a silent mutation of captured data), and never applied to a
+ * terminal rung: a closed deal or a decline is permanent, so if the order is
+ * already closed the drift is surfaced rather than "repaired".
+ */
+export async function reconcileOrder(env, order, authoritativeStatus) {
+  if (!order || !authoritativeStatus) return { order, reconciled: false, drift: false };
+  const current = normalizeStatus(order.status);
+  if (current === authoritativeStatus) return { order, reconciled: false, drift: false };
+
+  if (isClosed(current)) {
+    console.error('[negotiate] status drift (order is terminal, left untouched)', JSON.stringify({
+      requestId: order.id, orderStatus: current, threadStatus: authoritativeStatus
+    }));
+    return { order, reconciled: false, drift: true };
+  }
+
+  const res = await setOrderStatus(env, order.id, authoritativeStatus);
+  if (!res.ok) return { order, reconciled: false, drift: true };
+  return { order: { ...order, status: authoritativeStatus }, reconciled: true, drift: true };
 }
 
 export async function readNegotiation(env, id) {
@@ -203,9 +251,11 @@ export async function findOrCreateNegotiation(env, order) {
 
   const existing = await readActiveNegotiation(env, order.id);
   if (existing) {
-    // An order still sitting on "Pending" that already has a thread means the
-    // mirror write was missed (crash between the two statements) — heal it.
-    if (orderStatus === STATUS.PENDING) await setOrderStatus(env, order.id, STATUS.ACCEPTED);
+    // The thread already exists, so the order's status is a projection of it.
+    // Repair the projection with the thread's OWN rung — never with a
+    // hard-coded one: an "Order Accepted for Negotiation" mirror written over a
+    // thread that has already progressed would rewind the order's history.
+    await reconcileOrder(env, order, normalizeStatus(existing.status));
     return existing;
   }
 
@@ -243,11 +293,13 @@ export async function readRounds(env, negotiationId) {
 
 /**
  * Append one immutable round and advance the negotiation head atomically
- * (two statements, best-effort; a crash between them leaves the round
- * recorded — the head is recomputable from the thread, so it self-heals).
+ * (two statements; a crash between them leaves the round recorded — the head
+ * is recomputable from the thread, so it self-heals).
  *
- * The order record is advanced too: the head and the order must never drift,
- * or the dashboard would show a status the thread contradicts.
+ * The order record is advanced too, and that write is NOT best-effort-silent:
+ * setOrderStatus retries and reports. A missed mirror leaves the dashboard
+ * showing a status the thread contradicts, which is why every read path also
+ * reconciles the order from the thread.
  */
 export async function appendRound(env, negotiation, value, snapshot, actorEmail, nextState) {
   const rows = await readRounds(env, negotiation.id);

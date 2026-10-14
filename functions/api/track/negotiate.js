@@ -20,9 +20,10 @@
 
 import {
   getOrderById, listOrdersByEmail, dbReady, ensureNegotiationSchema,
-  listNegotiationsForOrder, findOrCreateNegotiation, appendRound, readRounds, verifyBuyerToken
+  listNegotiationsForOrder, findOrCreateNegotiation, appendRound, readRounds, verifyBuyerToken,
+  reconcileOrder, readActiveNegotiation
 } from '../negotiate/store.mjs';
-import { validateRound, applyRound, summarize, capturePriceSnapshot, isNegotiable, isClosed, STATUS } from '../negotiate/core.mjs';
+import { validateRound, applyRound, summarize, capturePriceSnapshot, explainGate, normalizeStatus } from '../negotiate/core.mjs';
 import { publicOrder } from './verify-otp.js';
 
 function json(body, status = 200) {
@@ -85,14 +86,34 @@ export async function onRequestGet({ request, env }) {
 
     const negotiations = await listNegotiationsForOrder(env, order.id);
     const threads = [];
-    for (const n of negotiations) threads.push(await threadFor(env, n, order));
+    let liveStatus = null;
+    let liveRank = -1;
+    for (const n of negotiations) {
+      const summary = await threadFor(env, n, order);
+      threads.push(summary);
+      // The most advanced non-terminal thread decides whether the buyer may
+      // speak; an old closed thread never unlocks a new one.
+      if (!summary.closed && summary.statusRank > liveRank) {
+        liveRank = summary.statusRank;
+        liveStatus = summary.status;
+      }
+    }
 
+    // Repair the projection from the record before reporting, so the Track page
+    // and the dashboard never quote two different statuses for one order.
+    let view = order;
+    if (liveStatus) {
+      const healed = await reconcileOrder(env, order, liveStatus);
+      view = healed.order || order;
+    }
+
+    const status = liveStatus || normalizeStatus(view.status);
     return json({
       success: true,
-      order: publicOrder(order),
+      order: publicOrder(view),
       // Chronological truth for the UI: can this buyer speak yet?
-      negotiable: isNegotiable(order.status) && !isClosed(order.status),
-      status: order.status || STATUS.PENDING,
+      negotiable: liveStatus !== null,
+      status,
       negotiations: threads
     });
   } catch (err) {
@@ -127,16 +148,31 @@ export async function onRequestPost({ request, env }) {
 
     await ensureNegotiationSchema(env);
 
-    // Chronology gate: until staff press "Order Accepted for Negotiation" the
-    // request is still Pending and the buyer has nothing to negotiate against.
-    if (!isNegotiable(order.status)) {
-      const msg = isClosed(order.status)
-        ? 'This request is closed — no further negotiation is possible.'
-        : 'Netamps has not accepted this request for negotiation yet.';
-      return json({ success: false, message: msg }, 409);
+    // ── Chronology gate ────────────────────────────────────────────────────
+    // A live thread, if one exists, is authoritative: it is append-only, so
+    // its status is the one value that cannot have been edited out from under
+    // us. Gate on it (not on the order's status field) so the Track page and
+    // this refusal can never disagree, and repair the order's projection first.
+    const live0 = await readActiveNegotiation(env, order.id);
+    const liveSummary0 = live0 ? summarize(live0, await readRounds(env, live0.id), order) : null;
+    const gate = explainGate({
+      kind: check.value.kind,
+      side: 'buyer',
+      orderStatus: order.status,
+      threadStatus: liveSummary0 ? liveSummary0.status : null
+    });
+    if (!gate.ok) {
+      return json({
+        success: false,
+        code: gate.code,
+        message: gate.message,
+        orderStatus: normalizeStatus(order.status),
+        threadStatus: liveSummary0 ? liveSummary0.status : null
+      }, 409);
     }
 
-    const negotiation = await findOrCreateNegotiation(env, order);
+    const { order: reconciledOrder } = await reconcileOrder(env, order, gate.status);
+    const negotiation = await findOrCreateNegotiation(env, reconciledOrder);
 
     const rounds = await readRounds(env, negotiation.id);
     const next = applyRound(
@@ -147,7 +183,7 @@ export async function onRequestPost({ request, env }) {
       },
       check.value
     );
-    if (!next.ok) return json({ success: false, message: next.error }, 409);
+    if (!next.ok) return json({ success: false, message: next.error, code: next.code || 'ILLEGAL_VERB' }, 409);
 
     // Freeze the price the buyer is acting against, right now.
     const snapshot = capturePriceSnapshot(order);

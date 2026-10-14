@@ -677,10 +677,29 @@ export async function onRequestPut({ request, env }) {
           if (current && isClosed(normalizeStatus(current.status))) {
             return new Response(JSON.stringify({
               success: false,
+              code: 'ALREADY_CLOSED',
               message: `This request is already “${normalizeStatus(current.status)}” and cannot be moved again.`
             }), { status: 409, headers: { 'Content-Type': 'application/json' } });
           }
-        } catch { /* no row/table → the UPDATE simply matches nothing */ }
+          // A live negotiation thread OWNS the order's status. Letting a bare
+          // status write land here moves the order to a rung its thread has
+          // already left, and from then on every negotiation verb refuses
+          // against a status the thread contradicts — the exact deadlock where
+          // the screen reads "Negotiation in Progress" while the button says
+          // "accept this request first". Status for a threaded order is moved
+          // only by the negotiation module, which advances the thread and the
+          // order together.
+          const liveThread = await env.DB.prepare(
+            "SELECT id, status FROM negotiations WHERE request_id = ? AND status NOT IN ('Order Deal Approved','Declined','rejected','withdrawn') ORDER BY created_at DESC LIMIT 1"
+          ).bind(update.id).first();
+          if (liveThread) {
+            return new Response(JSON.stringify({
+              success: false,
+              code: 'THREAD_OWNS_STATUS',
+              message: `This request has a live negotiation thread at “${normalizeStatus(liveThread.status)}”. Its status is changed from the Negotiations tab, which moves the thread and the order together.`
+            }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+          }
+        } catch { /* table absent (feature not yet installed) → no thread to consult */ }
       }
       if (update.action === 'status') {
         if (update.finalPrice !== undefined) {
@@ -760,10 +779,26 @@ export async function onRequestPut({ request, env }) {
           if (curStatus && isClosed(normalizeStatus(curStatus))) {
             return new Response(JSON.stringify({
               success: false,
+              code: 'ALREADY_CLOSED',
               message: `This request is already “${normalizeStatus(curStatus)}” and cannot be moved again.`
             }), { status: 409, headers: { 'Content-Type': 'application/json' } });
           }
-        } catch { /* no row/table → the UPDATE simply matches nothing */ }
+          // Same rule as the D1 branch: a live thread owns the order's status,
+          // so a bare status write cannot move the order off the rung its
+          // thread is on. Only the negotiation module advances both together.
+          const liveThreadPg = await client.query(
+            "SELECT id, status FROM negotiations WHERE request_id = $1 AND status NOT IN ('Order Deal Approved','Declined','rejected','withdrawn') ORDER BY created_at DESC LIMIT 1",
+            [update.id]
+          );
+          const liveRowPg = liveThreadPg.rows && liveThreadPg.rows[0];
+          if (liveRowPg) {
+            return new Response(JSON.stringify({
+              success: false,
+              code: 'THREAD_OWNS_STATUS',
+              message: `This request has a live negotiation thread at “${normalizeStatus(liveRowPg.status)}”. Its status is changed from the Negotiations tab, which moves the thread and the order together.`
+            }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+          }
+        } catch { /* table absent (feature not yet installed) → no thread to consult */ }
       }
       if (update.action === 'status') {
         if (update.finalPrice !== undefined) {

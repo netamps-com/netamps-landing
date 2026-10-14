@@ -433,6 +433,12 @@ export default function DashboardPage() {
         setApproveError(data?.message || 'Could not accept this request for negotiation.');
         return;
       }
+      // The server answers with the thread's OWN rung — which may already have
+      // progressed past "Order Accepted for Negotiation" if the request was
+      // reopened. Displaying the rung we optimistically guessed would put this
+      // row out of step with the monitor and the Track page.
+      const settledStatus = typeof data.status === 'string' ? data.status : ORDER_STATUS.ACCEPTED;
+      setReturns(previous.map(r => (r.id === req.id ? { ...r, status: settledStatus } : r)));
       const { logEvent } = await import('../lib/logger');
       logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${req.id} accepted for negotiation`, userRole);
     } catch (err) {
