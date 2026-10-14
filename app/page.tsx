@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useLayoutEffect } from 'react';
 import SecureLoginButton from './SecureLoginButton';
 import FirmOverviewBanner from './FirmOverviewBanner';
 import ServerStatusWidget from './ServerStatusWidget';
@@ -123,7 +123,7 @@ const EsgReturnsContent = () => {
 export default function Home() {
   // Homepage marks this tab session as entered via "/". /login and /returns
   // check this flag and redirect direct deep links back here.
-  useEffect(() => {
+  useLayoutEffect(() => {
     markHomeEntry();
   }, []);
   const [hoveredExpertise, setHoveredExpertise] = useState<number | null>(null);
