@@ -7,7 +7,8 @@ node_modules
 dist/
 
 # prisma
-prisma/migrations/
+# NOTE: prisma/migrations/ is intentionally tracked. Migration files are the
+# source of truth for `prisma migrate deploy` in CI and must be committed.
 
 # environment
 .env
