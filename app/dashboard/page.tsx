@@ -231,6 +231,40 @@ export default function DashboardPage() {
   // priced figure never churns through intermediate states while someone types.
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
 
+  // ── Deep link: /dashboard?order=B-772EECA3F6B9 ──
+  // Price Tracker and Order search both link here. Read from window.location
+  // rather than useSearchParams: this page is a static export, and pulling in
+  // useSearchParams would force the whole dashboard behind a Suspense
+  // boundary it does not otherwise need.
+  //
+  // The target is resolved only once the list it points into has actually
+  // loaded. A link that lands before the data arrives must not silently do
+  // nothing — if the list is loaded and the order still is not there, say so.
+  const [deepLinkOrder, setDeepLinkOrder] = useState<string | null>(null);
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+
+  useEffect(() => {
+    try {
+      const target = new URLSearchParams(window.location.search).get('order');
+      if (target) setDeepLinkOrder(target.trim().toUpperCase());
+    } catch { /* no URL to read, no link to follow */ }
+  }, []);
+
+  useEffect(() => {
+    if (!deepLinkOrder || deepLinkHandled || returns.length === 0) return;
+    const hit = returns.find((r) => String(r.id || '').toUpperCase() === deepLinkOrder);
+    if (!hit) {
+      setHeaderNotice((prev) => prev || `Order ${deepLinkOrder} is not in this list.`);
+      setDeepLinkHandled(true);
+      return;
+    }
+    setExpandedRows((prev) => new Set(prev).add(hit.id));
+    setDeepLinkHandled(true);
+    requestAnimationFrame(() => {
+      document.getElementById(`order-${hit.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, [deepLinkOrder, deepLinkHandled, returns]);
+
   const loadCandidatesFlag = useCallback(async () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -992,6 +1026,7 @@ export default function DashboardPage() {
                     return (
                       <React.Fragment key={req.id}>
                         <tr 
+                          id={`order-${req.id}`}
                           className="hover:bg-slate-800/30 transition-colors cursor-pointer group"
                           onClick={() => toggleRow(req.id)}
                         >
