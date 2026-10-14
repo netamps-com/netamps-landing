@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Mail, ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, ListOrdered } from 'lucide-react';
+import { Turnstile } from '@marsidev/react-turnstile';
 import NetampsLogo from '../NetampsLogo';
 import { formatPaise, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
 import { ORDER_STATUS, CHRONOLOGY, normalizeStatus, statusRank, isNegotiable, isClosedStatus, statusChip, kindLabel } from '../lib/status';
@@ -141,6 +142,16 @@ export default function TrackOrderPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  // Turnstile bot gate (action-pinned 'track-otp'). Dormant when the site key
+  // is unset — the gate activates on key configuration.
+  const trackSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+  const [trackToken, setTrackToken] = useState('');
+  const [trackKey, setTrackKey] = useState(0);
+  const resetTrackCaptcha = () => {
+    setTrackToken('');
+    setTrackKey((k) => k + 1); // remount mints a fresh single-use token
+  };
+
   // Negotiation draft.
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -162,8 +173,33 @@ export default function TrackOrderPage() {
     setError(''); setNotice('');
     const em = email.trim();
     if (!EMAIL_RE.test(em)) { setError('Enter the email address used on your requests.'); return; }
+
+    // Bot gate: challenge verified before any OTP email is issued.
+    if (trackSiteKey && !trackToken) {
+      setError('Complete the human verification challenge before sending a code.');
+      return;
+    }
     setBusy(true);
     try {
+      if (trackSiteKey) {
+        try {
+          const vRes = await fetch(`${API}/api/verify-turnstile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: trackToken, action: 'track-otp' })
+          });
+          const vData = await vRes.json().catch(() => null);
+          if (!vData || !vData.success) {
+            resetTrackCaptcha();
+            setError('Verification failed or expired. Complete the challenge and retry.');
+            return;
+          }
+        } catch {
+          setError('Verification service unavailable. Try again shortly.');
+          return;
+        }
+        resetTrackCaptcha(); // token is single-use — mint a fresh one
+      }
       const { ok, data } = await post('/api/track/request-otp', { email: em });
       if (!ok || !data?.success) { setError(data?.message || 'Could not send a code.'); return; }
       setStep('otp');
@@ -307,6 +343,18 @@ export default function TrackOrderPage() {
                 No order number needed. We send a code to this mailbox; it proves the requests are yours.
               </p>
             </div>
+            {trackSiteKey && (
+              <div className="flex justify-center">
+                <Turnstile
+                  key={trackKey}
+                  siteKey={trackSiteKey}
+                  options={{ theme: 'light', action: 'track-otp', appearance: 'always' }}
+                  onSuccess={(token) => setTrackToken(token)}
+                  onExpire={() => setTrackToken('')}
+                  onError={() => setTrackToken('')}
+                />
+              </div>
+            )}
             <button onClick={sendOtp} disabled={busy} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 disabled:opacity-50">
               {busy ? 'Sending…' : 'Send verification code'}
             </button>
