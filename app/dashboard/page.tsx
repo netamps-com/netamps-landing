@@ -117,6 +117,11 @@ export default function DashboardPage() {
   const [candidatesEnabled, setCandidatesEnabled] = useState<boolean | null>(null);
   const [candidatesFlagBusy, setCandidatesFlagBusy] = useState(false);
 
+  // Draft text for each evaluated-price field. Keystrokes never reach the
+  // server: a price is committed deliberately (blur / Enter), so price_history
+  // stays a chain of custody for real decisions instead of an edit log.
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+
   const loadCandidatesFlag = useCallback(async () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -169,9 +174,20 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestId: req.id, prune })
       });
-      const data = await res.json();
-      if (!data.success || !data.reports || data.reports.length === 0) {
-        throw new Error(data.message || 'Reconciliation failed.');
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        // Pages rewrites 404/5xx into a text/HTML page — never surface a raw
+        // "JSON.parse: unexpected end of data" to the operator.
+        throw new Error(
+          res.status === 404
+            ? 'Key-reconciliation service is not deployed on this build.'
+            : `Key-reconciliation service returned HTTP ${res.status}. Retry shortly.`
+        );
+      }
+      if (!res.ok || !data?.success || !data.reports || data.reports.length === 0) {
+        throw new Error(data?.message || `Reconciliation failed (HTTP ${res.status}).`);
       }
       setReconcileResult(prev => ({ ...prev, [req.id]: data.reports[0] }));
       if (prune) fetchReturns(false);
@@ -437,16 +453,35 @@ export default function DashboardPage() {
     }
   };
 
-  const handlePriceChange = async (reqId: string, productId: string, newPrice: string) => {
+  // Commit an evaluated price. Called on blur/Enter — NOT on every keystroke.
+  // Each deliberate commit writes exactly one price_history row, so the
+  // permanent audit trail records real decisions (1600 → 15000) rather than
+  // every intermediate value typed along the way.
+  const commitPrice = async (reqId: string, productId: string, raw: string) => {
+    const key = `${reqId}:${productId}`;
+    // The committed value now owns the field — clear any in-progress draft.
+    setPriceDrafts(prev => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
     if (userRole !== 'admin@netamps.com') return;
     const target = returns.find(r => r.id === reqId);
     if (target && target.status === 'Approved') return; // locked once approved (see finalPrice snapshot)
+
     // Paise-integer contract: parse the ₹ string once, store integer paise.
     // Empty clears; invalid (negative/nonnumeric) clears like before — never NaN.
-    const cleaned = newPrice.replace(/[₹,\s]/g, '');
+    const cleaned = raw.replace(/[₹,\s]/g, '');
     const n = Number(cleaned);
     const paise = cleaned.trim() === '' ? null : (!Number.isFinite(n) || n < 0 ? null : Math.round(n * 100));
-    
+
+    // No-op when nothing actually changed (re-committing the same figure, or
+    // matching the legacy rupee value) — no server write, no audit row.
+    const product = target?.products.find(p => p.id === productId);
+    if (product && paise === evalUnitPaise(product)) return;
+
     const updatedReturns = returns.map(req => {
       if (req.id === reqId) {
         return {
@@ -821,8 +856,10 @@ export default function DashboardPage() {
                                                   type="text"
                                                   inputMode="decimal"
                                                   disabled={userRole !== 'admin@netamps.com' || req.status === 'Approved'}
-                                                  value={(product.pricePaise ?? null) !== null ? String((product.pricePaise as number) / 100) : (product.price ?? '')}
-                                                  onChange={(e) => handlePriceChange(req.id, product.id, e.target.value.replace(/[^0-9.]/g, ''))}
+                                                  value={priceDrafts[`${req.id}:${product.id}`] ?? ((product.pricePaise ?? null) !== null ? String((product.pricePaise as number) / 100) : (product.price ?? ''))}
+                                                  onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ''); setPriceDrafts(prev => ({ ...prev, [`${req.id}:${product.id}`]: v })); }}
+                                                  onBlur={(e) => commitPrice(req.id, product.id, e.target.value.replace(/[^0-9.]/g, ''))}
+                                                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                                   placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
                                                   className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm tabular-nums text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                                                 />
