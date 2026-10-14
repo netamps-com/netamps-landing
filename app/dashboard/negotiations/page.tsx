@@ -104,7 +104,14 @@ export default function NegotiationsPage() {
       });
       let data: any = null;
       try { data = await res.json(); } catch { throw new Error('bad response'); }
-      if (!data?.success) { setError(data?.message || 'Could not record that.'); return; }
+      if (!data?.success) {
+        // Reload even on refusal: the server reconciles the order's status from
+        // its thread, so the screen must show the repaired truth rather than
+        // keep displaying a status the server will not act on.
+        setError(data?.message || 'Could not record that.');
+        await load(filter);
+        return;
+      }
       setDrafts((prev) => ({ ...prev, [n.id]: { amount: '', note: '' } }));
       if (action === 'approve') setNotice(`Deal approved at ${formatPaise(data.negotiation?.currentTotalPaise ?? n.currentTotalPaise)} · ${n.requestId}`);
       await load(filter);
