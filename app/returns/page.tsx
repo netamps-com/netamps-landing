@@ -4,13 +4,54 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
-import ProductTypeahead from '../components/ProductTypeahead';
-import ProductSuggest, { SuggestItem } from './ProductSuggest';
+import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
 import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
 import { statusChip, normalizeStatus, showsEvaluation } from '../lib/status';
+
+// ── Industry-standard ITAD equipment categories ──
+// The Category field is a fixed dropdown (both Sell & Buy). A catalog
+// suggestion carries a lowercase slug; CATSlugToLabel maps it onto the matching
+// dropdown option so picking a match also selects the right category. Unknown
+// slugs fall back to "Other / Mixed".
+const CATEGORY_OPTIONS = [
+  'Servers',
+  'Storage',
+  'Networking Equipment',
+  'Workstations & Desktops',
+  'Laptops & Notebooks',
+  'Monitors & Displays',
+  'Printers & Scanners',
+  'Mobile Devices & Tablets',
+  'Telecom & Unified Communications',
+  'Peripherals & Accessories',
+  'Components & Parts',
+  'Other / Mixed'
+];
+
+const CAT_SLUG_TO_LABEL: Record<string, string> = {
+  servers: 'Servers',
+  storage: 'Storage',
+  network: 'Networking Equipment',
+  networking: 'Networking Equipment',
+  workstations: 'Workstations & Desktops',
+  laptops: 'Laptops & Notebooks',
+  displays: 'Monitors & Displays',
+  monitors: 'Monitors & Displays',
+  printers: 'Printers & Scanners',
+  mobile: 'Mobile Devices & Tablets',
+  telecom: 'Telecom & Unified Communications',
+  peripherals: 'Peripherals & Accessories',
+  components: 'Components & Parts',
+  mixed: 'Other / Mixed'
+};
+
+function categoryLabelForSlug(slug?: string): string {
+  const key = String(slug || '').trim().toLowerCase();
+  return CAT_SLUG_TO_LABEL[key] || 'Other / Mixed';
+}
 
 function hexOfBytes(bytes: Uint8Array) {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -177,40 +218,22 @@ export default function ReturnsPage() {
     setProducts(products.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
 
-  // Catalog selection fills category + Details & Specs only. Pricing is NEVER
-  // derived from a catalog row: a suggestion is a spec, not a valuation, so
-  // every ₹ field stays blank until the visitor types it (BUY exposes no ₹
-  // fields at all). The full spec lands in `details`, which stays editable so
-  // the visitor can add or correct custom specs after selecting.
-  // `catalogId` marks the line Verified (the server re-validates the id
-  // against the catalog at submit); typing over any field clears it.
-  const handleSuggestionSelect = (suggestion: { id: string; category: string; model: string; specTemplate: string }, productId: string) => {
-    const spec = (suggestion.specTemplate || '').trim();
-    const composed = spec ? `${suggestion.model} — ${spec}` : suggestion.model;
-    setProducts(products.map(p => {
-      if (p.id !== productId) return p;
-      // Never discard specs the visitor typed by hand before selecting: append
-      // to existing non-catalog text, otherwise replace the previous selection.
-      const current = (p.details || '').trim();
-      const isFresh = current === '' || current === p.selectedModel;
-      const details = isFresh ? composed : `${current}\n${composed}`;
-      return { ...p, category: suggestion.category, details, selectedModel: composed, catalogId: suggestion.id };
-    }));
-  };
-
-  // Tier 3 — applying a suggestion fills category + canonical spec template.
-  // catalogId marks the line verified; clearing it (or editing fields later)
-  // reverts the line to Custom (unverified). Quantity is never touched.
-  // selectedModel mirrors the composed text so a later pick from the category
-  // typeahead sees this line as "fresh" instead of appending duplicate specs.
-  const applySuggestion = (id: string, item: SuggestItem) => {
+  // Catalog capture (shared by Sell & Buy): fills the Category dropdown (via
+  // slug→label) + composes Details & Specs. Pricing is NEVER derived from a
+  // catalog row — a suggestion is a spec, not a valuation — so every ₹ field
+  // stays blank until the visitor types it (BUY exposes no ₹ fields at all).
+  // The composed spec stays editable; `catalogId` marks the line Verified (the
+  // server re-validates the id at submit); any manual edit clears it.
+  //
+  // Seed-catalog specs already lead with the model ("Dell PowerEdge R740, …")
+  // while D1 rows can carry a bare template ("2U rack, 2x Xeon …") — compose so
+  // the model is never dropped. selectedModel mirrors the composed text so a
+  // later pick sees this line as "fresh" instead of appending duplicate specs.
+  const applySuggestion = (id: string, item: CatalogSuggestion) => {
     setProducts(products.map(p => {
       if (p.id !== id) return p;
-      // Seed-catalog specs already lead with the model ("Dell PowerEdge R740, …")
-      // while D1 rows carry a bare template ("2U rack, 2x Xeon …") — compose so
-      // the model is never dropped from Details & Specs.
       const modelLabel = `${item.brand ? `${item.brand} ` : ''}${item.model || ''}`.trim();
-      const spec = (item.spec || '').trim();
+      const spec = (item.spec || item.specTemplate || '').trim();
       const specHasModel = !!item.model && spec.toLowerCase().includes(item.model.toLowerCase());
       const composed = spec
         ? (specHasModel ? spec : modelLabel ? `${modelLabel} — ${spec}` : spec)
@@ -218,11 +241,11 @@ export default function ReturnsPage() {
       const current = (p.details || '').trim();
       const isFresh = current === '' || current === p.selectedModel;
       const details = isFresh ? composed : `${current}\n${composed}`;
-      return { ...p, category: item.category, details, selectedModel: composed, catalogId: item.id };
+      return { ...p, category: categoryLabelForSlug(item.category), details, selectedModel: composed, catalogId: item.id };
     }));
   };
 
-  // Manual edits after a pick downgrade the line back to Custom — the chip
+  // Manual edits after a capture downgrade the line back to Custom — the chip
   // must never claim verified once the canonical text has been altered.
   const manualEdit = (id: string, field: 'category' | 'details', value: string) => {
     setProducts(products.map(p => p.id === id ? { ...p, [field]: value, catalogId: undefined } : p));
@@ -1113,28 +1136,28 @@ export default function ReturnsPage() {
                           </div>
                         )}
 
-                        {/* BUY Tier 1/2 typeahead — picking fills category +
-                            canonical spec + catalogId (verified chip). No pick
-                            = Custom line, still submittable. */}
-                        <ProductSuggest
-                          visible={intent === 'buy'}
-                          disabled={isSubmitting}
-                          selectedId={product.catalogId || null}
-                          onSelect={(item) => applySuggestion(product.id, item)}
-                        />
-
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                           <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-slate-700 mb-1">Equipment Category *</label>
-                            <ProductTypeahead
-                              value={product.category}
-                              onChange={(value) => manualEdit(product.id, 'category', value)}
-                              onSelect={(suggestion) => handleSuggestionSelect(suggestion, product.id)}
-                              placeholder="Type to search catalog… (min 2 chars)"
-                              disabled={false}
-                              className="w-full"
-                              productId={product.id}
-                            />
+                            <label htmlFor={`cat-${product.id}`} className="block text-xs font-medium text-slate-700 mb-1">Equipment Category *</label>
+                            <div className="relative">
+                              <select
+                                id={`cat-${product.id}`}
+                                required
+                                value={product.category}
+                                onChange={(e) => manualEdit(product.id, 'category', e.target.value)}
+                                className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm shadow-sm appearance-none"
+                              >
+                                <option value="">Select a category…</option>
+                                {CATEGORY_OPTIONS.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                            </div>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-700 mb-1">Quantity *</label>
@@ -1199,40 +1222,39 @@ export default function ReturnsPage() {
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-700 mb-1">Details &amp; Specs *</label>
-                          <textarea
-                            rows={2}
-                            required
-                            maxLength={500}
+                          <DetailsSuggest
                             value={product.details}
-                            onChange={(e) => manualEdit(product.id, 'details', e.target.value)}
-                            className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm resize-none shadow-sm"
+                            onChange={(value) => manualEdit(product.id, 'details', value)}
+                            onSelect={(item) => applySuggestion(product.id, item)}
+                            selectedId={product.catalogId || null}
+                            disabled={isSubmitting}
                             placeholder={intent === 'sell'
-                              ? 'e.g. 25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition'
-                              : 'Describe the equipment you need — model, configuration, condition. Free-form and editable.'}
+                              ? 'Search catalog or type — e.g. "dell r740", "dl380 gen10"'
+                              : 'Search catalog or describe what you need — e.g. "cisco 9300"'}
                           />
                           <p className="text-[11px] text-slate-500 mt-1">
                             {intent === 'sell'
-                              ? 'Add condition, quantity breakdown, or any custom specs.'
-                              : 'Describe what you need. We evaluate availability and pricing — no budget required.'}
+                              ? 'Start typing to search the catalog — pick a match to auto-fill, or enter custom specs, condition and quantity breakdown.'
+                              : 'Start typing to search the catalog — pick a match, or describe what you need. We evaluate availability and pricing.'}
                           </p>
                         </div>
 
                         {/* Per-line verification chip — verified only while the
-                            catalog pick is intact; any manual edit reverts to
-                            Custom (submittable, staff-flagged). */}
-                        {intent === 'buy' && (
-                          <div className="-mt-2">
-                            {product.catalogId ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200" title={`catalog:${product.catalogId}`}>
-                                <CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Catalog verified
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border bg-amber-50 text-amber-700 border-amber-200">
-                                <AlertCircle className="w-3 h-3" aria-hidden="true" /> Custom (unverified) — staff will confirm
-                              </span>
-                            )}
-                          </div>
-                        )}
+                            catalog capture is intact; any manual edit reverts to
+                            Custom (submittable, staff-flagged). Shown for both
+                            Sell & Buy now that the catalog search lives in
+                            Details & Specs for both intents. */}
+                        <div className="-mt-2">
+                          {product.catalogId ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200" title={`catalog:${product.catalogId}`}>
+                              <CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Catalog verified
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border bg-amber-50 text-amber-700 border-amber-200">
+                              <AlertCircle className="w-3 h-3" aria-hidden="true" /> Custom (unverified) — staff will confirm
+                            </span>
+                          )}
+                        </div>
                         
                         {intent === 'sell' && (
                           <div className="mt-1 pt-3 border-t border-slate-200/60">
@@ -1381,22 +1403,12 @@ export default function ReturnsPage() {
         </motion.div>
 
         {/* Compliance & handling trust strip — every claim traceable to code:
-            TLS/HSTS headers, owner-or-admin CDN RBAC, quarantine-scan upload
-            pipeline, D1 audit trail. No attestation badges without a CPA letter. */}
+            TLS/HSTS headers and a D1 audit trail. No attestation badges
+            without a CPA letter. */}
         <div className="mt-5 flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-500 relative z-10 pb-6">
           <div className="flex items-center gap-2">
             <Lock className="w-5 h-5 text-indigo-600" />
             <span>TLS 1.3 Enforced</span>
-          </div>
-          <span className="hidden sm:inline text-slate-300">|</span>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-indigo-600" />
-            <span>Role-Gated Access</span>
-          </div>
-          <span className="hidden sm:inline text-slate-300">|</span>
-          <div className="flex items-center gap-2">
-            <Archive className="w-5 h-5 text-indigo-600" />
-            <span>Quarantine-Scanned Uploads</span>
           </div>
           <span className="hidden sm:inline text-slate-300">|</span>
           <div className="flex items-center gap-2">
