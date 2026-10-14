@@ -9,8 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/etl.test.mjs && node tests/norm-validator.test.mjs && node tests/enrich.test.mjs && node tests/candidates.test.mjs && node scripts/eval-match-rank.mjs",
-    "test:bench": "node scripts/eval-match-rank.mjs"
+    "test": "node tests/etl.test.mjs && node tests/norm-validator.test.mjs && node tests/enrich.test.mjs && node tests/candidates.test.mjs && node scripts/eval-match-rank.mjs && node scripts/test-buy-suggest.mjs",
+    "test:bench": "node scripts/eval-match-rank.mjs",
+    "test:buy-suggest": "node scripts/test-buy-suggest.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",

@@ -1,6 +1,7 @@
 import { verifySession } from './intake/auth';
 import { sendConfirmationEmail } from './email/confirm.js';
 import { indexLinesFor, ensureMatchTables } from './match.js';
+import { loadCatalog } from './products/suggest.js';
 
 // Phase-1 match index maintenance (shared with match.js — one line
 // definition via indexLinesFor, no drift). DELETE + INSERT per order keeps
@@ -178,6 +179,38 @@ export async function onRequestPost({ request, env, context }) {
       if (!p || typeof p !== 'object') return badRequest(`Product line ${i + 1} is malformed.`);
       if (!Number.isInteger(p.quantity) || p.quantity <= 0 || !Number.isSafeInteger(p.quantity)) {
         return badRequest(`Product line ${i + 1}: quantity must be a positive safe integer.`);
+      }
+      // BUY precision shell: every line carries category + non-empty details.
+      // Custom (unverified) lines satisfy this like any other — they are
+      // flagged via `verification`, never rejected here.
+      if (returnReq.intent === 'buy') {
+        if (typeof p.category !== 'string' || p.category.trim() === '') {
+          return badRequest(`Product line ${i + 1}: an equipment category is required.`);
+        }
+        if (typeof p.details !== 'string' || p.details.trim() === '') {
+          return badRequest(`Product line ${i + 1}: details & specs are required.`);
+        }
+      }
+    }
+
+    // The model suggests, the catalog decides — re-validate any claimed
+    // catalog id at submit time. A poisoned/stale id (absent from the
+    // catalog) is DROPPED server-side: the line demotes to Custom
+    // (unverified) instead of failing the request or passing as verified.
+    if (returnReq.intent === 'buy') {
+      let validIds = null;
+      try {
+        validIds = new Set((await loadCatalog(env)).map((e) => e.id));
+      } catch { validIds = null; } // catalog unavailable → fail to Custom, not verified
+      for (const p of returnReq.products) {
+        const claimed = typeof p.catalogId === 'string' ? p.catalogId.trim() : '';
+        if (claimed && validIds && validIds.has(claimed)) {
+          p.catalogId = claimed;
+          p.verification = 'catalog';
+        } else {
+          delete p.catalogId;
+          p.verification = 'custom';
+        }
       }
     }
     if (returnReq.pricingBasis === 'lot' && returnReq.lotConsiderationPaise !== null && returnReq.lotConsiderationPaise !== undefined) {

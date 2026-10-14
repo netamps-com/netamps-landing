@@ -1,18 +1,33 @@
 /**
- * GET /api/products/suggest?q=&limit= — deterministic catalog typeahead.
+ * GET /api/products/suggest?q=&limit= — catalog typeahead for BUY product search.
  *
- * Catalog source: D1 `products` table seeded from approved SELL history +
- * ITAD taxonomy. Zero LLM, zero hallucination, sub-300ms cold, <50ms warm.
+ * Two tiers, both under one rule: the model suggests, the catalog decides.
+ *
+ * Tier 1 — deterministic, zero LLM: the D1 `products` catalog through
+ *   ./catalog.js (FTS5 → prefix → alias-prefix → Jaro-Winkler fuzzy over
+ *   model + aliases). This is the SAME matching core the Tier-2 normalizer
+ *   resolves through (one definition, no drift), and the shadow-comparison
+ *   harness keeps sampling it unchanged. When D1 is absent or the table is
+ *   empty, the bundled seed catalog (./catalog.mjs) serves matches so the
+ *   typeahead works before the table is seeded.
+ *
+ * Tier 2 — Workers AI, ONLY when Tier 1 finds nothing: calls go through the
+ *   shared gateway (../llm/client.js — model identity, small→large
+ *   escalation, telemetry and the `llm_enabled` emergency brake live there)
+ *   and every returned id is re-validated against the same catalog universe
+ *   Tier 1 serves (validateLLMResponse in ./catalog.mjs). A poisoned or
+ *   invented id is dropped; unparseable output resolves to explicit unmatched
+ *   (source: 'none'). Failure is always soft — the Custom (unverified) path
+ *   is a valid outcome, never a failed request.
  *
  * Contract:
- *  - q (string, 2–64 chars, folded): query string
- *  - limit (integer, 1–20): max results (default 10)
- *  - Returns: { success, suggestions: ProductSuggestion[] }
+ *  - q (string, 2–64 chars, folded), limit (integer 1–20, default 10)
+ *  - Returns { success, query, source: 'catalog' | 'llm' | 'none', suggestions[], hasMore }
+ *  - Each suggestion carries BOTH consumer shapes:
+ *      ProductTypeahead: id, category, model, specTemplate, matchType
+ *      ProductSuggest:   id, category, brand, model, spec, score
  *
- * Matching: prefix on normalized name/model, then fuzzy (Jaro-Winkler ≥0.85)
- * over canonical model + aliases. No invention, no external calls.
- * Public endpoint (no session): per-IP rate limit only.
- *
+ * Public endpoint (catalog data only, no PII): per-IP rate limit only.
  * Matching core lives in ./catalog.js so the Tier-2 normalizer resolves
  * catalog rows through the identical code path (one definition, no drift).
  */
@@ -26,6 +41,8 @@ import {
   searchCatalog
 } from './catalog.js';
 import { compareAndRecord } from './shadow.js';
+import { runJson } from '../llm/client.js';
+import { SEED_UNIQUE, matchCatalog, validateLLMResponse, foldText } from './catalog.mjs';
 
 /**
  * Shadow comparison switch. Default OFF, same match_meta gate convention as
@@ -44,10 +61,10 @@ async function shadowEnabled(env) {
   }
 }
 
-function json(body, status = 200) {
+function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers }
   });
 }
 
@@ -68,6 +85,128 @@ function suggestRateLimited(ip) {
   return rec.count > SUGGEST_RL_PER_IP;
 }
 
+// Tier-2 short-TTL cache — the same no-match query does not re-pay the model
+// (and an 'none' verdict expires quickly if the catalog grows). Tier-1 hits
+// are NOT memory-cached so the shadow harness keeps sampling every request.
+const TIER2_TTL_MS = 60_000;
+const tier2Cache = new Map(); // foldedQuery -> { at, body }
+const LLM_TIMEOUT_MS = 4000;
+const LLM_MAX_TOKENS = 160;
+// The prompt carries the catalog inline so ids can be COPIED, not guessed.
+// 600 rows ≈ well inside context; validation below still uses the FULL set.
+const LLM_PROMPT_CATALOG_CAP = 600;
+
+/**
+ * The catalog universe this endpoint serves: D1 `products` rows when any
+ * exist, else the bundled seed floor. ONE rule shared by Tier 1, the Tier-2
+ * id re-validation and returns.js submit-time re-check — an id can only ever
+ * be "verified" if this endpoint could actually have served it.
+ *
+ * Exported — returns.js re-validates claimed catalogIds at submit time and
+ * demotes any id absent from here to Custom (unverified).
+ */
+export async function loadCatalog(env) {
+  if (!env.DB || typeof env.DB.prepare !== 'function') return SEED_UNIQUE;
+  try {
+    await ensureCatalog(env);
+    const res = await env.DB.prepare(
+      'SELECT id, category, model, spec_template FROM products'
+    ).all();
+    const rows = (res?.results || [])
+      .map((r) => ({
+        id: String(r.id),
+        category: r.category || 'mixed',
+        // D1 model strings lead with the brand ("Dell PowerEdge R740"), so no
+        // separate brand column is needed; the seed entries carry one.
+        brand: '',
+        model: String(r.model || ''),
+        spec: typeof r.spec_template === 'string' ? r.spec_template : ''
+      }))
+      .filter((r) => r.id && r.model);
+    return rows.length > 0 ? rows : SEED_UNIQUE;
+  } catch {
+    return SEED_UNIQUE;
+  }
+}
+
+/** Does the D1 catalog have rows? False without a DB, on an empty table, or
+ *  on any D1 error (the seed floor then degrades gracefully). */
+async function hasD1Catalog(env) {
+  if (!env.DB || typeof env.DB.prepare !== 'function') return false;
+  try {
+    await ensureCatalog(env);
+    const row = await env.DB.prepare('SELECT id FROM products LIMIT 1').first();
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tier 2 — Workers AI fallback through the shared gateway, strictly bounded.
+ * Returns candidate ids that pass validateLLMResponse (full-catalog
+ * membership enforced) or null when the model is unavailable, rejected by the
+ * llm_enabled brake, unparseable, or simply unsure. Never throws.
+ */
+async function llmFallback(env, rawQuery, universe) {
+  const compactCatalog = universe
+    .slice(0, LLM_PROMPT_CATALOG_CAP)
+    .map((e) => `${e.id} | ${e.category} | ${e.brand ? `${e.brand} ` : ''}${e.model}`)
+    .join('\n');
+
+  const system = [
+    "You map a buyer's typed equipment query to entries from a FIXED catalog.",
+    'Reply with ONLY a JSON object: {"candidates":["id",...],"unmatched":boolean}.',
+    'Rules:',
+    '- candidates may ONLY contain ids copied EXACTLY from the catalog list. Never invent ids, models, specs, or near-miss ids.',
+    '- If no catalog entry plausibly matches, return {"candidates":[],"unmatched":true}.',
+    '- Max 4 candidates, best first. No prose, no markdown fences.'
+  ].join('\n');
+
+  const user = `CATALOG (id | category | brand model):\n${compactCatalog}\n\nBUYER QUERY: ${JSON.stringify(String(rawQuery).slice(0, 120))}\n\nJSON:`;
+
+  const res = await runJson(env, {
+    feature: 'buy_suggest',
+    promptVersion: 'suggest-t2-v1',
+    tier: 'auto',
+    temperature: 0,
+    maxTokens: LLM_MAX_TOKENS,
+    timeoutMs: LLM_TIMEOUT_MS,
+    system,
+    user
+  });
+  if (!res || res.ok !== true || res.payload === undefined || res.payload === null) return null;
+
+  // The gateway already parsed JSON — re-serialize so the EXACT validator
+  // exercised by scripts/test-buy-suggest.mjs runs on the production path
+  // too (fence/prose tolerance, poisoned-id drop, dedupe, cap).
+  const text = typeof res.payload === 'string' ? res.payload : JSON.stringify(res.payload);
+  const verdict = validateLLMResponse(text, universe);
+  return verdict.candidates.length > 0 ? verdict.candidates : null;
+}
+
+/** Map a catalog entry (seed or D1 row, Tier 1 or Tier 2) onto the response
+ *  shape BOTH consumers read: ProductTypeahead wants specTemplate/matchType,
+ *  ProductSuggest wants spec/brand/score. */
+function toSuggestion(m) {
+  const spec = (typeof m.spec === 'string' && m.spec)
+    ? m.spec
+    : (typeof m.specTemplate === 'string' ? m.specTemplate : '');
+  const matchType = (m.matchType === 'prefix' || m.matchType === 'fuzzy')
+    ? m.matchType
+    : (typeof m.matchType === 'string' && m.matchType ? m.matchType : 'prefix');
+  return {
+    id: m.id,
+    category: m.category,
+    brand: m.brand || '',
+    model: m.model || '',
+    spec,
+    specTemplate: spec,
+    matchType,
+    score: Number.isFinite(m.score) ? m.score : (matchType === 'prefix' ? 90 : 75)
+  };
+}
+
 export async function onRequestGet({ request, env, context }) {
   try {
     const ip = request.headers.get('cf-connecting-ip') ||
@@ -76,8 +215,6 @@ export async function onRequestGet({ request, env, context }) {
     if (suggestRateLimited(ip)) {
       return json({ success: false, message: 'Too many suggestion requests.' }, 429);
     }
-
-    await ensureCatalog(env);
 
     const url = new URL(request.url);
     const q = url.searchParams.get('q')?.trim() ?? '';
@@ -92,25 +229,78 @@ export async function onRequestGet({ request, env, context }) {
     );
 
     if (normalizeFold(q).length < CATALOG_MIN_QUERY) {
-      return json({ success: true, suggestions: [] });
+      return json({ success: true, query: q, source: 'none', suggestions: [], hasMore: false });
     }
 
-    const suggestions = await searchCatalog(env, q, limit);
+    // ── Tier 1 — deterministic ──────────────────────────────────────────
+    const d1 = await hasD1Catalog(env);
+    const tier1 = d1
+      ? await searchCatalog(env, q, limit)
+      : matchCatalog(SEED_UNIQUE, q, limit);
 
     // Step 3 shadow comparison (docs/catalog-retrieval-etl.md §10).
     // Returns the LEGACY result untouched; FTS5 only records what it would
     // have returned, so we can prove the extra recall is correct before
     // cutover. Gated by match_meta 'shadow_enabled' (default OFF) and always
     // fire-and-forget: it can never alter or delay this response.
-    if (await shadowEnabled(env)) {
-      const work = compareAndRecord(env, q, suggestions, { limit })
+    if (d1 && (await shadowEnabled(env))) {
+      const work = compareAndRecord(env, q, tier1, { limit })
         .catch((err) => console.error('[shadow] compare failed', err?.message));
       if (context && typeof context.waitUntil === 'function') {
         context.waitUntil(work);
       }
     }
 
-    return json({ success: true, suggestions });
+    if (tier1.length > 0) {
+      return json({
+        success: true,
+        query: q,
+        source: 'catalog',
+        suggestions: tier1.map(toSuggestion),
+        hasMore: tier1.length >= limit
+      });
+    }
+
+    // ── Tier 2 — LLM, only when Tier 1 found nothing ───────────────────
+    const cacheKey = foldText(q);
+    const hit = tier2Cache.get(cacheKey);
+    if (hit && Date.now() - hit.at < TIER2_TTL_MS) {
+      return json(hit.body, 200, { 'Cache-Control': 'public, max-age=30' });
+    }
+
+    let source = 'none';
+    let matches = [];
+    try {
+      const universe = await loadCatalog(env);
+      const ids = await llmFallback(env, q, universe);
+      if (ids && ids.length > 0) {
+        const byId = new Map(universe.map((e) => [e.id, e]));
+        matches = ids
+          .map((id, i) => {
+            const entry = byId.get(id);
+            // id already proven in the universe by validateLLMResponse
+            return entry ? { ...entry, matchType: 'fuzzy', score: 90 - i } : null;
+          })
+          .filter(Boolean);
+        source = matches.length > 0 ? 'llm' : 'none';
+      }
+    } catch (err) {
+      console.error('[products/suggest] tier2 failed', err?.message);
+      // soft failure — Custom (unverified) is always an acceptable outcome
+    }
+
+    const body = {
+      success: true,
+      query: q,
+      source, // 'catalog' (Tier 1) | 'llm' (Tier 2, catalog-validated) | 'none' (Custom path)
+      suggestions: matches.map(toSuggestion),
+      hasMore: matches.length >= limit
+    };
+    tier2Cache.set(cacheKey, { at: Date.now(), body });
+    if (tier2Cache.size > 500) {
+      tier2Cache.delete(tier2Cache.keys().next().value);
+    }
+    return json(body, 200, { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' });
   } catch (err) {
     console.error('[products/suggest]', err);
     return json({ success: false, message: 'Suggestion service unavailable.' }, 500);

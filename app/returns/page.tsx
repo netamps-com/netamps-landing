@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Archive, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import ProductTypeahead from '../components/ProductTypeahead';
+import ProductSuggest, { SuggestItem } from './ProductSuggest';
 import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
 
 function hexOfBytes(bytes: Uint8Array) {
@@ -44,6 +45,10 @@ interface ProductItem {
   details: string;
   quantity: number;
   attachedFiles: string[];
+  // BUY precision shell: set only when the visitor picked a server-validated
+  // catalog suggestion. Absent/empty = Custom (unverified) line — submittable
+  // but flagged to staff. The server re-validates this id against the catalog.
+  catalogId?: string;
   // Visitor-stated consideration, raw editable string. Parsed to paise
   // (integer) or null only at validation/submit — never stored as float.
   lineConsideration: string;
@@ -176,6 +181,8 @@ export default function ReturnsPage() {
   // every ₹ field stays blank until the visitor types it (BUY exposes no ₹
   // fields at all). The full spec lands in `details`, which stays editable so
   // the visitor can add or correct custom specs after selecting.
+  // `catalogId` marks the line Verified (the server re-validates the id
+  // against the catalog at submit); typing over any field clears it.
   const handleSuggestionSelect = (suggestion: { id: string; category: string; model: string; specTemplate: string }, productId: string) => {
     const spec = (suggestion.specTemplate || '').trim();
     const composed = spec ? `${suggestion.model} — ${spec}` : suggestion.model;
@@ -186,8 +193,38 @@ export default function ReturnsPage() {
       const current = (p.details || '').trim();
       const isFresh = current === '' || current === p.selectedModel;
       const details = isFresh ? composed : `${current}\n${composed}`;
-      return { ...p, category: suggestion.category, details, selectedModel: composed };
+      return { ...p, category: suggestion.category, details, selectedModel: composed, catalogId: suggestion.id };
     }));
+  };
+
+  // Tier 3 — applying a suggestion fills category + canonical spec template.
+  // catalogId marks the line verified; clearing it (or editing fields later)
+  // reverts the line to Custom (unverified). Quantity is never touched.
+  // selectedModel mirrors the composed text so a later pick from the category
+  // typeahead sees this line as "fresh" instead of appending duplicate specs.
+  const applySuggestion = (id: string, item: SuggestItem) => {
+    setProducts(products.map(p => {
+      if (p.id !== id) return p;
+      // Seed-catalog specs already lead with the model ("Dell PowerEdge R740, …")
+      // while D1 rows carry a bare template ("2U rack, 2x Xeon …") — compose so
+      // the model is never dropped from Details & Specs.
+      const modelLabel = `${item.brand ? `${item.brand} ` : ''}${item.model || ''}`.trim();
+      const spec = (item.spec || '').trim();
+      const specHasModel = !!item.model && spec.toLowerCase().includes(item.model.toLowerCase());
+      const composed = spec
+        ? (specHasModel ? spec : modelLabel ? `${modelLabel} — ${spec}` : spec)
+        : (modelLabel || spec);
+      const current = (p.details || '').trim();
+      const isFresh = current === '' || current === p.selectedModel;
+      const details = isFresh ? composed : `${current}\n${composed}`;
+      return { ...p, category: item.category, details, selectedModel: composed, catalogId: item.id };
+    }));
+  };
+
+  // Manual edits after a pick downgrade the line back to Custom — the chip
+  // must never claim verified once the canonical text has been altered.
+  const manualEdit = (id: string, field: 'category' | 'details', value: string) => {
+    setProducts(products.map(p => p.id === id ? { ...p, [field]: value, catalogId: undefined } : p));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -213,6 +250,14 @@ export default function ReturnsPage() {
 
       if (products.some(p => !p.category || !p.details.trim())) {
         setCaptchaError('Please ensure all product details are filled correctly.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // BUY precision shell: every line must carry a usable quantity too
+      // (custom lines are fine — they are the Custom (unverified) path).
+      if (products.some(p => !Number.isInteger(p.quantity) || p.quantity < 1)) {
+        setCaptchaError('Every product line needs a quantity of at least 1.');
         setIsSubmitting(false);
         return;
       }
@@ -557,6 +602,12 @@ export default function ReturnsPage() {
             <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Box className="w-4 h-4 text-indigo-500" />
               Your BUY List
+              <span className="text-xs font-medium text-slate-500 font-normal" role="status">
+                · {products.length} line{products.length === 1 ? '' : 's'}
+                {' · '}{products.reduce((s, p) => s + (Number.isInteger(p.quantity) && p.quantity > 0 ? p.quantity : 0), 0)} unit{products.reduce((s, p) => s + (Number.isInteger(p.quantity) && p.quantity > 0 ? p.quantity : 0), 0) === 1 ? '' : 's'}
+                {' · '}{products.filter((p) => p.catalogId).length} verified
+                {' · '}{products.filter((p) => !p.catalogId).length} custom
+              </span>
             </h4>
             <button
               type="button"
@@ -575,7 +626,12 @@ export default function ReturnsPage() {
             <div className="space-y-2">
               {products.map((product, index) => {
                 const qty = product.quantity || 1;
-                const isVerified = product.category && product.details && product.category.trim() !== '' && product.details.trim() !== '';
+                // Verified = a catalog pick whose id the server re-validates at
+                // submit; everything else is Custom (unverified), submittable
+                // but flagged for staff confirmation. Same predicate the server
+                // uses (`verification` field), so the strip can never disagree
+                // with what gets submitted.
+                const isVerified = !!product.catalogId;
                 return (
                   <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                     <span className="w-6 text-center text-slate-500 font-mono text-xs">{index + 1}</span>
@@ -587,7 +643,7 @@ export default function ReturnsPage() {
                           <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded border border-emerald-200">Verified</span>
                         )}
                         {!isVerified && (
-                          <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 rounded border border-amber-200">Custom</span>
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 rounded border border-amber-200">Custom (unverified)</span>
                         )}
                       </div>
                       <div className="text-[11px] text-slate-500 font-mono">
@@ -598,6 +654,11 @@ export default function ReturnsPage() {
                 );
               })}
             </div>
+          )}
+          {buyListExpanded && products.some((p) => !p.catalogId) && (
+            <p className="text-[11px] text-slate-500 mt-2">
+              Custom lines are submitted as typed and flagged for staff confirmation — we never invent a model on your behalf.
+            </p>
           )}
         </div>
       )}
@@ -1013,12 +1074,22 @@ export default function ReturnsPage() {
                           </div>
                         )}
 
+                        {/* BUY Tier 1/2 typeahead — picking fills category +
+                            canonical spec + catalogId (verified chip). No pick
+                            = Custom line, still submittable. */}
+                        <ProductSuggest
+                          visible={intent === 'buy'}
+                          disabled={isSubmitting}
+                          selectedId={product.catalogId || null}
+                          onSelect={(item) => applySuggestion(product.id, item)}
+                        />
+
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-medium text-slate-700 mb-1">Equipment Category *</label>
                             <ProductTypeahead
                               value={product.category}
-                              onChange={(value) => updateProduct(product.id, 'category', value)}
+                              onChange={(value) => manualEdit(product.id, 'category', value)}
                               onSelect={(suggestion) => handleSuggestionSelect(suggestion, product.id)}
                               placeholder="Type to search catalog… (min 2 chars)"
                               disabled={false}
@@ -1094,7 +1165,7 @@ export default function ReturnsPage() {
                             required
                             maxLength={500}
                             value={product.details}
-                            onChange={(e) => updateProduct(product.id, 'details', e.target.value)}
+                            onChange={(e) => manualEdit(product.id, 'details', e.target.value)}
                             className="block w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm resize-none shadow-sm"
                             placeholder={intent === 'sell'
                               ? 'e.g. 25x Dell PowerEdge R740, 2x Xeon Gold, 128GB RAM, working condition'
@@ -1106,6 +1177,23 @@ export default function ReturnsPage() {
                               : 'Describe what you need. We evaluate availability and pricing — no budget required.'}
                           </p>
                         </div>
+
+                        {/* Per-line verification chip — verified only while the
+                            catalog pick is intact; any manual edit reverts to
+                            Custom (submittable, staff-flagged). */}
+                        {intent === 'buy' && (
+                          <div className="-mt-2">
+                            {product.catalogId ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200" title={`catalog:${product.catalogId}`}>
+                                <CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Catalog verified
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border bg-amber-50 text-amber-700 border-amber-200">
+                                <AlertCircle className="w-3 h-3" aria-hidden="true" /> Custom (unverified) — staff will confirm
+                              </span>
+                            )}
+                          </div>
+                        )}
                         
                         {intent === 'sell' && (
                           <div className="mt-1 pt-3 border-t border-slate-200/60">

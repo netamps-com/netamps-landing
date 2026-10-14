@@ -24,9 +24,13 @@ bucket_name = "netamps-evidence"
 
 # Workers AI — Llama for Tier-2 product-line normalization (spec D4).
 # Account-native: same Cloudflare account as D1/R2, no third-party vendor and no
-# API key to store or leak. Consumed only by functions/api/normalize/line.js,
-# and only when the match_meta 'norm_enabled' flag is '1' (default OFF), so
-# this binding existing costs nothing until enrichment is switched on.
+# API key to store or leak. Consumed by functions/api/normalize/line.js (only
+# when the match_meta 'norm_enabled' flag is '1', default OFF) and by the BUY
+# typeahead Tier-2 fallback in functions/api/products/suggest.js (only when
+# Tier-1 finds nothing). Both callers guard `env.AI` truthiness: a missing
+# binding degrades (raw key / Custom-unverified path), never a request failure.
+# Model ids are constants at the call sites — update there when Cloudflare
+# retires a model. This binding existing costs nothing until used.
 [ai]
 binding = "AI"
 
