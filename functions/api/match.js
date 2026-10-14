@@ -339,7 +339,7 @@ export async function onRequestPost({ request, env }) {
     }
     const { limit, offset, unmatchedLimit, unmatchedOffset } = pageParams(body);
     const action = !body.action || body.action === 'match' ? 'match' : String(body.action);
-    const ALLOWED_ACTIONS = new Set(['match', 'backfill', 'candidates', 'accept', 'candidates-backfill']);
+    const ALLOWED_ACTIONS = new Set(['match', 'backfill', 'candidates', 'accept', 'candidates-backfill', 'candidates-flag']);
     if (!ALLOWED_ACTIONS.has(action)) {
       return json({ success: false, message: 'Unknown action.' }, 400);
     }
@@ -396,6 +396,36 @@ export async function onRequestPost({ request, env }) {
         processed++;
       }
       return json({ success: true, processed, sellBookVersion: await sellBookVersion(env) });
+    }
+
+    // ── candidates-flag (admin): read or set the best-match kill switch.
+    // The ranker's `candidates_enabled` gate, flipped without a deploy. Absent
+    // `enabled` → read current state. This is the deliberate "internal first"
+    // switch: ON runs the deterministic blocking + LLM re-rank and renders the
+    // advisory panel; OFF (default) leaves the feature dark. ──
+    if (action === 'candidates-flag') {
+      if (user.role !== 'admin' && user.email !== 'admin@netamps.com') {
+        return json({ success: false, message: 'Forbidden' }, 403);
+      }
+      if (!env.DB || typeof env.DB.prepare !== 'function') {
+        return json({ success: false, message: 'Returns database is not attached.' }, 503);
+      }
+      await ensureMatchTables(env);
+      if (body.enabled === undefined || body.enabled === null) {
+        const row = await env.DB
+          .prepare("SELECT value FROM match_meta WHERE key = 'candidates_enabled'")
+          .bind()
+          .first();
+        return json({ success: true, candidatesEnabled: !!row && row.value === '1' });
+      }
+      if (typeof body.enabled !== 'boolean') {
+        return json({ success: false, message: '`enabled` must be a boolean.' }, 400);
+      }
+      await env.DB
+        .prepare("INSERT INTO match_meta (key, value) VALUES ('candidates_enabled', ?1) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .bind(body.enabled ? '1' : '0')
+        .run();
+      return json({ success: true, candidatesEnabled: body.enabled });
     }
 
     // ── accept (admin): a human accepts a candidate as a real match. The only

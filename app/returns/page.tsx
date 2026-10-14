@@ -758,6 +758,13 @@ export default function ReturnsPage() {
                   <button type="button" onClick={handleTrackSubmit} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900">
                     Track Request
                   </button>
+                  <p className="text-xs text-slate-500 text-center">
+                    Price shown here is read-only. To negotiate,{' '}
+                    <Link href="/track" className="font-semibold text-indigo-600 hover:text-indigo-800 underline">
+                      verify with your email
+                    </Link>{' '}
+                    in the secure tracking module.
+                  </p>
                   {trackingError && <p className="text-red-500 text-center text-sm">{trackingError}</p>}
                   
                   {trackingResult && (
@@ -826,6 +833,12 @@ export default function ReturnsPage() {
                             </div>
                           </div>
                         )}
+
+                        <div className="pt-2">
+                          <Link href="/track" className="inline-flex items-center justify-center gap-2 w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors">
+                            <ShieldCheck className="w-4 h-4" /> Verify email to negotiate price
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   )}

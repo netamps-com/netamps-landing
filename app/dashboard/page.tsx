@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Download } from 'lucide-react';
+import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Download, Handshake, Sparkles } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
@@ -112,6 +112,48 @@ export default function DashboardPage() {
   // Key-reconciliation reports, keyed by request id (admin-only UI below).
   const [reconcileResult, setReconcileResult] = useState<Record<string, any>>({});
   const [reconciling, setReconciling] = useState<string | null>(null);
+
+  // Best-match (BUY → SELL suggestions) kill switch — admin-visible state.
+  const [candidatesEnabled, setCandidatesEnabled] = useState<boolean | null>(null);
+  const [candidatesFlagBusy, setCandidatesFlagBusy] = useState(false);
+
+  const loadCandidatesFlag = useCallback(async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'candidates-flag' })
+      });
+      const data = await res.json();
+      if (data?.success) setCandidatesEnabled(!!data.candidatesEnabled);
+    } catch {}
+  }, []);
+
+  const setCandidatesFlag = async (next: boolean) => {
+    if (candidatesFlagBusy) return;
+    if (next && !window.confirm(
+      'Enable best-match suggestions?\n\nAdvisory only — the model suggests, staff decide. New BUY orders get a gated, cached candidate set; existing orders need a Regenerate.'
+    )) return;
+    setCandidatesFlagBusy(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'candidates-flag', enabled: next })
+      });
+      const data = await res.json();
+      if (data?.success) setCandidatesEnabled(!!data.candidatesEnabled);
+    } catch {} finally {
+      setCandidatesFlagBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const isAdmin = userRole === 'admin@netamps.com' || userRole === 'admin';
+    if (isAuthenticated && isAdmin) loadCandidatesFlag();
+  }, [isAuthenticated, userRole, loadCandidatesFlag]);
 
   const runReconcile = async (req: ReturnRequest, prune: boolean) => {
     if (prune && !window.confirm(
@@ -536,6 +578,16 @@ export default function DashboardPage() {
                 <Mail className="w-4 h-4" />
                 <span className="hidden sm:inline">Webmail</span>
               </a>
+
+              {/* Price negotiations monitor — buyer ↔ seller threads (separate tab) */}
+              <Link
+                href="/dashboard/negotiations"
+                className="flex items-center gap-2 text-sm text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20"
+                title="Price negotiations"
+              >
+                <Handshake className="w-4 h-4" />
+                <span className="hidden sm:inline">Negotiations</span>
+              </Link>
               
               <div className="text-sm font-medium text-slate-300">
                 Logged in as <span className="text-white capitalize">{userRole}</span>
@@ -554,6 +606,14 @@ export default function DashboardPage() {
                     className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
                   >
                     <Key className="w-4 h-4" /> Manage Users
+                  </button>
+                  <button 
+                    onClick={() => setCandidatesFlag(!(candidatesEnabled === true))}
+                    disabled={candidatesFlagBusy}
+                    className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors border disabled:opacity-50 ${candidatesEnabled === true ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20' : 'text-slate-300 bg-slate-800 border-slate-700 hover:bg-slate-700'}`}
+                    title="Best-match suggestions for BUY orders (advisory: the model suggests, staff decide)"
+                  >
+                    <Sparkles className="w-4 h-4" /> Best-match: {candidatesEnabled === null ? '…' : candidatesEnabled ? 'ON' : 'OFF'}
                   </button>
                   <button 
                     onClick={() => exportRequests('json')}
