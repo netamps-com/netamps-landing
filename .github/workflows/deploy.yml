@@ -63,10 +63,30 @@ jobs:
         run: |
           cd crm-backend
           npx prisma generate
+      # Applies committed Prisma migrations. If the target database already
+      # contains the schema but has no migration history, `migrate deploy`
+      # fails with P3005 ("database schema is not empty"); in that case we
+      # baseline the initial migration once and re-run. Any other failure
+      # (unset DATABASE_URL, unreachable DB, a real SQL error) fails normally.
       - name: Run Database Migrations
         run: |
           cd crm-backend
-          npx prisma migrate deploy
+          set +e
+          OUTPUT=$(npx prisma migrate deploy 2>&1)
+          STATUS=$?
+          set -e
+          echo "$OUTPUT"
+          if [ "$STATUS" -eq 0 ]; then
+            exit 0
+          fi
+          if echo "$OUTPUT" | grep -q "P3005"; then
+            echo "::warning::Database schema is not empty (P3005). Baselining 20261014000000_init as applied, then re-running migrate deploy."
+            npx prisma migrate resolve --applied 20261014000000_init
+            npx prisma migrate deploy
+          else
+            echo "::error::prisma migrate deploy failed (exit $STATUS) for a non-baseline reason; not attempting to baseline."
+            exit "$STATUS"
+          fi
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Build TypeScript
