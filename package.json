@@ -7,7 +7,10 @@
     "build": "node build.js",
     "deploy": "npx wrangler pages deploy .open-next",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node tests/etl.test.mjs && node tests/norm-validator.test.mjs && node tests/enrich.test.mjs && node tests/candidates.test.mjs && node scripts/eval-match-rank.mjs",
+    "test:bench": "node scripts/eval-match-rank.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",

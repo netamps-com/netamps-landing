@@ -1,0 +1,67 @@
+name: Regression Suites
+
+# Offline, deterministic guards for the matching pipeline. These run the real
+# modules (no mocking of the code under test) against fixtures and fake DB/AI
+# bindings, so a regression in catalog ETL, the Tier-2 normalizer, external
+# enrichment, the exact matcher index, or the BUY→SELL candidate ranker fails
+# the build instead of shipping silently.
+#
+# Node 24 is used deliberately: it enables ESM syntax detection for the
+# Functions' `.js` modules (which are ESM without a package `type`) and ships
+# `node:sqlite` unflagged, which the candidate driver test uses as a faithful
+# D1 adapter.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit + benchmark (offline)
+    runs-on: ubuntu-latest
+    env:
+      NODE_NO_WARNINGS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Catalog ETL (transform / validate / dedupe)
+        run: node tests/etl.test.mjs
+
+      - name: Tier-2 normalizer validator (no-fabrication contract)
+        run: node tests/norm-validator.test.mjs
+
+      - name: External enrichment (hint-only, quarantined)
+        run: node tests/enrich.test.mjs
+
+      - name: BUY→SELL candidate driver (blocking / validator / accept)
+        run: node tests/candidates.test.mjs
+
+      - name: BUY→SELL best-match benchmark (P/R/MRR/NDCG/abstention)
+        run: node scripts/eval-match-rank.mjs
+
+  typecheck:
+    name: Typecheck (tsc --noEmit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install (from lockfile)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit
