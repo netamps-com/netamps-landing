@@ -188,7 +188,7 @@ export default function TrackOrderPage() {
       <header className="border-b border-slate-200 bg-white">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <NetampsLogo />
-          <Link href="/" className="text-sm font-semibold text-slate-500 hover:text-slate-900">Home</Link>
+          <Link href="/returns" className="text-sm font-semibold text-slate-500 hover:text-slate-900">← Back</Link>
         </div>
       </header>
 
