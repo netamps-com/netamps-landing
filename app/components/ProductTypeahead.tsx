@@ -189,7 +189,7 @@ export default function ProductTypeahead({
           placeholder={placeholder}
           autoComplete="off"
           spellCheck={false}
-          className={`w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed`}
           aria-autocomplete="list"
           aria-controls="suggestions-list"
           aria-expanded={isOpen && suggestions.length > 0}
@@ -197,12 +197,12 @@ export default function ProductTypeahead({
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
+            <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
           </div>
         )}
         {error && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <AlertCircle className="w-5 h-5 text-red-400" />
+            <AlertCircle className="w-5 h-5 text-red-500" />
           </div>
         )}
       </div>
@@ -212,10 +212,10 @@ export default function ProductTypeahead({
           ref={listRef}
           id="suggestions-list"
           role="listbox"
-          className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-slate-950 border border-slate-700 rounded-lg shadow-lg divide-y divide-slate-800"
+          className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-white border border-slate-200 rounded-lg shadow-xl divide-y divide-slate-100"
         >
           {suggestions.length === 0 && !loading && !error && (
-            <li className="px-3 py-2 text-sm text-slate-500 text-center">
+            <li className="px-3 py-2 text-sm text-slate-400 text-center">
               No matches in catalog. Enter custom details below — unmatched lines are checked against external references async after submit, never blocking you.
             </li>
           )}
@@ -228,21 +228,21 @@ export default function ProductTypeahead({
               onClick={() => handleSelect(s)}
               onMouseEnter={() => setHighlightedIndex(i)}
               className={`px-3 py-2 cursor-pointer transition-colors ${
-                i === highlightedIndex ? 'bg-indigo-500/20 text-white' : 'hover:bg-slate-800/50 text-slate-200'
+                i === highlightedIndex ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-700'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{s.model}</p>
+                  <p className="text-sm font-medium text-slate-900 truncate">{s.model}</p>
                   <p className="text-xs text-slate-400 truncate">{s.specTemplate}</p>
                 </div>
               </div>
             </li>
           ))}
           {loading && (
-            <li className="px-3 py-2 text-center text-sm text-slate-500">
+            <li className="px-3 py-2 text-center text-sm text-slate-400">
               <div className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
                 <span>Loading suggestions…</span>
               </div>
             </li>
