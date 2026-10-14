@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useLayoutEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import SecureLoginButton from './SecureLoginButton';
 import FirmOverviewBanner from './FirmOverviewBanner';
 import ServerStatusWidget from './ServerStatusWidget';
 import NetampsLogo from './NetampsLogo';
-import { markHomeEntry } from './lib/home-entry';
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle, Mail, Shield, Server, Lock, Fingerprint, Activity, Network, Cloud, Key, AlertTriangle, Eye, Menu, X, BookOpen, Cctv, Cpu, Repeat, Target, ShoppingCart } from 'lucide-react';
 
@@ -121,11 +120,6 @@ const EsgReturnsContent = () => {
 };
 
 export default function Home() {
-  // Homepage marks this tab session as entered via "/". /login and /returns
-  // check this flag and redirect direct deep links back here.
-  useLayoutEffect(() => {
-    markHomeEntry();
-  }, []);
   const [hoveredExpertise, setHoveredExpertise] = useState<number | null>(null);
   const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [currentTimeIST, setCurrentTimeIST] = useState<string>('');
