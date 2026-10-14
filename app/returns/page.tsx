@@ -9,7 +9,6 @@ import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import ProductTypeahead from '../components/ProductTypeahead';
 import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
-import { useRouter } from 'next/navigation';
 import { hasHomeEntry, hasInternalReferrer, markHomeEntry } from '../lib/home-entry';
 
 function hexOfBytes(bytes: Uint8Array) {
@@ -62,7 +61,6 @@ interface ProductItem {
 // evaluated price is per-unit. ──
 
 export default function ReturnsPage() {
-  const router = useRouter();
   // Homepage-only entry gate (UX gate, not a security boundary — see
   // app/lib/home-entry.ts). No query-param exemptions here: tracking uses
   // in-page state, and the sid is minted by this page itself after entry.
@@ -74,14 +72,17 @@ export default function ReturnsPage() {
         markHomeEntry();
         setEntryAllowed(true);
       } else {
-        router.replace('/');
+        // Full-page navigation, not Next router: this is a static export and
+        // the gate must work even where client routing is degraded.
+        window.location.replace('/');
+        return;
       }
     } catch {
       setEntryAllowed(true);
     } finally {
       setEntryChecked(true);
     }
-  }, [router]);
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [intent, setIntent] = useState<'sell' | 'buy' | 'track'>('sell');

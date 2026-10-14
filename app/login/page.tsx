@@ -208,7 +208,10 @@ export default function LoginPage() {
         markHomeEntry();
         setEntryAllowed(true);
       } else {
-        router.replace('/');
+        // Full-page navigation, not Next router: this is a static export and
+        // the gate must work even where client routing is degraded.
+        window.location.replace('/');
+        return;
       }
     } catch {
       setEntryAllowed(true);
