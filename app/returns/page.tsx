@@ -132,7 +132,7 @@ export default function ReturnsPage() {
   }, [queueSnapshot]);
 
   useEffect(() => {
-    document.title = 'Enterprise ITAD Exchange Portal - Netamps Technologies';
+    document.title = 'Enterprise IT Liquidation, Simplified - Netamps Technologies';
   }, []);
 
   useEffect(() => {
@@ -681,11 +681,68 @@ export default function ReturnsPage() {
           </Link>
         </div>
         <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-slate-900">
-          Enterprise ITAD Exchange Portal
+          Enterprise IT Liquidation, Simplified
         </h2>
         <p className="mt-3 text-center text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
-          The secure interface for high-velocity hardware liquidation, certified data sanitization, and premium secondary market sourcing
+          The all-in-one portal to sell, source, and track your IT assets with total transparency.
         </p>
+      </div>
+
+      {/* Banner visual: light abstract space — floating server racks / hardware
+          components connected by smooth lines. Pure inline SVG, decorative only. */}
+      <div className="sm:mx-auto sm:w-full sm:max-w-2xl relative z-10 mt-6" aria-hidden="true">
+        <svg viewBox="0 0 640 180" className="w-full h-auto" role="presentation">
+          <defs>
+            <linearGradient id="retBannerBg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="100%" stopColor="#eef2f7" />
+            </linearGradient>
+            <linearGradient id="retRackFace" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#f8fafc" />
+              <stop offset="100%" stopColor="#dbe3ee" />
+            </linearGradient>
+          </defs>
+          <rect x="8" y="8" width="624" height="164" rx="20" fill="url(#retBannerBg)" stroke="#e2e8f0" strokeWidth="1.5" />
+          {/* smooth connector lines */}
+          <path d="M150 90 C 230 40, 300 140, 390 84 S 520 70, 556 92" fill="none" stroke="#c7d2fe" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M118 120 C 210 150, 330 60, 430 118 S 540 128, 560 110" fill="none" stroke="#bbf7d0" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M170 60 C 260 90, 360 50, 470 96" fill="none" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" strokeDasharray="6 6" />
+          {/* server rack 1 */}
+          <g>
+            <rect x="96" y="52" width="72" height="88" rx="8" fill="url(#retRackFace)" stroke="#94a3b8" strokeWidth="1.5" />
+            <rect x="104" y="62" width="56" height="10" rx="2.5" fill="#cbd5e1" />
+            <rect x="104" y="78" width="56" height="10" rx="2.5" fill="#cbd5e1" />
+            <rect x="104" y="94" width="56" height="10" rx="2.5" fill="#cbd5e1" />
+            <circle cx="110" cy="67" r="2.4" fill="#34d399" />
+            <circle cx="110" cy="83" r="2.4" fill="#34d399" />
+            <circle cx="110" cy="99" r="2.4" fill="#fbbf24" />
+            <rect x="104" y="110" width="56" height="10" rx="2.5" fill="#e0e7ff" />
+            <rect x="104" y="124" width="34" height="8" rx="2" fill="#e2e8f0" />
+          </g>
+          {/* server rack 2 */}
+          <g>
+            <rect x="284" y="44" width="72" height="88" rx="8" fill="url(#retRackFace)" stroke="#94a3b8" strokeWidth="1.5" />
+            <rect x="292" y="54" width="56" height="10" rx="2.5" fill="#cbd5e1" />
+            <rect x="292" y="70" width="56" height="10" rx="2.5" fill="#cbd5e1" />
+            <circle cx="298" cy="59" r="2.4" fill="#34d399" />
+            <circle cx="298" cy="75" r="2.4" fill="#34d399" />
+            <rect x="292" y="86" width="56" height="10" rx="2.5" fill="#e0e7ff" />
+            <rect x="292" y="102" width="56" height="10" rx="2.5" fill="#cbd5e1" />
+            <rect x="292" y="118" width="34" height="8" rx="2" fill="#e2e8f0" />
+          </g>
+          {/* hardware component: drive / chip */}
+          <g>
+            <rect x="472" y="62" width="64" height="48" rx="8" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.5" />
+            <rect x="482" y="72" width="44" height="12" rx="2.5" fill="#dbe3ee" />
+            <circle cx="488" cy="96" r="3" fill="#6366f1" />
+            <circle cx="500" cy="96" r="3" fill="#94a3b8" />
+            <circle cx="512" cy="96" r="3" fill="#34d399" />
+          </g>
+          {/* floating nodes */}
+          <circle cx="228" cy="60" r="5" fill="#ffffff" stroke="#6366f1" strokeWidth="2" />
+          <circle cx="412" cy="128" r="5" fill="#ffffff" stroke="#10b981" strokeWidth="2" />
+          <circle cx="540" cy="52" r="4" fill="#ffffff" stroke="#94a3b8" strokeWidth="2" />
+        </svg>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-3xl relative z-10">
@@ -1337,7 +1394,7 @@ export default function ReturnsPage() {
                       {isSubmitting ? (
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       ) : (
-                        `Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`
+                        intent === 'sell' ? 'One-Click Liquidation' : 'Generate BUY Request'
                       )}
                     </button>
                     <button
