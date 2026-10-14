@@ -1,20 +1,28 @@
 /**
  * /api/track/negotiate — buyer side of a price negotiation.
  *
- * Auth: an order-access token minted by /api/track/verify-otp (post-OTP), sent
- * as `x-order-token: <token>` (or `Authorization: Bearer <token>`). The token is
- * scoped to exactly one order — it can read and negotiate that order and nothing
- * else.
+ * Auth: a buyer token minted by /api/track/verify-otp (post-OTP), sent as
+ * `x-buyer-token: <token>` (or `Authorization: Bearer <token>`). The token is
+ * scoped to an EMAIL, so it authorises every order filed under that address —
+ * and NOTHING else: each request re-checks the order's email against the
+ * token's. That is what lets the buyer choose which order to negotiate.
  *
- *   GET  → the order + every negotiation thread + the current frozen price
- *   POST → append one BUYER round ({ action, totalPaise, note }), freezing the
- *          price the buyer is looking at (price-version capture)
+ *   GET  ?requestId=B-… → that order + its threads + the current frozen price
+ *   GET  (no requestId) → the buyer's order list (re-fetch after verifying)
+ *   POST { requestId, action, totalPaise, note }
+ *                      → append one BUYER round, freezing the price the buyer
+ *                        is looking at (price-version capture)
  *
- * The model is never consulted here. Amounts are integer paise.
+ * A buyer can offer / counter / accept / withdraw — never "approve the deal",
+ * and never before staff have moved the request to "Order Accepted for
+ * Negotiation". The model is never consulted here. Amounts are integer paise.
  */
 
-import { getOrderById, dbReady, ensureNegotiationSchema, listNegotiationsForOrder, findOrCreateNegotiation, appendRound, readRounds, verifyOrderToken } from '../negotiate/store.mjs';
-import { validateRound, applyRound, summarize, capturePriceSnapshot } from '../negotiate/core.mjs';
+import {
+  getOrderById, listOrdersByEmail, dbReady, ensureNegotiationSchema,
+  listNegotiationsForOrder, findOrCreateNegotiation, appendRound, readRounds, verifyBuyerToken
+} from '../negotiate/store.mjs';
+import { validateRound, applyRound, summarize, capturePriceSnapshot, isNegotiable, isClosed, STATUS } from '../negotiate/core.mjs';
 import { publicOrder } from './verify-otp.js';
 
 function json(body, status = 200) {
@@ -25,21 +33,31 @@ function json(body, status = 200) {
 }
 
 function readToken(request) {
-  const direct = request.headers.get('x-order-token');
+  const direct = request.headers.get('x-buyer-token') || request.headers.get('x-order-token');
   if (direct) return direct.trim();
   const auth = request.headers.get('authorization') || '';
   const m = /^Bearer\s+(.+)$/i.exec(auth.trim());
   return m ? m[1].trim() : '';
 }
 
-async function loadContext(env, request) {
+/** Token → { email }. Ownership of the mailbox, nothing more. */
+async function loadBuyer(env, request) {
   if (!dbReady(env)) return { error: json({ success: false, message: 'Tracking is temporarily unavailable.' }, 503) };
-  const token = readToken(request);
-  const session = await verifyOrderToken(env, token);
+  const session = await verifyBuyerToken(env, readToken(request));
   if (!session) return { error: json({ success: false, message: 'Your verification has expired. Please verify again.' }, 401) };
-  const order = await getOrderById(env, session.requestId);
+  return { email: session.email };
+}
+
+/** Load an order the token's email provably owns — otherwise 404 either way. */
+async function loadOwnedOrder(env, email, requestId) {
+  const order = await getOrderById(env, requestId);
   if (!order) return { error: json({ success: false, message: 'Request not found.' }, 404) };
-  return { order, email: session.email };
+  const owner = order.email ? String(order.email).trim().toLowerCase() : null;
+  if (!owner || owner !== email) {
+    // Same message as "does not exist" — this token cannot probe other buyers.
+    return { error: json({ success: false, message: 'Request not found.' }, 404) };
+  }
+  return { order };
 }
 
 async function threadFor(env, negotiation, order) {
@@ -49,16 +67,34 @@ async function threadFor(env, negotiation, order) {
 
 export async function onRequestGet({ request, env }) {
   try {
-    const ctx = await loadContext(env, request);
-    if (ctx.error) return ctx.error;
-    const { order } = ctx;
+    const buyer = await loadBuyer(env, request);
+    if (buyer.error) return buyer.error;
 
     await ensureNegotiationSchema(env);
+    const requestId = new URL(request.url).searchParams.get('requestId');
+
+    // No order chosen yet → hand back the buyer's own list.
+    if (!requestId) {
+      const orders = await listOrdersByEmail(env, buyer.email);
+      return json({ success: true, email: buyer.email, orders: orders.map(publicOrder) });
+    }
+
+    const owned = await loadOwnedOrder(env, buyer.email, requestId);
+    if (owned.error) return owned.error;
+    const { order } = owned;
+
     const negotiations = await listNegotiationsForOrder(env, order.id);
     const threads = [];
     for (const n of negotiations) threads.push(await threadFor(env, n, order));
 
-    return json({ success: true, order: publicOrder(order), negotiations: threads });
+    return json({
+      success: true,
+      order: publicOrder(order),
+      // Chronological truth for the UI: can this buyer speak yet?
+      negotiable: isNegotiable(order.status) && !isClosed(order.status),
+      status: order.status || STATUS.PENDING,
+      negotiations: threads
+    });
   } catch (err) {
     console.error('[track] negotiate GET error:', err);
     return json({ success: false, message: 'Failed to load the negotiation.' }, 500);
@@ -67,9 +103,8 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   try {
-    const ctx = await loadContext(env, request);
-    if (ctx.error) return ctx.error;
-    const { order } = ctx;
+    const buyer = await loadBuyer(env, request);
+    if (buyer.error) return buyer.error;
 
     let body;
     try {
@@ -77,6 +112,10 @@ export async function onRequestPost({ request, env }) {
     } catch {
       return json({ success: false, message: 'Invalid request body' }, 400);
     }
+
+    const owned = await loadOwnedOrder(env, buyer.email, typeof body.requestId === 'string' ? body.requestId : '');
+    if (owned.error) return owned.error;
+    const { order } = owned;
 
     const check = validateRound({
       side: 'buyer',
@@ -87,10 +126,25 @@ export async function onRequestPost({ request, env }) {
     if (!check.ok) return json({ success: false, message: check.error }, 400);
 
     await ensureNegotiationSchema(env);
+
+    // Chronology gate: until staff press "Order Accepted for Negotiation" the
+    // request is still Pending and the buyer has nothing to negotiate against.
+    if (!isNegotiable(order.status)) {
+      const msg = isClosed(order.status)
+        ? 'This request is closed — no further negotiation is possible.'
+        : 'Netamps has not accepted this request for negotiation yet.';
+      return json({ success: false, message: msg }, 409);
+    }
+
     const negotiation = await findOrCreateNegotiation(env, order);
 
+    const rounds = await readRounds(env, negotiation.id);
     const next = applyRound(
-      { status: negotiation.status, currentTotalPaise: Number.isInteger(negotiation.current_total_paise) ? negotiation.current_total_paise : null },
+      {
+        status: negotiation.status,
+        roundCount: rounds.length,
+        currentTotalPaise: Number.isInteger(negotiation.current_total_paise) ? negotiation.current_total_paise : null
+      },
       check.value
     );
     if (!next.ok) return json({ success: false, message: next.error }, 409);
@@ -105,9 +159,15 @@ export async function onRequestPost({ request, env }) {
       fresh,
       order
     );
-    return json({ success: true, negotiation: summary, current: snapshot });
+    return json({
+      success: true,
+      negotiation: summary,
+      current: snapshot,
+      status: next.status
+    });
   } catch (err) {
     console.error('[track] negotiate POST error:', err);
-    return json({ success: false, message: 'Failed to record the negotiation. Please try again.' }, 500);
+    const message = err && err.code === 'ORDER_CLOSED' ? err.message : 'Failed to record the negotiation. Please try again.';
+    return json({ success: false, message }, err && err.code === 'ORDER_CLOSED' ? 409 : 500);
   }
 }

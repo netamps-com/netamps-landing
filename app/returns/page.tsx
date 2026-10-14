@@ -10,6 +10,7 @@ import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } fr
 import ProductTypeahead from '../components/ProductTypeahead';
 import ProductSuggest, { SuggestItem } from './ProductSuggest';
 import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
+import { statusChip, normalizeStatus, showsEvaluation } from '../lib/status';
 
 function hexOfBytes(bytes: Uint8Array) {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -771,8 +772,8 @@ export default function ReturnsPage() {
                     <div className="mt-6 p-6 border border-slate-200 rounded-xl bg-slate-50 shadow-sm animate-in fade-in zoom-in duration-300">
                       <div className="flex justify-between items-center mb-4">
                         <span className="font-mono font-bold text-slate-900 text-lg">{trackingResult.id}</span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${trackingResult.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : trackingResult.status === 'Declined' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
-                          {trackingResult.status}
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusChip(trackingResult.status)}`}>
+                          {normalizeStatus(trackingResult.status)}
                         </span>
                       </div>
                       <div className="space-y-4">
@@ -785,7 +786,7 @@ export default function ReturnsPage() {
                           )}
                         </div>
 
-                        {(trackingResult.status === 'Approved' || trackingResult.status === 'Declined') && trackingResult.products && (
+                        {showsEvaluation(trackingResult.status) && trackingResult.products && (
                           <div>
                             <h4 className="text-sm font-bold text-slate-800 mb-3">Equipment Evaluation Details</h4>
                             {trackingResult.pricingBasis === 'lot' && (

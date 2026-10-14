@@ -2,17 +2,27 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Search, ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { Mail, ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, ListOrdered } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import { formatPaise, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
+import { ORDER_STATUS, CHRONOLOGY, normalizeStatus, statusRank, isNegotiable, isClosedStatus, statusChip, kindLabel } from '../lib/status';
 
 /**
- * Track Order — the buyer-facing module.
+ * Track Order — the buyer-facing module. EMAIL ONLY.
  *
- * Order ID + email → email OTP → the verified order, with a price-negotiation
- * panel. The price shown is the FROZEN snapshot the buyer is negotiating
- * against (price-version capture); a negotiation is only ever visible after the
- * email on the order has been proven with a one-time code.
+ * The email address on the requests IS the identity. A one-time code delivered
+ * to that mailbox proves ownership, and then EVERY successfully-created request
+ * filed under it is listed for the buyer to choose from — no order ID needed
+ * to get in, no order ID invented along the way.
+ *
+ * The price shown is the FROZEN snapshot the buyer negotiates against
+ * (price-version capture). The thread advances chronologically:
+ *
+ *   Pending → Order Accepted for Negotiation → Negotiation in Progress
+ *           → Accepted Final Price           → Order Deal Approved
+ *
+ * A buyer can offer / counter / accept / withdraw. Only Netamps staff can
+ * accept a request for negotiation and only staff can approve the final deal.
  */
 
 type Product = {
@@ -55,7 +65,7 @@ type Round = {
 
 type Negotiation = {
   id: string;
-  status: 'open' | 'accepted' | 'rejected' | 'withdrawn';
+  status: string;
   currentTotalPaise: number | null;
   openedPriceVersion: number;
   current: { version: number; basis: string; totalPaise: number | null };
@@ -65,22 +75,67 @@ type Negotiation = {
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
-const ID_RE = /^[SB]-[A-Z0-9-]{3,64}$/;
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 
-function statusChip(status: string) {
-  if (status === 'Approved' || status === 'accepted') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-  if (status === 'Declined' || status === 'rejected') return 'bg-red-100 text-red-700 border-red-200';
-  if (status === 'withdrawn') return 'bg-slate-200 text-slate-600 border-slate-300';
-  return 'bg-amber-100 text-amber-700 border-amber-200';
+/**
+ * The figure to show on a list row. The frozen final price when one exists;
+ * otherwise the lot ask; otherwise the sum of the lines that actually have an
+ * evaluated price — labelled as such, because an unpriced line contributes
+ * nothing and the total must never pretend otherwise.
+ */
+function orderFigure(o: Order): { paise: number | null; label: string } {
+  if (o.finalPrice && typeof o.finalPrice.totalPaise === 'number') {
+    return { paise: o.finalPrice.totalPaise, label: '' };
+  }
+  if (o.pricingBasis === 'lot' && typeof o.lotConsiderationPaise === 'number') {
+    return { paise: o.lotConsiderationPaise, label: 'ask' };
+  }
+  let total = 0;
+  let any = false;
+  for (const p of o.products || []) {
+    const unit = evalUnitPaise(p);
+    if (unit === null) continue;
+    total += unit * (Number(p.quantity) || 1);
+    any = true;
+  }
+  return any ? { paise: total, label: 'evaluated' } : { paise: null, label: '' };
+}
+
+/** The chronological ladder rendered as a stepper — status made visible. */
+function Lifecycle({ status }: { status: string }) {
+  const current = normalizeStatus(status);
+  const rank = statusRank(status);
+  const steps = current === ORDER_STATUS.DECLINED ? [ORDER_STATUS.PENDING, ORDER_STATUS.DECLINED] : CHRONOLOGY;
+  const done = current === ORDER_STATUS.DECLINED ? 2 : rank;
+  return (
+    <ol className="flex flex-wrap items-center gap-y-2">
+      {steps.map((s, i) => {
+        const state = i < done ? 'done' : i === done ? 'here' : 'todo';
+        return (
+          <li key={s} className="flex items-center">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+              state === 'done' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : state === 'here' ? 'border-amber-300 bg-amber-50 text-amber-800'
+              : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+              {state === 'done' ? <CheckCircle2 className="w-3 h-3" /> : state === 'here' ? <Clock className="w-3 h-3" /> : null}
+              {s}
+            </span>
+            {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 mx-1 text-slate-300" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 export default function TrackOrderPage() {
-  const [step, setStep] = useState<'identify' | 'otp' | 'view'>('identify');
-  const [trackingId, setTrackingId] = useState('');
+  const [step, setStep] = useState<'identify' | 'otp' | 'orders' | 'view'>('identify');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [token, setToken] = useState('');
+  const [orders, setOrders] = useState<Order[]>([]);
   const [order, setOrder] = useState<Order | null>(null);
+  const [negotiable, setNegotiable] = useState(false);
   const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -90,15 +145,12 @@ export default function TrackOrderPage() {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
 
-  const active = negotiations.find((n) => n.status === 'open') || negotiations[0] || null;
+  const active = negotiations.find((n) => !isClosedStatus(n.status)) || negotiations[0] || null;
 
-  const post = async (path: string, body: any, withToken = false) => {
+  const post = async (path: string, body: any) => {
     const res = await fetch(`${API}${path}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(withToken ? { 'x-order-token': token } : {})
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     let data: any = null;
@@ -108,14 +160,12 @@ export default function TrackOrderPage() {
 
   const sendOtp = async () => {
     setError(''); setNotice('');
-    const id = trackingId.trim().toUpperCase();
-    if (!ID_RE.test(id)) { setError('That does not look like a Netamps tracking ID (format S-… or B-…).'); return; }
-    if (!email.trim()) { setError('Enter the email address used on the request.'); return; }
+    const em = email.trim();
+    if (!EMAIL_RE.test(em)) { setError('Enter the email address used on your requests.'); return; }
     setBusy(true);
     try {
-      const { ok, data } = await post('/api/track/request-otp', { id, email: email.trim() });
+      const { ok, data } = await post('/api/track/request-otp', { email: em });
       if (!ok || !data?.success) { setError(data?.message || 'Could not send a code.'); return; }
-      setTrackingId(id);
       setStep('otp');
       setNotice(data.message || 'Verification code sent to your email.');
     } catch (e: any) {
@@ -130,12 +180,13 @@ export default function TrackOrderPage() {
     if (!/^[0-9]{6}$/.test(code.trim())) { setError('Enter the 6-digit code from your email.'); return; }
     setBusy(true);
     try {
-      const { ok, data } = await post('/api/track/verify-otp', { id: trackingId.trim().toUpperCase(), email: email.trim(), code: code.trim() });
+      const { ok, data } = await post('/api/track/verify-otp', { email: email.trim(), code: code.trim() });
       if (!ok || !data?.success) { setError(data?.message || 'Verification failed.'); return; }
       setToken(data.token);
-      setOrder(data.order);
-      setStep('view');
-      await refreshThread(data.token);
+      setEmail(data.email || email.trim());
+      setOrders(data.orders || []);
+      // Every request under this address, ready to choose from.
+      setStep('orders');
     } catch (e: any) {
       setError(e?.message || 'Verification failed.');
     } finally {
@@ -143,14 +194,52 @@ export default function TrackOrderPage() {
     }
   };
 
-  const refreshThread = async (withToken = token) => {
-    const res = await fetch(`${API}/api/track/negotiate`, { headers: { 'x-order-token': withToken } });
-    let data: any = null;
-    try { data = await res.json(); } catch { return; }
-    if (data?.success) {
+  /** Open one of the buyer's own orders. */
+  const openOrder = async (o: Order, withToken = token) => {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/api/track/negotiate?requestId=${encodeURIComponent(o.id)}`, {
+        headers: { 'x-buyer-token': withToken }
+      });
+      let data: any = null;
+      try { data = await res.json(); } catch { throw new Error('Server returned an invalid response.'); }
+      if (!data?.success) { setError(data?.message || 'Could not open that request.'); return; }
       setOrder(data.order);
+      setNegotiable(!!data.negotiable);
       setNegotiations(data.negotiations || []);
+      setStep('view');
+    } catch (e: any) {
+      setError(e?.message || 'Could not open that request.');
+    } finally {
+      setBusy(false);
     }
+  };
+
+  const refreshThread = async (withToken = token) => {
+    // No order open yet → we are on the list step; refresh the list itself.
+    if (!order) {
+      try {
+        const res = await fetch(`${API}/api/track/negotiate`, { headers: { 'x-buyer-token': withToken } });
+        let data: any = null;
+        try { data = await res.json(); } catch { return; }
+        if (data?.success && Array.isArray(data.orders)) setOrders(data.orders);
+      } catch { /* keep the list we already have */ }
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/api/track/negotiate?requestId=${encodeURIComponent(order.id)}`, {
+        headers: { 'x-buyer-token': withToken }
+      });
+      let data: any = null;
+      try { data = await res.json(); } catch { return; }
+      if (data?.success) {
+        setOrder(data.order);
+        setNegotiable(!!data.negotiable);
+        setNegotiations(data.negotiations || []);
+        setOrders((prev) => prev.map((o) => (o.id === data.order.id ? data.order : o)));
+      }
+    } catch { /* keep the last good thread on screen */ }
   };
 
   const act = async (action: string, withAmount: boolean) => {
@@ -162,10 +251,12 @@ export default function TrackOrderPage() {
     }
     setBusy(true);
     try {
-      const { ok, data } = await post('/api/track/negotiate', { action, totalPaise, note: note.trim() }, true);
+      const { ok, data } = await post('/api/track/negotiate', {
+        requestId: order?.id, action, totalPaise, note: note.trim()
+      });
       if (!ok || !data?.success) { setError(data?.message || 'Could not record that.'); return; }
       setNotice('Recorded.');
-      setNote('');
+      setNote(''); setAmount('');
       await refreshThread();
     } catch (e: any) {
       setError(e?.message || 'Could not record that.');
@@ -175,13 +266,15 @@ export default function TrackOrderPage() {
   };
 
   const reset = () => {
-    setStep('identify'); setCode(''); setToken(''); setOrder(null); setNegotiations([]);
-    setError(''); setNotice(''); setAmount(''); setNote('');
+    setStep('identify'); setCode(''); setToken(''); setOrder(null); setOrders([]); setNegotiations([]);
+    setNegotiable(false); setError(''); setNotice(''); setAmount(''); setNote('');
   };
 
-  const startingFresh = !active || active.status !== 'open' || active.rounds.length === 0;
+  const startingFresh = !active || active.rounds.length === 0;
   const nextKind = startingFresh ? 'offer' : 'counter';
   const proposeLabel = startingFresh ? 'Make offer' : 'Counter';
+  const canSpeak = negotiable && !isClosedStatus(order?.status);
+  const tablePrice = active ? (active.currentTotalPaise ?? null) : (order?.finalPrice?.totalPaise ?? null);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -195,24 +288,24 @@ export default function TrackOrderPage() {
       <main className="max-w-3xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-black text-slate-900">Track &amp; Negotiate</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Verify with your order ID and the email on the request, then view the evaluation and negotiate the price.
+          Verify with your email address — every request filed under it will be listed, and you choose which one to negotiate.
         </p>
 
-        {/* ── Step 1: identify ── */}
+        {/* ── Step 1: email ── */}
         {step === 'identify' && (
           <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
             <div>
-              <label htmlFor="track-id" className="block text-sm font-medium text-slate-700">Order ID</label>
+              <label htmlFor="track-email" className="block text-sm font-medium text-slate-700">Email address on your requests</label>
               <div className="mt-2 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <input id="track-id" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} placeholder="B-… or S-…"
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <input id="track-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendOtp(); }}
+                  placeholder="you@company.com" autoComplete="email"
                   className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
               </div>
-            </div>
-            <div>
-              <label htmlFor="track-email" className="block text-sm font-medium text-slate-700">Email on the request</label>
-              <input id="track-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com"
-                className="mt-2 block w-full px-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
+              <p className="mt-2 text-xs text-slate-500">
+                No order number needed. We send a code to this mailbox; it proves the requests are yours.
+              </p>
             </div>
             <button onClick={sendOtp} disabled={busy} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 disabled:opacity-50">
               {busy ? 'Sending…' : 'Send verification code'}
@@ -229,25 +322,81 @@ export default function TrackOrderPage() {
             <h2 className="text-lg font-bold text-slate-900">Enter your code</h2>
             <p className="text-sm text-slate-500">{notice}</p>
             <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+              onKeyDown={(e) => { if (e.key === 'Enter') verifyOtp(); }}
               className="block w-full max-w-xs mx-auto text-center tracking-widest text-2xl px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500" placeholder="••••••" />
             <button onClick={verifyOtp} disabled={busy} className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50">
-              {busy ? 'Verifying…' : 'Verify & view order'}
+              {busy ? 'Verifying…' : 'Verify & list my requests'}
             </button>
-            <button onClick={() => { setStep('identify'); setCode(''); }} className="text-sm text-slate-500 hover:text-slate-800">Use a different order</button>
+            <button onClick={() => { setStep('identify'); setCode(''); }} className="text-sm text-slate-500 hover:text-slate-800">Use a different email</button>
           </section>
         )}
 
-        {/* ── Step 3: verified order + negotiate ── */}
+        {/* ── Step 3: the buyer's own requests — choose one ── */}
+        {step === 'orders' && (
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <ListOrdered className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-lg font-bold text-slate-900">Your requests</h2>
+            </div>
+            <p className="text-sm text-slate-500">
+              {orders.length} request{orders.length === 1 ? '' : 's'} filed under <span className="font-semibold text-slate-700">{email}</span>
+            </p>
+
+            {orders.length === 0 && (
+              <p className="mt-4 text-sm text-slate-500">No requests found for this address.</p>
+            )}
+
+            <ul className="mt-4 space-y-3">
+              {orders.map((o) => {
+                const fig = orderFigure(o);
+                return (
+                  <li key={o.id}>
+                    <button onClick={() => openOrder(o)} disabled={busy}
+                      className="w-full text-left rounded-xl border border-slate-200 p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors disabled:opacity-50">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <span className="font-mono font-bold text-slate-900">{o.id}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusChip(o.status)}`}>
+                          {normalizeStatus(o.status)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        {o.name}{o.company ? ` · ${o.company}` : ''} · <span className="uppercase font-semibold">{o.intent}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+                        <span>{o.date ? new Date(o.date).toLocaleDateString() : ''}</span>
+                        <span className="font-mono">
+                          {fig.paise === null
+                            ? 'Price pending'
+                            : `${formatPaise(fig.paise)}${fig.label ? ` · ${fig.label}` : ''}`}
+                        </span>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-5 flex items-center justify-between text-sm">
+              <button onClick={() => refreshThread()} className="text-slate-500 hover:text-slate-800">Refresh list</button>
+              <button onClick={reset} className="text-slate-500 hover:text-slate-800">Sign out of tracking</button>
+            </div>
+          </section>
+        )}
+
+        {/* ── Step 4: one verified request + negotiate ── */}
         {step === 'view' && order && (
           <div className="mt-8 space-y-6">
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
                 <span className="font-mono font-bold text-slate-900 text-lg">{order.id}</span>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusChip(order.status)}`}>{order.status}</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusChip(order.status)}`}>{normalizeStatus(order.status)}</span>
               </div>
-              <p className="text-sm text-slate-600"><strong className="text-slate-800">Name:</strong> {order.name}</p>
+
+              <Lifecycle status={order.status} />
+
+              <p className="mt-4 text-sm text-slate-600"><strong className="text-slate-800">Name:</strong> {order.name}</p>
               <p className="text-sm text-slate-600"><strong className="text-slate-800">Company:</strong> {order.company}</p>
-              <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {new Date(order.date).toLocaleDateString()}</p>
+              <p className="text-sm text-slate-600"><strong className="text-slate-800">Date:</strong> {order.date ? new Date(order.date).toLocaleDateString() : '—'}</p>
 
               <h3 className="mt-5 text-sm font-bold text-slate-800">Equipment</h3>
               <div className="mt-3 space-y-2">
@@ -269,11 +418,11 @@ export default function TrackOrderPage() {
 
               <div className="mt-4 rounded-lg bg-slate-100 border border-slate-200 p-3 text-sm text-slate-700">
                 Current price:{' '}
-                <span className="font-mono font-bold text-slate-900">
-                  {formatPaise(active ? (active.current.totalPaise ?? null) : (order.finalPrice?.totalPaise ?? null))}
-                </span>
+                <span className="font-mono font-bold text-slate-900">{formatPaise(tablePrice)}</span>
                 <span className="ml-2 text-xs text-slate-500">
-                  {order.finalPrice ? `(approved basis: ${order.finalPrice.basis}, v${order.finalPrice.version})` : '(evaluated baseline, not yet approved)'}
+                  {order.finalPrice
+                    ? `(${order.finalPrice.basis} basis, v${order.finalPrice.version})`
+                    : '(evaluated baseline — the figure we negotiate against)'}
                 </span>
               </div>
             </section>
@@ -284,21 +433,42 @@ export default function TrackOrderPage() {
                 <Handshake className="w-5 h-5 text-indigo-600" />
                 <h2 className="text-lg font-bold text-slate-900">Price negotiation</h2>
               </div>
-              {active && active.stale && (
-                <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+
+              {isClosedStatus(order.status) && (
+                <div className={`mt-3 flex items-start gap-2 rounded-lg border p-3 text-sm ${
+                  normalizeStatus(order.status) === ORDER_STATUS.DEAL
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-red-200 bg-red-50 text-red-800'}`}>
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                  {normalizeStatus(order.status) === ORDER_STATUS.DEAL
+                    ? `Deal approved${order.finalPrice ? ` at ${formatPaise(order.finalPrice.totalPaise)}` : ''} — this negotiation is closed.`
+                    : 'This request was declined — the negotiation is closed.'}
+                </div>
+              )}
+
+              {!isClosedStatus(order.status) && !negotiable && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <Clock className="w-4 h-4 mt-0.5 shrink-0" />
+                  Netamps has not accepted this request for negotiation yet. You will be able to make an offer once it reaches
+                  “{ORDER_STATUS.ACCEPTED}”.
+                </div>
+              )}
+
+              {active && active.stale && !isClosedStatus(order.status) && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                   The price changed after this thread began — the amounts below were agreed against an older price version.
                 </div>
               )}
-              {!active && <p className="text-sm text-slate-500 mt-2">No negotiation yet. Make an offer below to start one.</p>}
+              {!active && negotiable && <p className="text-sm text-slate-500 mt-2">No negotiation yet. Make an offer below to start one.</p>}
 
               {active && active.rounds.length > 0 && (
                 <ul className="mt-4 space-y-2">
                   {active.rounds.map((r) => (
                     <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-3">
                         <span className="font-semibold text-slate-700">
-                          {r.side === 'buyer' ? 'You' : 'Netamps'} · {r.kind}
+                          {r.side === 'buyer' ? 'You' : 'Netamps'} · {kindLabel(r.kind)}
                         </span>
                         <span className="font-mono text-slate-800">{r.totalPaise === null ? '—' : formatPaise(r.totalPaise)}</span>
                       </div>
@@ -311,52 +481,68 @@ export default function TrackOrderPage() {
                 </ul>
               )}
 
-              <div className="mt-4 flex items-center gap-2 text-xs">
-                {active && active.status === 'open' && <span className="inline-flex items-center gap-1 text-amber-700"><Clock className="w-3.5 h-3.5" /> Open</span>}
-                {active && active.status === 'accepted' && <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5" /> Accepted at {formatPaise(active.currentTotalPaise)}</span>}
-                {active && active.status === 'rejected' && <span className="inline-flex items-center gap-1 text-red-700"><XCircle className="w-3.5 h-3.5" /> Closed</span>}
-                {active && active.status === 'withdrawn' && <span className="inline-flex items-center gap-1 text-slate-600"><XCircle className="w-3.5 h-3.5" /> Withdrawn</span>}
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                {active && normalizeStatus(active.status) === ORDER_STATUS.IN_PROGRESS && (
+                  <span className="inline-flex items-center gap-1 text-indigo-700"><Clock className="w-3.5 h-3.5" /> {ORDER_STATUS.IN_PROGRESS}</span>
+                )}
+                {active && normalizeStatus(active.status) === ORDER_STATUS.AGREED && (
+                  <span className="inline-flex items-center gap-1 text-teal-700"><CheckCircle2 className="w-3.5 h-3.5" /> {ORDER_STATUS.AGREED} at {formatPaise(active.currentTotalPaise)}</span>
+                )}
+                {active && normalizeStatus(active.status) === ORDER_STATUS.DEAL && (
+                  <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5" /> {ORDER_STATUS.DEAL}</span>
+                )}
+                {active && isClosedStatus(active.status) && normalizeStatus(active.status) === ORDER_STATUS.DECLINED && (
+                  <span className="inline-flex items-center gap-1 text-red-700"><XCircle className="w-3.5 h-3.5" /> {ORDER_STATUS.DECLINED}</span>
+                )}
               </div>
 
-              <div className="mt-4 space-y-3">
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="neg-amount" className="block text-xs font-semibold text-slate-600">Your total (₹)</label>
-                    <input id="neg-amount" value={amount} onChange={(e) => setAmount(sanitizeMoneyInput(e.target.value))} placeholder="e.g. 85,000.00"
-                      className="mt-1 block w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
+              {canSpeak && (
+                <div className="mt-4 space-y-3">
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="neg-amount" className="block text-xs font-semibold text-slate-600">Your total (₹)</label>
+                      <input id="neg-amount" value={amount} onChange={(e) => setAmount(sanitizeMoneyInput(e.target.value))}
+                        placeholder="e.g. 85,000.00" inputMode="decimal"
+                        className="mt-1 block w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
+                    </div>
+                    <div>
+                      <label htmlFor="neg-note" className="block text-xs font-semibold text-slate-600">Note (optional)</label>
+                      <input id="neg-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500}
+                        className="mt-1 block w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
+                    </div>
                   </div>
-                  <div>
-                    <label htmlFor="neg-note" className="block text-xs font-semibold text-slate-600">Note (optional)</label>
-                    <input id="neg-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500}
-                      className="mt-1 block w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => act(nextKind, true)} disabled={busy}
+                      className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 text-sm">
+                      {proposeLabel}
+                    </button>
+                    {tablePrice !== null && (
+                      <button onClick={() => act('accept', false)} disabled={busy}
+                        className="px-4 py-2.5 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 disabled:opacity-50 text-sm">
+                        Accept {formatPaise(tablePrice)}
+                      </button>
+                    )}
+                    {active && !isClosedStatus(active.status) && (
+                      <button onClick={() => act('withdraw', false)} disabled={busy}
+                        className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-100 disabled:opacity-50 text-sm">
+                        Withdraw
+                      </button>
+                    )}
                   </div>
+                  <p className="text-[11px] text-slate-500">
+                    Only Netamps can press “{ORDER_STATUS.DEAL}” — accepting here records your agreement, it does not close the order.
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => act(nextKind, true)} disabled={busy}
-                    className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 text-sm">
-                    {proposeLabel}
-                  </button>
-                  {active && active.status === 'open' && active.currentTotalPaise !== null && (
-                    <button onClick={() => act('accept', false)} disabled={busy}
-                      className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 text-sm">
-                      Accept {formatPaise(active.currentTotalPaise)}
-                    </button>
-                  )}
-                  {active && active.status === 'open' && (
-                    <button onClick={() => act('withdraw', false)} disabled={busy}
-                      className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-100 disabled:opacity-50 text-sm">
-                      Withdraw
-                    </button>
-                  )}
-                </div>
-              </div>
+              )}
             </section>
 
             <div className="flex items-center justify-between text-sm">
               <button onClick={() => refreshThread()} className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900">
                 <RefreshCw className="w-4 h-4" /> Refresh
               </button>
-              <button onClick={reset} className="text-slate-500 hover:text-slate-800">Track another order</button>
+              <button onClick={() => { setStep('orders'); setError(''); }} className="text-slate-500 hover:text-slate-800">
+                ← Back to my requests
+              </button>
             </div>
           </div>
         )}

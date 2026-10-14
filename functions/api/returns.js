@@ -1,4 +1,5 @@
 import { verifySession } from './intake/auth';
+import { normalizeStatus, isClosed, STATUS } from './negotiate/core.mjs';
 import { sendConfirmationEmail } from './email/confirm.js';
 import { indexLinesFor, ensureMatchTables } from './match.js';
 import { loadCatalog } from './products/suggest.js';
@@ -590,6 +591,32 @@ export async function onRequestPut({ request, env }) {
     const update = await request.json();
     if (!update.id) throw new Error('ID required');
 
+    // ── Status writes are guarded, not free-form ────────────────────────────
+    // The lifecycle is a CLOSED vocabulary — only the rungs exist, so a typo
+    // can never park an order somewhere the UI cannot render. And the closing
+    // rung is reserved outright: "Order Deal Approved" is written exclusively
+    // by the negotiation module's approve action, which freezes the final price
+    // in the same breath. A bare status write would close a deal with no price
+    // behind it, and would bypass the one-button rule that holds for BUY and
+    // SELL alike.
+    if (update.action === 'status') {
+      const ALLOWED_STATUS = new Set([
+        STATUS.PENDING, STATUS.ACCEPTED, STATUS.IN_PROGRESS, STATUS.AGREED,
+        STATUS.DECLINED, STATUS.DEAL,
+        'Approved', 'Rejected' // pre-lifecycle spellings still on older rows
+      ]);
+      if (typeof update.status !== 'string' || !ALLOWED_STATUS.has(update.status)) {
+        return new Response(JSON.stringify({ success: false, message: 'Invalid status.' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (update.status === STATUS.DEAL) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: `A deal may only be closed with “${STATUS.DEAL}” from the Negotiations tab, where the final price is recorded alongside it.`
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+
     // FinalPriceSnapshot validation: malformed snapshots are rejected, never
     // partially stored. Status and snapshot write atomically in one UPDATE.
     const validFinalPrice = (fp) => {
@@ -622,9 +649,9 @@ export async function onRequestPut({ request, env }) {
 
     if (env.DB) {
       try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN finalPrice TEXT').run(); } catch(e){}
-      // Append-only evaluated-price history (chain of custody for pricing:
-      // every PUT-price writes old→new with actor + timestamp; never updated
-      // or deleted — the approval snapshot freezes the agreed figures).
+      // Permanent price audit trail: one append-only row per deal approval (the
+      // FINAL price, with actor + timestamp). Never updated or deleted, and
+      // never written for an intermediate edit — those live in the thread.
       try {
         await env.DB.prepare(
           `CREATE TABLE IF NOT EXISTS price_history (
@@ -639,26 +666,57 @@ export async function onRequestPut({ request, env }) {
         ).run();
         await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_price_history_req ON price_history(request_id)').run();
       } catch(e){}
+      // Audit posture: price_history records the FINAL price only. Intermediate
+      // evaluated-price edits are negotiation fuel, not decisions — they live in
+      // the thread (negotiation_rounds), never in the permanent trail.
+      // A terminal rung is also permanent: a stale tab may not overwrite an
+      // already-decided request.
+      if (update.action === 'status') {
+        try {
+          const current = await env.DB.prepare('SELECT status FROM returns WHERE id = ?').bind(update.id).first();
+          if (current && isClosed(normalizeStatus(current.status))) {
+            return new Response(JSON.stringify({
+              success: false,
+              message: `This request is already “${normalizeStatus(current.status)}” and cannot be moved again.`
+            }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+          }
+        } catch { /* no row/table → the UPDATE simply matches nothing */ }
+      }
       if (update.action === 'status') {
         if (update.finalPrice !== undefined) {
           const fp = validFinalPrice(update.finalPrice);
+          let prevTotalPaise = null;
+          try {
+            const prev = await env.DB.prepare('SELECT finalPrice FROM returns WHERE id = ?').bind(update.id).first();
+            const parsed = prev && prev.finalPrice ? JSON.parse(prev.finalPrice) : null;
+            if (parsed && Number.isInteger(parsed.totalPaise)) prevTotalPaise = parsed.totalPaise;
+          } catch(e){}
           await env.DB.prepare('UPDATE returns SET status = ?, finalPrice = ? WHERE id = ?').bind(update.status, fp ? JSON.stringify(fp) : null, update.id).run();
+          if (fp) { // exactly one permanent row per approval: the deal price
+            try {
+              let actor = 'unknown';
+              try {
+                const sessionUser = await verifySession(env, request);
+                if (sessionUser && sessionUser.email) actor = String(sessionUser.email).slice(0, 254);
+              } catch {}
+              await env.DB.prepare(
+                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+              ).bind(crypto.randomUUID(), update.id, null, prevTotalPaise, fp.totalPaise, actor, new Date().toISOString()).run();
+            } catch(e){}
+          }
         } else {
           await env.DB.prepare('UPDATE returns SET status = ? WHERE id = ?').bind(update.status, update.id).run();
         }
       } else if (update.action === 'emailDelivery') {
         await env.DB.prepare('UPDATE returns SET emailDeliveryStatus = ? WHERE id = ?').bind(update.emailDeliveryStatus, update.id).run();
       } else if (update.action === 'price') {
-        // fetching existing products to update price (paise-integer contract;
-        // legacy rupee-float `price` preserved untouched for old readers)
+        // Evaluated-price edit. NO audit row is written here, by design: an
+        // intermediate figure is not a decision. The permanent trail holds the
+        // final price (written once, on approval); every step along the way is
+        // captured in the negotiation thread instead.
         const { results } = await env.DB.prepare('SELECT products FROM returns WHERE id = ?').bind(update.id).all();
         if (results.length > 0) {
           const products = JSON.parse(results[0].products || '[]');
-          const target = products.find(p => p && p.id === update.productId);
-          const oldPaise = target && Number.isInteger(target.pricePaise) && target.pricePaise >= 0 ? target.pricePaise : null;
-          const newPaise = (update.pricePaise === null || update.pricePaise === undefined)
-            ? null
-            : (Number.isInteger(update.pricePaise) && update.pricePaise >= 0 ? update.pricePaise : null);
           const updatedProducts = products.map(p => {
             if (p.id !== update.productId) return p;
             const next = { ...p };
@@ -679,22 +737,6 @@ export async function onRequestPut({ request, env }) {
           updatedProducts.forEach(p => { totalAmount += evalPaiseOf(p) * (Number(p.quantity) || 1); });
           try { await env.DB.prepare('ALTER TABLE returns ADD COLUMN totalAmount REAL').run(); } catch(e){}
           await env.DB.prepare('UPDATE returns SET products = ?, totalAmount = ? WHERE id = ?').bind(JSON.stringify(updatedProducts), totalAmount, update.id).run();
-          // History write: only on actual change, best-effort (never fails the price update).
-          if (oldPaise !== newPaise) {
-            try {
-              let actor = 'unknown';
-              try {
-                const sessionUser = await verifySession(env, request);
-                if (sessionUser && sessionUser.email) actor = String(sessionUser.email).slice(0, 254);
-              } catch {}
-              await env.DB.prepare(
-                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
-              ).bind(
-                crypto.randomUUID(), update.id, update.productId,
-                oldPaise, newPaise, actor, new Date().toISOString()
-              ).run();
-            } catch(e){}
-          }
         }
       }
     } else if (env.DATABASE_URL) {
@@ -709,24 +751,54 @@ export async function onRequestPut({ request, env }) {
         )`);
         await client.query('CREATE INDEX IF NOT EXISTS idx_price_history_req ON price_history(request_id)');
       } catch(e){}
+      // Audit posture (mirrors the D1 branch): FINAL price only, terminal rung
+      // is permanent.
+      if (update.action === 'status') {
+        try {
+          const currentPg = await client.query('SELECT status FROM returns WHERE id = $1', [update.id]);
+          const curStatus = currentPg.rows && currentPg.rows[0] && currentPg.rows[0].status;
+          if (curStatus && isClosed(normalizeStatus(curStatus))) {
+            return new Response(JSON.stringify({
+              success: false,
+              message: `This request is already “${normalizeStatus(curStatus)}” and cannot be moved again.`
+            }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+          }
+        } catch { /* no row/table → the UPDATE simply matches nothing */ }
+      }
       if (update.action === 'status') {
         if (update.finalPrice !== undefined) {
           const fp = validFinalPrice(update.finalPrice);
+          let prevTotalPaisePg = null;
+          try {
+            const prevRows = await client.query('SELECT finalprice FROM returns WHERE id = $1', [update.id]);
+            const parsedPrev = prevRows.rows && prevRows.rows[0] && prevRows.rows[0].finalprice
+              ? JSON.parse(prevRows.rows[0].finalprice) : null;
+            if (parsedPrev && Number.isInteger(parsedPrev.totalPaise)) prevTotalPaisePg = parsedPrev.totalPaise;
+          } catch(e){}
           await client.query('UPDATE returns SET status = $1, finalprice = $2 WHERE id = $3', [update.status, fp ? JSON.stringify(fp) : null, update.id]);
+          if (fp) {
+            try {
+              let actorFinalPg = 'unknown';
+              try {
+                const sessionUser = await verifySession(env, request);
+                if (sessionUser && sessionUser.email) actorFinalPg = String(sessionUser.email).slice(0, 254);
+              } catch {}
+              await client.query(
+                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                [crypto.randomUUID(), update.id, null, prevTotalPaisePg, fp.totalPaise, actorFinalPg, new Date().toISOString()]
+              );
+            } catch(e){}
+          }
         } else {
           await client.query('UPDATE returns SET status = $1 WHERE id = $2', [update.status, update.id]);
         }
       } else if (update.action === 'emailDelivery') {
         await client.query('UPDATE returns SET emailDeliveryStatus = $1 WHERE id = $2', [update.emailDeliveryStatus, update.id]);
       } else if (update.action === 'price') {
+        // Evaluated-price edit — no audit row (final-price-only trail; see D1 branch).
         const { rows } = await client.query('SELECT products FROM returns WHERE id = $1', [update.id]);
         if (rows.length > 0) {
           const products = JSON.parse(rows[0].products || '[]');
-          const targetPg = products.find(p => p && p.id === update.productId);
-          const oldPaisePg = targetPg && Number.isInteger(targetPg.pricePaise) && targetPg.pricePaise >= 0 ? targetPg.pricePaise : null;
-          const newPaisePg = (update.pricePaise === null || update.pricePaise === undefined)
-            ? null
-            : (Number.isInteger(update.pricePaise) && update.pricePaise >= 0 ? update.pricePaise : null);
           const updatedProducts = products.map(p => {
             if (p.id !== update.productId) return p;
             const next = { ...p };
@@ -747,19 +819,6 @@ export async function onRequestPut({ request, env }) {
           updatedProducts.forEach(p => { totalAmount += evalPaiseOfPg(p) * (Number(p.quantity) || 1); });
           try { await client.query('ALTER TABLE returns ADD COLUMN totalamount NUMERIC'); } catch(e){}
           await client.query('UPDATE returns SET products = $1, totalamount = $2 WHERE id = $3', [JSON.stringify(updatedProducts), totalAmount, update.id]);
-          if (oldPaisePg !== newPaisePg) {
-            try {
-              let actorPg = 'unknown';
-              try {
-                const sessionUser = await verifySession(env, request);
-                if (sessionUser && sessionUser.email) actorPg = String(sessionUser.email).slice(0, 254);
-              } catch {}
-              await client.query(
-                'INSERT INTO price_history (id, request_id, product_id, old_paise, new_paise, actor, at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                [crypto.randomUUID(), update.id, update.productId, oldPaisePg, newPaisePg, actorPg, new Date().toISOString()]
-              );
-            } catch(e){}
-          }
         }
       }
       await client.end();

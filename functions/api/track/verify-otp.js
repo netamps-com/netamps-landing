@@ -1,16 +1,20 @@
 /**
  * POST /api/track/verify-otp
  *
- * Step 2 of buyer order verification. On a correct code, mints a short-lived,
- * order-scoped access token (60 min) and returns ONLY that one order. The token
- * authorises negotiation actions (functions/api/track/negotiate.js); it is not a
- * login session and cannot read anything but this order.
+ * Step 2 of buyer verification — EMAIL ONLY.
+ *
+ * On a correct code (verified FIRST, so the brute-force budget is spent even
+ * for addresses with no requests), mints a short-lived EMAIL-scoped token
+ * (60 min) and returns EVERY successfully-created request filed under that
+ * address. The buyer then chooses which one to negotiate.
+ *
+ * The token is not a login session and grants nothing else: every subsequent
+ * read re-checks that the requested order belongs to this email.
  */
 
-import { getOrderById, dbReady, mintOrderToken, ensureNegotiationSchema } from '../negotiate/store.mjs';
+import { listOrdersByEmail, dbReady, mintBuyerToken, ensureNegotiationSchema } from '../negotiate/store.mjs';
 import { verifyTrackOtp } from './otp.mjs';
 
-const ID_RE = /^[SB]-[A-Z0-9-]{3,64}$/;
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 const CODE_RE = /^[0-9]{6}$/;
 
@@ -21,8 +25,12 @@ function json(body, status = 200) {
   });
 }
 
+/** One message, one status — for a wrong code and for an address with nothing on file. */
+const GENERIC_FAIL = 'Invalid or expired code. Please request a new one.';
+
 /** The buyer-visible projection of their own order — never the whole row. */
 export function publicOrder(order) {
+  if (!order) return null;
   return {
     id: order.id,
     intent: order.intent,
@@ -51,28 +59,30 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: 'Invalid request body' }, 400);
     }
 
-    const id = typeof body.id === 'string' ? body.id.trim().toUpperCase() : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const code = typeof body.code === 'string' ? body.code.trim() : '';
-    if (!ID_RE.test(id) || !email || email.length > 254 || !EMAIL_RE.test(email) || !CODE_RE.test(code)) {
-      return json({ success: false, message: 'A valid tracking ID, email and 6-digit code are required.' }, 400);
+    if (!email || email.length > 254 || !EMAIL_RE.test(email) || !CODE_RE.test(code)) {
+      return json({ success: false, message: 'A valid email address and 6-digit code are required.' }, 400);
     }
 
-    const order = await getOrderById(env, id);
-    const onFile = order && order.email ? String(order.email).trim().toLowerCase() : null;
-    if (!order || onFile !== email.toLowerCase()) {
-      return json({ success: false, message: 'No open request matches that ID and email address.' }, 404);
-    }
+    // Consume the code FIRST: a wrong guess costs an attempt whether or not
+    // this address has requests, so success/failure never leaks that fact.
+    const ok = await verifyTrackOtp(env, { email, code });
+    if (!ok) return json({ success: false, message: GENERIC_FAIL }, 400);
 
-    const ok = await verifyTrackOtp(env, { requestId: order.id, code });
-    if (!ok) {
-      return json({ success: false, message: 'Invalid or expired code. Please request a new one.' }, 400);
-    }
+    const orders = await listOrdersByEmail(env, email);
+    if (orders.length === 0) return json({ success: false, message: GENERIC_FAIL }, 400);
 
     await ensureNegotiationSchema(env);
-    const { token, expiresAt } = await mintOrderToken(env, { requestId: order.id, email: onFile });
+    const { token, expiresAt, email: scoped } = await mintBuyerToken(env, { email });
 
-    return json({ success: true, token, expiresAt, order: publicOrder(order) });
+    return json({
+      success: true,
+      token,
+      expiresAt,
+      email: scoped,
+      orders: orders.map(publicOrder)
+    });
   } catch (err) {
     console.error('[track] verify-otp error:', err);
     return json({ success: false, message: 'Failed to verify the code. Please try again shortly.' }, 500);

@@ -10,7 +10,10 @@ import LogViewerModal from './LogViewerModal';
 import MatchCandidates from './MatchCandidates';
 import EvidenceGallery from './EvidenceGallery';
 import { useIdleTimeout, IdleTimeoutModal } from '../lib/idle-timeout';
-import { formatPaise as paiseToDisplay, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise, lineFinalOf } from '../lib/money';
+import { formatPaise as paiseToDisplay, evalUnitPaise, lineFinalOf } from '../lib/money';
+import {
+  ORDER_STATUS, normalizeStatus, isClosedStatus, isPriceLocked, isNegotiable, statusChipDark
+} from '../lib/status';
 
 interface ProductItem {
   id: string;
@@ -52,7 +55,7 @@ interface ReturnRequest {
   lotConsiderationPaise?: number | null;
   manifest?: { requestId: string; hash: string; generatedAt: string; version?: number } | null;
   finalPrice?: FinalPriceSnapshot | null;
-  priceHistory?: { productId: string; oldPaise: number | null; newPaise: number | null; actor: string; at: string }[];
+  priceHistory?: { productId: string | null; oldPaise: number | null; newPaise: number | null; actor: string; at: string }[];
 }
 
 // ── Totals math (paise integers; null = unstated, never 0) ──
@@ -102,12 +105,10 @@ export default function DashboardPage() {
   const idle = useIdleTimeout();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Approval snapshot draft (per-request). Approving writes a FinalPriceSnapshot
-  // atomically with the status flip; post-approval price edits are locked.
-  const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [approveBasis, setApproveBasis] = useState<'evaluated' | 'consideration' | 'negotiated'>('evaluated');
-  const [approveNegotiated, setApproveNegotiated] = useState('');
+  // Error text for the "Order Accepted for Negotiation" action (per-request).
   const [approveError, setApproveError] = useState<string | null>(null);
+  // Global banner (e.g. the suggestion backfill result) — shown above the table.
+  const [headerNotice, setHeaderNotice] = useState<string | null>(null);
 
   // Key-reconciliation reports, keyed by request id (admin-only UI below).
   const [reconcileResult, setReconcileResult] = useState<Record<string, any>>({});
@@ -118,8 +119,8 @@ export default function DashboardPage() {
   const [candidatesFlagBusy, setCandidatesFlagBusy] = useState(false);
 
   // Draft text for each evaluated-price field. Keystrokes never reach the
-  // server: a price is committed deliberately (blur / Enter), so price_history
-  // stays a chain of custody for real decisions instead of an edit log.
+  // server: a price is committed deliberately (blur / Enter), so the order's
+  // priced figure never churns through intermediate states while someone types.
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
 
   const loadCandidatesFlag = useCallback(async () => {
@@ -138,19 +139,60 @@ export default function DashboardPage() {
   const setCandidatesFlag = async (next: boolean) => {
     if (candidatesFlagBusy) return;
     if (next && !window.confirm(
-      'Enable best-match suggestions?\n\nAdvisory only — the model suggests, staff decide. New BUY orders get a gated, cached candidate set; existing orders need a Regenerate.'
+      'Enable best-match suggestions?\n\nAdvisory only — the model suggests, staff decide.\n\n' +
+      'This also regenerates the candidate cache for every BUY order, so the panel is populated ' +
+      'straight away (the sweep may take a minute).'
     )) return;
     setCandidatesFlagBusy(true);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${API_URL}/api/match`, {
+      const flagRes = await fetch(`${API_URL}/api/match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'candidates-flag', enabled: next })
       });
-      const data = await res.json();
-      if (data?.success) setCandidatesEnabled(!!data.candidatesEnabled);
-    } catch {} finally {
+      const flagData = await flagRes.json();
+      if (!flagData?.success) {
+        setHeaderNotice(flagData?.message || 'Could not update the suggestions flag.');
+        return;
+      }
+      setCandidatesEnabled(!!flagData.candidatesEnabled);
+      if (!next) {
+        setHeaderNotice('Suggestions disabled — the panel stays hidden and the empty state remains honest.');
+        return;
+      }
+
+      // The switch and the cache are separate concerns: the flag is already ON
+      // and read-only safe, so the sweep runs as its own admin-gated request.
+      // If it fails or times out, suggestions still work for new orders and the
+      // operator is told exactly what to do about the rest.
+      try {
+        const sweepRes = await fetch(`${API_URL}/api/match`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'candidates-backfill' })
+        });
+        const sweepData = await sweepRes.json();
+        if (sweepData?.success && typeof sweepData.processed === 'number') {
+          setHeaderNotice(
+            `Suggestions enabled — candidate sets regenerated for ${sweepData.processed} BUY order${sweepData.processed === 1 ? '' : 's'}. ` +
+            `Advisory only: the model suggests, staff decide.`
+          );
+        } else {
+          setHeaderNotice(
+            'Suggestions enabled, but the cache sweep did not complete. ' +
+            'Existing orders can be filled from the “Regenerate” control on each request.'
+          );
+        }
+      } catch {
+        setHeaderNotice(
+          'Suggestions enabled, but the cache sweep was interrupted. ' +
+          'Existing orders can be filled from the “Regenerate” control on each request.'
+        );
+      }
+    } catch {
+      setHeaderNotice('Could not update the suggestions flag. Check your connection and retry.');
+    } finally {
       setCandidatesFlagBusy(false);
     }
   };
@@ -354,89 +396,119 @@ export default function DashboardPage() {
     setExpandedRows(newSet);
   };
 
-  const handleUpdateStatus = async (id: string, newStatus: string) => {
-    const updatedReturns = returns.map(req => 
-      req.id === id ? { ...req, status: newStatus } : req
+  /**
+   * "Order Accepted for Negotiation" — the rung that opens (or resumes) a
+   * buyer ↔ seller price thread. It deliberately decides NO price: the final
+   * figure is agreed in the thread and frozen only by "Order Deal Approved"
+   * in the Negotiations tab, which is the single closing action.
+   */
+  const handleAcceptForNegotiation = async (req: ReturnRequest) => {
+    setApproveError(null);
+    if (!window.confirm(
+      `Accept ${req.id} for negotiation?\n\n` +
+      `This moves it to “${ORDER_STATUS.ACCEPTED}” and opens a price thread in the Negotiations tab. ` +
+      `No price is decided at this step.`
+    )) return;
+
+    const previous = returns;
+    const updatedReturns = returns.map(r =>
+      r.id === req.id ? { ...r, status: ORDER_STATUS.ACCEPTED } : r
     );
     setReturns(updatedReturns);
     localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      await fetch(`${API_URL}/api/returns`, {
-        method: 'PUT',
+      const res = await fetch(`${API_URL}/api/negotiations`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action: 'status', status: newStatus })
+        body: JSON.stringify({ requestId: req.id, action: 'open' })
       });
+      let data: any = null;
+      try { data = await res.json(); } catch { data = null; }
+      if (!res.ok || !data?.success) {
+        // Roll the optimistic flip back — the row must never claim a rung the
+        // server refused.
+        setReturns(previous);
+        localStorage.setItem('netamps_returns', JSON.stringify(previous));
+        setApproveError(data?.message || 'Could not accept this request for negotiation.');
+        return;
+      }
       const { logEvent } = await import('../lib/logger');
-      logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${id} status changed to ${newStatus}`, userRole);
-    } catch(err){}
+      logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${req.id} accepted for negotiation`, userRole);
+    } catch (err) {
+      setReturns(previous);
+      localStorage.setItem('netamps_returns', JSON.stringify(previous));
+      setApproveError('Could not accept this request for negotiation. Check your connection and retry.');
+    }
   };
 
-  // Approval writes a FinalPriceSnapshot atomically with the status flip.
-  // Corrections re-approve (version+1 with history); post-approval edits lock.
-  const handleApproveWithSnapshot = async (req: ReturnRequest) => {
-    setApproveError(null);
-    const ev = evalTotalOf(req);
-    const ask = askTotalOf(req);
-    let total: number | null = null;
-    if (approveBasis === 'evaluated') {
-      if (ev.total === null) {
-        setApproveError('Cannot approve on Evaluated basis: some lines lack evaluated prices.');
-        return;
-      }
-      total = ev.total;
-    } else if (approveBasis === 'consideration') {
-      if (ask.total === null) {
-        setApproveError('Cannot approve on Consideration basis: the ask is unstated.');
-        return;
-      }
-      total = ask.total;
-    } else {
-      const negotiated = moneyStringToPaise(approveNegotiated);
-      if (negotiated === null) {
-        setApproveError('Enter a valid negotiated total (0 – ₹99,99,99,999, max 2 decimals).');
-        return;
-      }
-      total = negotiated;
-    }
+  /**
+   * Declining must not leave a live price thread behind: a thread that
+   * outlives its order would still show as open in the monitor and refuse
+   * every later action. So if the request is already on the ladder, the decline
+   * is recorded as a real staff `reject` round (which closes the thread AND
+   * mirrors the status). A request still Pending has no thread to close, so it
+   * is a plain status write.
+   */
+  const handleDeclineRequest = async (req: ReturnRequest) => {
+    if (!window.confirm(
+      `Decline ${req.id}?\n\n` +
+      (isNegotiable(req.status)
+        ? `This also closes the open negotiation thread for the order.`
+        : `This request is not in negotiation yet — it will be marked “${ORDER_STATUS.DECLINED}”.`)
+    )) return;
 
-    const snapshot: FinalPriceSnapshot = {
-      version: (req.finalPrice?.version ?? 0) + 1,
-      decidedAt: new Date().toISOString(),
-      decidedBy: userRole || 'unknown',
-      basis: approveBasis,
-      totalPaise: total,
-      lines: (req.products || []).map(p => {
-        const a = lineAskOf(req, p);
-        const unit = evalUnitPaise(p);
-        const e = unit === null ? null : unit * (Number(p.quantity) || 1);
-        return {
-          productId: p.id,
-          askPaise: a,
-          evaluatedPaise: e,
-          settledPaise: approveBasis === 'negotiated' ? null : (approveBasis === 'evaluated' ? e : a)
-        };
-      }),
-      manifestHashAtApproval: req.manifest?.hash ?? null
+    const previous = returns;
+    const applyLocal = (status: string) => {
+      const next = previous.map(r => (r.id === req.id ? { ...r, status } : r));
+      setReturns(next);
+      localStorage.setItem('netamps_returns', JSON.stringify(next));
     };
+    applyLocal(ORDER_STATUS.DECLINED);
 
-    const updatedReturns = returns.map(r =>
-      r.id === req.id ? { ...r, status: 'Approved', finalPrice: snapshot } : r
-    );
-    setReturns(updatedReturns);
-    localStorage.setItem('netamps_returns', JSON.stringify(updatedReturns));
-    setApprovingId(null);
-    setApproveNegotiated('');
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-      await fetch(`${API_URL}/api/returns`, {
+      if (isNegotiable(req.status)) {
+        const res = await fetch(`${API_URL}/api/negotiations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId: req.id, action: 'reject' })
+        });
+        let data: any = null;
+        try { data = await res.json(); } catch { data = null; }
+        // A refusal here (e.g. the thread already closed) still means the order
+        // should read Declined — fall back to the direct status write.
+        if (data?.success) {
+          const { logEvent } = await import('../lib/logger');
+          logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${req.id} declined; negotiation thread closed`, userRole);
+          return;
+        }
+      }
+      const putRes = await fetch(`${API_URL}/api/returns`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: req.id, action: 'status', status: 'Approved', finalPrice: snapshot })
+        body: JSON.stringify({ id: req.id, action: 'status', status: ORDER_STATUS.DECLINED })
       });
+      let putData: any = null;
+      try { putData = await putRes.json(); } catch { putData = null; }
+      if (!putRes.ok || putData?.success === false) {
+        // The server refused (typically because this request has since reached a
+        // terminal rung). Never leave the row claiming a status it does not
+        // have — pull the truth back from the server instead of trusting the
+        // optimistic flip.
+        setReturns(previous);
+        localStorage.setItem('netamps_returns', JSON.stringify(previous));
+        setApproveError(putData?.message || 'Could not decline this request. It may already have been decided.');
+        fetchReturns(true);
+        return;
+      }
       const { logEvent } = await import('../lib/logger');
-      logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${req.id} approved (final v${snapshot.version}, basis ${snapshot.basis}, total ${snapshot.totalPaise} paise)`, userRole);
-    } catch(err){}
+      logEvent('STATUS_UPDATED', 'Dashboard Page', `Request ${req.id} declined`, userRole);
+    } catch (err) {
+      setReturns(previous);
+      localStorage.setItem('netamps_returns', JSON.stringify(previous));
+      setApproveError('Could not decline this request. Check your connection and retry.');
+    }
   };
 
   const handleDeleteRequest = async (id: string) => {
@@ -454,9 +526,9 @@ export default function DashboardPage() {
   };
 
   // Commit an evaluated price. Called on blur/Enter — NOT on every keystroke.
-  // Each deliberate commit writes exactly one price_history row, so the
-  // permanent audit trail records real decisions (1600 → 15000) rather than
-  // every intermediate value typed along the way.
+  // The permanent audit trail is final-price-only (written once, when the deal
+  // is approved), so this writes NO history row at all: an intermediate figure
+  // is not a decision. Intermediate steps live in the negotiation thread.
   const commitPrice = async (reqId: string, productId: string, raw: string) => {
     const key = `${reqId}:${productId}`;
     // The committed value now owns the field — clear any in-progress draft.
@@ -469,7 +541,7 @@ export default function DashboardPage() {
 
     if (userRole !== 'admin@netamps.com') return;
     const target = returns.find(r => r.id === reqId);
-    if (target && target.status === 'Approved') return; // locked once approved (see finalPrice snapshot)
+    if (target && isPriceLocked(target.status)) return; // price frozen once the deal closes
 
     // Paise-integer contract: parse the ₹ string once, store integer paise.
     // Empty clears; invalid (negative/nonnumeric) clears like before — never NaN.
@@ -515,7 +587,7 @@ export default function DashboardPage() {
   };
 
   const handleEmailPush = async (req: ReturnRequest) => {
-    if (req.status !== 'Approved') return;
+    if (normalizeStatus(req.status) !== ORDER_STATUS.DEAL) return; // push only after the deal is approved
     
     const updatedReturns = returns.map(r => 
       r.id === req.id ? { ...r, emailDeliveryStatus: 'pending' as const } : r
@@ -696,6 +768,18 @@ export default function DashboardPage() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {headerNotice && (
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <p className="text-sm text-amber-200">{headerNotice}</p>
+            <button
+              onClick={() => setHeaderNotice(null)}
+              className="shrink-0 text-amber-300 hover:text-amber-100 text-sm font-bold"
+              aria-label="Dismiss"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <div className="flex justify-between items-end mb-8">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Active Requests Dashboard</h1>
@@ -780,12 +864,8 @@ export default function DashboardPage() {
                             {new Date(req.date).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <span className={`px-2.5 py-1 text-xs font-medium border rounded-full ${
-                              req.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                              req.status === 'Declined' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
-                              'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                            }`}>
-                              {req.status}
+                            <span className={`px-2.5 py-1 text-xs font-medium border rounded-full ${statusChipDark(req.status)}`}>
+                              {normalizeStatus(req.status)}
                             </span>
                           </td>
                         </tr>
@@ -855,7 +935,7 @@ export default function DashboardPage() {
                                                 <input
                                                   type="text"
                                                   inputMode="decimal"
-                                                  disabled={userRole !== 'admin@netamps.com' || req.status === 'Approved'}
+                                                  disabled={userRole !== 'admin@netamps.com' || isPriceLocked(req.status)}
                                                   value={priceDrafts[`${req.id}:${product.id}`] ?? ((product.pricePaise ?? null) !== null ? String((product.pricePaise as number) / 100) : (product.price ?? ''))}
                                                   onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ''); setPriceDrafts(prev => ({ ...prev, [`${req.id}:${product.id}`]: v })); }}
                                                   onBlur={(e) => commitPrice(req.id, product.id, e.target.value.replace(/[^0-9.]/g, ''))}
@@ -910,11 +990,12 @@ export default function DashboardPage() {
                                           <>
                                             <div className="border-t border-slate-700/60 my-1" />
                                             <div className="pt-2">
-                                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Price history (permanent audit trail)</div>
+                                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Final price (permanent audit trail)</div>
                                               <ul className="space-y-1">
                                                 {(req.priceHistory ?? []).slice(-5).map((h, i) => (
                                                   <li key={i} className="text-[11px] font-mono text-slate-400">
-                                                    {h.productId.slice(0, 8)}…: {paiseToDisplay(h.oldPaise)} → {paiseToDisplay(h.newPaise)} <span className="text-slate-600">· {h.actor} · {new Date(h.at).toLocaleString()}</span>
+                                                    {h.productId ? <>{h.productId.slice(0, 8)}…: </> : null}
+                                                    {paiseToDisplay(h.oldPaise)} → {paiseToDisplay(h.newPaise)} <span className="text-slate-600">· {h.actor} · {new Date(h.at).toLocaleString()}</span>
                                                   </li>
                                                 ))}
                                               </ul>
@@ -1007,97 +1088,73 @@ export default function DashboardPage() {
                                 )}
 
                                 <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-800 pt-4 items-center">
-                                  {approvingId === req.id && (
-                                    <div className="w-full mb-4 p-4 rounded-lg bg-slate-900 border border-emerald-500/30">
-                                      <div className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
-                                        Approve with final price snapshot {req.finalPrice ? `(correction → v${req.finalPrice.version + 1})` : '(v1)'}
-                                      </div>
-                                      <div className="flex flex-wrap gap-2 mb-3">
-                                        {(['evaluated', 'consideration', 'negotiated'] as const).map(b => (
+                                  {approveError && (
+                                    <div className="w-full text-xs text-red-400">{approveError}</div>
+                                  )}
+                                  {(() => {
+                                    const st = normalizeStatus(req.status);
+                                    const closed = isClosedStatus(st);
+                                    const deal = st === ORDER_STATUS.DEAL;
+                                    const negotiating = !closed && !deal && (st === ORDER_STATUS.ACCEPTED || st === ORDER_STATUS.IN_PROGRESS || st === ORDER_STATUS.AGREED);
+                                    return (
+                                      <>
+                                        {deal && (
                                           <button
-                                            key={b}
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setApproveBasis(b); setApproveError(null); }}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${approveBasis === b ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}`}
+                                            onClick={(e) => { e.stopPropagation(); handleEmailPush(req); }}
+                                            disabled={req.emailDeliveryStatus === 'pending'}
+                                            className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 mr-auto disabled:opacity-70 ${req.emailDeliveryStatus === 'sent' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-500'}`}
                                           >
-                                            {b === 'evaluated' ? 'Evaluated Total' : b === 'consideration' ? 'Consideration Total' : 'Negotiated Total'}
+                                            {req.emailDeliveryStatus === 'pending' ? <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Mail className="w-4 h-4" />}
+                                            {req.emailDeliveryStatus === 'sent' ? 'Email Sent' : req.emailDeliveryStatus === 'failed' ? 'Retry Email' : 'Email Push'}
                                           </button>
-                                        ))}
-                                      </div>
-                                      {approveBasis === 'negotiated' && (
-                                        <input
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={approveNegotiated}
-                                          onChange={(e) => setApproveNegotiated(sanitizeMoneyInput(e.target.value))}
-                                          placeholder="Negotiated total (₹)"
-                                          className="w-full sm:max-w-xs mb-3 px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:border-emerald-500 focus:outline-none"
-                                        />
-                                      )}
-                                      <div className="text-sm text-slate-400 mb-3">
-                                        Preview total:{' '}
-                                        <span className="font-mono font-bold text-white">
-                                          {(() => {
-                                            if (approveBasis === 'evaluated') return paiseToDisplay(evalTotalOf(req).total);
-                                            if (approveBasis === 'consideration') return paiseToDisplay(askTotalOf(req).total);
-                                            const n = moneyStringToPaise(approveNegotiated);
-                                            return n === null ? '—' : paiseToDisplay(n);
-                                          })()}
-                                        </span>
-                                      </div>
-                                      {approveError && (
-                                        <div className="text-xs text-red-400 mb-3">{approveError}</div>
-                                      )}
-                                      <div className="flex gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={(e) => { e.stopPropagation(); handleApproveWithSnapshot(req); }}
-                                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg transition-colors"
-                                        >
-                                          Confirm Approval
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={(e) => { e.stopPropagation(); setApprovingId(null); setApproveError(null); }}
-                                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors border border-slate-700"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {req.status === 'Approved' && (
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); handleEmailPush(req); }}
-                                      disabled={req.emailDeliveryStatus === 'pending'}
-                                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 mr-auto disabled:opacity-70 ${req.emailDeliveryStatus === 'sent' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-indigo-600 hover:bg-indigo-500'}`}
-                                    >
-                                      {req.emailDeliveryStatus === 'pending' ? <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Mail className="w-4 h-4" />}
-                                      {req.emailDeliveryStatus === 'sent' ? 'Email Sent' : req.emailDeliveryStatus === 'failed' ? 'Retry Email' : 'Email Push'}
-                                    </button>
-                                  )}
-                                  <div className={req.status === 'Approved' ? 'flex gap-3' : 'ml-auto flex gap-3'}>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); setApprovingId(req.id); setApproveBasis('evaluated'); setApproveNegotiated(''); setApproveError(null); }}
-                                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors"
-                                    >
-                                      Approve Request
-                                    </button>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(req.id, 'Declined'); }}
-                                      className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors"
-                                    >
-                                      Decline Request
-                                    </button>
-                                    {userRole === 'admin@netamps.com' && (
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); handleDeleteRequest(req.id); }}
-                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-sm font-medium rounded-lg transition-colors border border-red-500/20"
-                                      >
-                                        Delete Request
-                                      </button>
-                                    )}
-                                  </div>
+                                        )}
+                                        <div className={deal ? 'flex gap-3 flex-wrap items-center' : 'ml-auto flex gap-3 flex-wrap items-center'}>
+                                          {/* Rung 2 — opens the thread, decides no price. */}
+                                          {!closed && !negotiating && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); handleAcceptForNegotiation(req); }}
+                                              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded-lg transition-colors"
+                                            >
+                                              {ORDER_STATUS.ACCEPTED}
+                                            </button>
+                                          )}
+                                          {/* Already on the ladder → continue in the monitor. */}
+                                          {negotiating && (
+                                            <Link
+                                              href="/dashboard/negotiations"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors"
+                                            >
+                                              <Handshake className="w-4 h-4" /> {st} — open negotiations
+                                            </Link>
+                                          )}
+                                          {/* Rung 5 — written only by the Negotiations tab. */}
+                                          {deal && (
+                                            <span className="px-4 py-2 rounded-lg text-sm font-bold border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
+                                              {ORDER_STATUS.DEAL}
+                                              {req.finalPrice ? ` · ${paiseToDisplay(req.finalPrice.totalPaise)}` : ''}
+                                            </span>
+                                          )}
+                                          {!closed && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); handleDeclineRequest(req); }}
+                                              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                            >
+                                              Decline Request
+                                            </button>
+                                          )}
+                                          {userRole === 'admin@netamps.com' && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); handleDeleteRequest(req.id); }}
+                                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-sm font-medium rounded-lg transition-colors border border-red-500/20"
+                                            >
+                                              Delete Request
+                                            </button>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             </td>
