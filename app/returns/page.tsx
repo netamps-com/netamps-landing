@@ -802,6 +802,39 @@ export default function ReturnsPage() {
                 </button>
               </div>
 
+              {intent === 'buy' && (
+                <section aria-label="Buy with absolute confidence" className="mb-8 rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-6 sm:p-7 relative overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-black tracking-tight text-slate-900">Buy with Absolute Confidence</h3>
+                      <ul className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
+                        {['Fast Quotes', 'Zero Risk', 'Fully Tested Hardware', 'Enterprise-Grade Quality', 'Custom sourcing'].map((t) => (
+                          <li key={t} className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            {t}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-4 text-sm text-slate-600 leading-relaxed">
+                        <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
+                      </p>
+                    </div>
+                    <div className="shrink-0 mx-auto sm:mx-0" aria-hidden="true">
+                      <svg viewBox="0 0 120 120" className="w-28 h-28" role="presentation">
+                        <circle cx="60" cy="60" r="54" fill="#ffffff" stroke="#a7f3d0" strokeWidth="2" />
+                        <circle cx="60" cy="60" r="44" fill="#ecfdf5" />
+                        <rect x="42" y="38" width="36" height="44" rx="5" fill="#ffffff" stroke="#059669" strokeWidth="2" />
+                        <rect x="47" y="44" width="26" height="6" rx="1.5" fill="#a7f3d0" />
+                        <rect x="47" y="53" width="26" height="6" rx="1.5" fill="#a7f3d0" />
+                        <rect x="47" y="62" width="26" height="6" rx="1.5" fill="#a7f3d0" />
+                        <circle cx="86" cy="86" r="16" fill="#059669" />
+                        <path d="M79 86 l5 5 l9 -10" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  </div>
+                </section>
+              )}
+
               {intent === 'track' ? (
                 <div className="space-y-6">
                   <div>
@@ -934,7 +967,7 @@ export default function ReturnsPage() {
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         {isUploading ? 'Uploading securely to R2...' : 'Verifying...'}
                       </div>
-                    ) : `Verify & Generate ${intent === 'sell' ? 'SELL' : 'BUY'} Request`}
+                    ) : (intent === 'sell' ? 'Verify & Generate One-Click Liquidation' : 'Verify & Generate BUY Request')}
                   </button>
                   <button type="button" onClick={() => { setShowOtp(false); resetRetToken(); }} className="text-sm text-indigo-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded">
                     Cancel and return to form
