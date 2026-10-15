@@ -1,0 +1,125 @@
+// Prisma: PostgreSQL + enums for the procure-to-pay state machine
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  USER
+}
+
+enum DocType {
+  QUOTE
+  PURCHASE_ORDER
+  PROFORMA_INVOICE
+  INVOICE
+  CASH_MEMO
+}
+
+enum DocStatus {
+  DRAFT
+  COMMITTED
+  SETTLED
+  CANCELLED
+}
+
+enum AuditAction {
+  DOCUMENT_MUTATION
+  STATUS_FINALIZATION
+  STOCK_ADJUSTMENT
+  USER_AUTH
+  SESSION_ROTATE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  hash      String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  sessions  RefreshSession[]
+  audits    AuditLedger[] @relation("AuditActor")
+}
+
+model RefreshSession {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Client {
+  id             String   @id @default(uuid())
+  name           String
+  email          String   @unique
+  // PII below is AES-256-GCM ciphertext (see src/crypto/pii.ts), never plaintext
+  taxIdEnc       String?
+  paymentEnc     String?
+  createdAt      DateTime @default(now())
+}
+
+model Sku {
+  sku                        String @id
+  description                String
+  current_on_hand_balance    Int    @default(0)
+  reserved_pending_allocation Int   @default(0)
+
+  @@map("inventory_stock_registry")
+}
+
+model Document {
+  document_id     String    @id @default(uuid())
+  document_number String    @unique
+  doc_type        DocType
+  lifecycle_status DocStatus @default(DRAFT)
+  subtotal        Decimal   @db.Decimal(12, 2)
+  tax_rate        Decimal   @db.Decimal(5, 4)
+  total_payable   Decimal   @db.Decimal(12, 2)
+  ownerId         String?
+  sourcePoId      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lines           DocumentLineItem[]
+
+  @@map("documents")
+}
+
+model DocumentLineItem {
+  id                String   @id @default(uuid())
+  documentId        String
+  document          Document @relation(fields: [documentId], references: [document_id], onDelete: Cascade)
+  sku               String?
+  description       String
+  selected_quantity Int
+  unit_cost         Decimal  @db.Decimal(12, 2)
+  extended_total    Decimal  @db.Decimal(12, 2)
+
+  @@map("document_line_items")
+  @@index([documentId])
+}
+
+model AuditLedger {
+  audit_id   String      @id @default(uuid())
+  actor_id   String?
+  actor      User?       @relation("AuditActor", fields: [actor_id], references: [id], onDelete: SetNull)
+  ip_address String
+  action_type AuditAction
+  old_state  Json?
+  new_state  Json?
+  timestamp  DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@map("audit_ledger")
+  @@index([actor_id])
+  @@index([timestamp])
+}
