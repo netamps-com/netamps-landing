@@ -423,32 +423,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex items-center justify-center px-4 py-8 relative overflow-hidden">
       {/* Floating Status Widget */}
       <HealthStatusWidget />
 
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
-        <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
-        <div className="absolute bottom-0 left-0 w-[50vw] h-[50vw] bg-emerald-200/40 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
+        <div className="absolute top-0 right-0 w-[40vw] h-[40vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
+        <div className="absolute bottom-0 left-0 w-[40vw] h-[40vw] bg-emerald-200/40 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="flex justify-center mb-8">
-          <Link href="/" className="scale-125 transform origin-center transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg">
-            <NetampsLogo />
-          </Link>
-        </div>
-        <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-slate-900">
-          Netamps Connect
-        </h2>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+      <div className="w-full max-w-md relative z-10">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/90 backdrop-blur-xl py-8 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl sm:px-10 border border-slate-200/60"
+          className="bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-6 sm:p-8 border border-slate-200/60 flex flex-col gap-5"
         >
           {resetToken ? (
             <div className="space-y-6">
@@ -686,10 +675,11 @@ export default function LoginPage() {
           
           </motion.div>
         
-        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Verified Sessions · Role-Gated Access</span>
-        </div>
+          {/* Bottom trust badge */}
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-medium pt-2 border-t border-slate-200/50">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Verified Sessions · Role-Gated Access</span>
+          </div>
       </div>
     </div>
   );
