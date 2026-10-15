@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useMemo, useCallback, type ReactNode, type
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Link2, ChevronUp, ChevronDown, AlertCircle, Heart, Zap, DollarSign, Shield, Cpu, Laptop2, Mouse, Package, Folder } from 'lucide-react';
+import BuyModuleScroll from './BuyModuleScroll';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
@@ -891,6 +892,11 @@ export default function ReturnsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-5 sm:px-6 lg:px-8 relative overflow-x-clip">
+      {/* BUY Module Sidebar — visible only on buy intent */}
+      {intent === 'buy' && (
+        <BuyModuleScroll className="fixed left-0 top-0 bottom-0 w-64 h-full bg-white border-r border-slate-200/50 sticky top-0 bottom-0 z-20 transition-transform sm:translate-x-0 md:translate-x-4 lg:translate-x-8" />
+      )}
+
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
