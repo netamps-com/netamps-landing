@@ -892,11 +892,6 @@ export default function ReturnsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-5 sm:px-6 lg:px-8 relative overflow-x-clip">
-      {/* BUY Module Sidebar — visible only on buy intent */}
-      {intent === 'buy' && (
-        <BuyModuleScroll className="fixed left-0 top-0 bottom-0 w-64 h-full bg-white border-r border-slate-200/50 overflow-y-auto z-20" />
-      )}
-
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
