@@ -119,7 +119,10 @@ async function logLlmCall(env, rec) {
  * @param {number} [opts.temperature] when omitted the model default applies
  *                                    (kept omitted so existing callers are
  *                                    byte-for-byte unchanged)
- * @param {'auto'|'large'} [opts.tier] 'auto' = small→large escalation
+ * @param {'auto'|'small'|'large'} [opts.tier] 'auto' = small→large escalation,
+ *   'small' = fast model only (typeahead / extraction: answer fast or not at
+ *   all — a second 70B attempt on a keystroke path is latency, not quality),
+ *   'large' = large model only
  * @param {number} [opts.timeoutMs]
  * @param {string} [opts.feature]     telemetry label
  * @param {string} [opts.promptVersion]
@@ -142,7 +145,14 @@ export async function runJson(env, {
     return { ok: false, reason: 'LLM_DISABLED' };
   }
 
-  const models = tier === 'large' ? [MODEL_LARGE] : [MODEL_SMALL, MODEL_LARGE];
+  // 'small' is a real tier, not an alias: callers on a latency budget (the
+  // typeahead refine pass, track extraction) must never pay for a second 70B
+  // attempt. 'auto' keeps its historical small→large escalation byte-for-byte.
+  const models = tier === 'large'
+    ? [MODEL_LARGE]
+    : tier === 'small'
+      ? [MODEL_SMALL]
+      : [MODEL_SMALL, MODEL_LARGE];
   const started = Date.now();
 
   for (const model of models) {
