@@ -214,10 +214,19 @@ export default function Home() {
             <div className="relative p-[3px] bg-white rounded-xl shadow-sm border border-slate-200 group-hover:shadow-[0_0_20px_rgba(79,70,229,0.2)] group-hover:border-indigo-300 transition-all duration-500">
               <NetampsLogo className="h-10 w-10 md:h-12 md:w-12 group-hover:scale-[1.03] transition-transform duration-500" />
             </div>
-            <h1 className="hidden sm:flex flex-col font-black tracking-tighter text-2xl leading-none">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-900">NETAMPS</span>
-              <span className="text-[10px] text-transparent bg-clip-text bg-gradient-to-r from-slate-600 to-slate-400 tracking-[0.3em] leading-none mt-1">TECHNOLOGIES</span>
-            </h1>
+            <div className="hidden sm:flex flex-col">
+              <h1 className="flex flex-col font-black tracking-tighter text-2xl leading-none">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-900">NETAMPS</span>
+                <span className="text-[10px] text-transparent bg-clip-text bg-gradient-to-r from-slate-600 to-slate-400 tracking-[0.3em] leading-none mt-1">TECHNOLOGIES</span>
+              </h1>
+              {/* Tagline. A script face rather than the brand's geometric sans:
+                  this line is meant to read as a signature, not as another
+                  typeset label. 14px / semibold / slate-700 — a script face at
+                  a lighter weight or smaller size stops reading as words. */}
+              <span className="mt-1.5 font-script text-sm font-semibold tracking-wide text-slate-700">
+                Solutions Redefined
+              </span>
+            </div>
           </a>
           <div className="flex items-center gap-6">
             {currentTimeIST && (
@@ -637,10 +646,8 @@ export default function Home() {
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Security Standards</span>
               {[
-                { label: 'TLS 1.3 Enforced', icon: '🔒' },
                 { label: 'Role-Gated Access', icon: '🛡️' },
                 { label: 'Quarantine-Scanned Uploads', icon: '🔍' },
-                { label: 'Full Audit Trail', icon: '📋' },
               ].map((badge) => (
                 <div key={badge.label} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/60 backdrop-blur-sm border border-slate-200 px-2.5 py-1 rounded-full shadow-sm">
                   <span>{badge.icon}</span>

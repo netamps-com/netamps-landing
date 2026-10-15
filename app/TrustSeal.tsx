@@ -1,6 +1,6 @@
 'use client';
 
-import { ShieldCheck, Lock, Shield, Award } from 'lucide-react';
+import { Lock, Shield } from 'lucide-react';
 import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
@@ -11,19 +11,11 @@ const SEAL_ROUTES = ['/privacy', '/status'];
 
 const seals = [
   {
-    label: 'TLS 1.3',
-    sublabel: 'Encrypted',
-    icon: ShieldCheck,
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
-    ping: 'bg-emerald-500',
-  },
-  {
     label: 'Role-Gated',
     sublabel: 'Access',
     icon: Shield,
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/20',
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
     ping: 'bg-blue-500',
   },
   {
@@ -33,14 +25,6 @@ const seals = [
     color: 'text-amber-600',
     bg: 'bg-amber-50',
     ping: 'bg-amber-500',
-  },
-  {
-    label: 'Audit',
-    sublabel: 'Trail',
-    icon: Award,
-    color: 'text-indigo-600',
-    bg: 'bg-indigo-50',
-    ping: 'bg-indigo-500',
   },
 ] as const;
 
@@ -103,13 +87,13 @@ export default function TrustSeal() {
 
       {/* Collapsed main badge */}
       <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-slate-200 p-1.5 pr-3 rounded-full shadow-lg hover:bg-slate-50 transition-colors">
-        <div className="bg-emerald-50 p-1.5 rounded-full relative">
-          <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-20"></div>
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 relative z-10" />
+        <div className="bg-blue-50 p-1.5 rounded-full relative">
+          <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
+          <Shield className="w-3.5 h-3.5 text-blue-600 relative z-10" />
         </div>
         <div className="flex flex-col">
-          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-tight">TLS 1.3 · Secured</span>
-          <span className="text-[10px] font-bold text-slate-900 flex items-center gap-1 leading-tight"><Lock className="w-2 h-2" /> TLS Encrypted</span>
+          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-tight">Role-Gated</span>
+          <span className="text-[10px] font-bold text-slate-900 flex items-center gap-1 leading-tight"><Shield className="w-2 h-2" /> Access Controlled</span>
         </div>
       </div>
     </motion.div>

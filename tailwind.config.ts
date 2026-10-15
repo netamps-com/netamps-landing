@@ -11,6 +11,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-inter)"],
         heading: ["var(--font-outfit)"],
+        script: ["var(--font-caveat)"],
       },
       colors: {
         background: "#ffffff",
