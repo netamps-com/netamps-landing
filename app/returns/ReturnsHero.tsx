@@ -50,7 +50,10 @@ type Variant = {
 };
 
 const SellMotif = () => (
-  <svg viewBox="0 0 240 120" className="h-auto w-full" role="presentation">
+  /* viewBox is cropped to the drawing's real bounds (y 22..88) rather than a
+     nominal 0..120. The dead band above and below was inflating the rendered
+     height by ~40% at no visual cost. */
+  <svg viewBox="0 22 240 66" className="h-auto w-full" role="presentation">
     {/* asset leaving the rack */}
     <g>
       <rect x="14" y="26" width="62" height="52" rx="12" fill="#ffffff" stroke="#6366f1" strokeWidth="2" />
@@ -79,7 +82,9 @@ const SellMotif = () => (
 );
 
 const BuyMotif = () => (
-  <svg viewBox="0 0 240 120" className="h-auto w-full" role="presentation">
+  /* cropped to the three source cards, y 12..108 — the tallest of the three,
+     so this variant still sets the hero's height. */
+  <svg viewBox="0 12 240 96" className="h-auto w-full" role="presentation">
     {/* sources converging on fulfilment */}
     <g>
       <rect x="10" y="16" width="54" height="24" rx="9" fill="#ffffff" stroke="#10b981" strokeWidth="2" />
@@ -100,7 +105,8 @@ const BuyMotif = () => (
 );
 
 const TrackMotif = () => (
-  <svg viewBox="0 0 240 120" className="h-auto w-full" role="presentation">
+  /* cropped to the rail plus its milestone ticks, y 32..100. */
+  <svg viewBox="0 32 240 68" className="h-auto w-full" role="presentation">
     {/* milestone rail */}
     <path d="M26 72 H214" stroke="#e2e8f0" strokeWidth="4" strokeLinecap="round" />
     <path d="M26 72 H138" stroke="#f59e0b" strokeWidth="4" strokeLinecap="round" className="track-progress" />
@@ -160,46 +166,53 @@ export default function ReturnsHero({ intent }: { intent: Intent }) {
   const v = HERO_VARIANTS[intent] ?? HERO_VARIANTS.sell;
 
   return (
-    <div className="relative">
+    <div className="relative w-full">
       {/* Ambient wash tinted to the active intent. Re-keyed so the colour
           change is instant and never cross-fades from the previous accent. */}
       <div
         key={`wash-${intent}`}
         aria-hidden="true"
-        className={`pointer-events-none absolute -inset-x-8 -top-10 -bottom-6 rounded-[2.5rem] ${v.accentSoft} opacity-40 blur-3xl hero-swap-in`}
+        className={`pointer-events-none absolute -inset-x-6 -top-6 -bottom-4 rounded-[2.5rem] ${v.accentSoft} opacity-40 blur-3xl hero-swap-in`}
       />
 
-      <div key={intent} className="relative hero-swap-in">
-        {/* ── Motif ── */}
-        <div aria-hidden="true" className="pointer-events-none mx-auto mb-4 w-full max-w-[17rem] sm:max-w-[19rem]">
+      {/* Same single-gap column as the logo block that wraps it, so the two
+          share one rhythm instead of the hero having its own internal scale. */}
+      <div key={intent} className="relative flex flex-col items-center justify-center gap-2.5 hero-swap-in">
+        {/* ── Motif ──
+            Sized by width, but the tall inner padding of the 240x120 viewBox
+            is what gives the graphic its vertical footprint — capping the
+            width is what actually shrinks it. */}
+        <div aria-hidden="true" className="pointer-events-none w-full max-w-[12.5rem] sm:max-w-[14rem] -mb-0.5">
           {v.motif}
         </div>
 
         {/* ── Eyebrow ── */}
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm ${v.accentRing} ${v.accentSoft} ${v.accent}`}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm ${v.accentRing} ${v.accentSoft} ${v.accent}`}
         >
           {v.eyebrow}
         </span>
 
         {/* ── Headline ──
             aria-live so the new headline is announced when the tab changes;
-            it is the only part of the banner that changes the page's subject. */}
+            it is the only part of the banner that changes the page's subject.
+            The top clamp is nudged down from 1.4rem: the row above now sits at
+            a fixed 10px gap, so the previous leading margin was adding to it. */}
         <h2
           id="returnsHeroTitle"
           aria-live="polite"
-          className="mt-3 text-center text-[clamp(1.4rem,4vw,2.25rem)] font-black leading-[1.15] tracking-tight text-slate-900"
+          className="text-center text-[clamp(1.25rem,3.4vw,1.875rem)] font-black leading-[1.15] tracking-tight text-slate-900"
         >
           {v.headline}
         </h2>
 
         {/* ── Subheadline ──
-            Keyed too: the three strings differ in length, so a height
-            transition between them would jump the content below. A min-height
-            reserved across variants keeps the block from reflowing. */}
+            Keyed separately from the block so it replays its entrance on its
+            own short delay. `text-balance` keeps the two lines of the longest
+            variant from breaking awkwardly without a fixed height. */}
         <p
           key={`sub-${intent}`}
-          className="mx-auto mt-2.5 max-w-2xl text-center text-[clamp(0.9rem,1.7vw,1.0625rem)] leading-relaxed text-slate-500 hero-sub-in"
+          className="max-w-xl text-center text-balance text-[clamp(0.85rem,1.5vw,0.975rem)] leading-snug text-slate-500 hero-sub-in"
         >
           {v.sub}
         </p>

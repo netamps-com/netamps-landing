@@ -731,7 +731,7 @@ export default function ReturnsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-8 sm:px-6 lg:px-8 relative overflow-x-clip">
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-5 sm:px-6 lg:px-8 relative overflow-x-clip">
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
@@ -739,15 +739,23 @@ export default function ReturnsPage() {
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl relative z-10">
-        <div className="flex justify-center mb-5">
-          <Link href="/" className="scale-110 transform origin-center transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl">
+        {/* ONE column, ONE gap. Logo, motif, badge, headline and subheadline are
+            siblings in a single flex column with a uniform 16px gap, so the
+            vertical rhythm lives in one place instead of being the sum of five
+            independent margins that drifted apart over time. */}
+        <div className="flex flex-col items-center justify-center gap-4">
+          <Link
+            href="/"
+            aria-label="Netamps home"
+            className="transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl"
+          >
             <NetampsLogo />
           </Link>
+          <ReturnsHero intent={intent} />
         </div>
-        <ReturnsHero intent={intent} />
       </div>
 
-      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-3xl relative z-10">
+      <div className="mt-5 sm:mx-auto sm:w-full sm:max-w-3xl relative z-10">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
