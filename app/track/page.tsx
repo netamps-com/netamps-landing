@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Mail, ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, ListOrdered } from 'lucide-react';
-import { Turnstile } from '@marsidev/react-turnstile';
+import { ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, ListOrdered } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import TrackHero from './TrackHero';
 import { formatPaise, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
@@ -393,40 +392,19 @@ export default function TrackOrderPage() {
 
         {/* ── Step 1: email ── */}
         {step === 'identify' && (
-          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5 contain-[layout_paint]">
-            {/* Hero FIRST: the visitor reads what this page is for, then the
-                form below is self-evidently how to get at it. */}
-            <TrackHero />
-
-            <div>
-              <label htmlFor="track-email" className="block text-sm font-medium text-slate-700">Email address on your requests</label>
-              <div className="mt-2 relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <input id="track-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') sendOtp(); }}
-                  placeholder="you@company.com" autoComplete="email"
-                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                No order number needed. We send a code to this mailbox; it proves the requests are yours.
-              </p>
-            </div>
-
-            {trackSiteKey && (
-              <div className="flex justify-center">
-                <Turnstile
-                  key={trackKey}
-                  siteKey={trackSiteKey}
-                  options={{ theme: 'light', action: 'track-otp', appearance: 'always' }}
-                  onSuccess={(token) => setTrackToken(token)}
-                  onExpire={() => setTrackToken('')}
-                  onError={() => setTrackToken('')}
-                />
-              </div>
-            )}
-            <button onClick={sendOtp} disabled={busy} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 disabled:opacity-50">
-              {busy ? 'Sending…' : 'Send verification code'}
-            </button>
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm contain-[layout_paint]">
+            <TrackHero
+              email={email}
+              onEmailChange={(e) => setEmail(e.target.value)}
+              onEmailKeyDown={(e) => { if (e.key === 'Enter') sendOtp(); }}
+              onSendOtp={sendOtp}
+              busy={busy}
+              trackSiteKey={trackSiteKey}
+              trackToken={trackToken}
+              onTurnstileSuccess={(token) => setTrackToken(token)}
+              onTurnstileExpire={() => setTrackToken('')}
+              onTurnstileError={() => setTrackToken('')}
+            />
           </section>
         )}
 

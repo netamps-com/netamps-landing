@@ -23,7 +23,8 @@
  * layout), reusing the global `hero-swap-in` / `animate-dash-flow` utilities.
  */
 
-import { Handshake, Lock, BadgeCheck } from 'lucide-react';
+import { Turnstile } from '@marsidev/react-turnstile';
+import { Handshake, Lock, BadgeCheck, Mail, Send } from 'lucide-react';
 
 const STEPS = [
   { icon: Handshake, label: 'Offer', note: 'Buyer opens' },
@@ -119,7 +120,29 @@ function NegotiationFlow() {
   );
 }
 
-export default function TrackHero() {
+export default function TrackHero({
+  email,
+  onEmailChange,
+  onEmailKeyDown,
+  onSendOtp,
+  busy,
+  trackSiteKey,
+  trackToken,
+  onTurnstileSuccess,
+  onTurnstileExpire,
+  onTurnstileError
+}: {
+  email: string;
+  onEmailChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onEmailKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onSendOtp: () => void;
+  busy: boolean;
+  trackSiteKey?: string;
+  trackToken?: string;
+  onTurnstileSuccess?: (token: string) => void;
+  onTurnstileExpire?: () => void;
+  onTurnstileError?: () => void;
+}) {
   return (
     <section
       aria-label="Negotiations Simplified at Netamps"
@@ -151,7 +174,48 @@ export default function TrackHero() {
         <p className="mt-1.5 max-w-xl text-[clamp(0.82rem,1.6vw,0.92rem)] leading-relaxed text-slate-300">
           Negotiate hardware quotes and monitor real-time milestone updates within a single dashboard.
         </p>
-      </div>
+
+        {/* Email input inside the hero panel */}
+        <div className="mt-5 w-full max-w-md">
+          <label htmlFor="track-email" className="sr-only">Email address on your requests</label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" aria-hidden="true" />
+            <input
+              id="track-email"
+              type="email"
+              value={email}
+              onChange={onEmailChange}
+              onKeyDown={onEmailKeyDown}
+              placeholder="you@company.com"
+              autoComplete="email"
+              className="block w-full pl-10 pr-3 py-3 border border-white/20 bg-white/5 rounded-xl text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 sm:text-sm"
+            />
+          </div>
+          <p className="mt-2 text-xs text-center text-slate-400">
+            No order number needed. We send a code to this mailbox; it proves the requests are yours.
+          </p>
+
+          {/* Turnstile + Submit button inside the hero panel */}
+          {trackSiteKey && (
+            <div className="mt-4 flex justify-center">
+              <Turnstile
+                key={trackToken}
+                siteKey={trackSiteKey}
+                options={{ theme: 'light', action: 'track-otp', appearance: 'always' }}
+                onSuccess={onTurnstileSuccess}
+                onExpire={onTurnstileExpire}
+                onError={onTurnstileError}
+              />
+            </div>
+          )}
+          <button
+            onClick={onSendOtp}
+            disabled={busy}
+            className="mt-4 w-full py-3.5 bg-amber-400 text-slate-950 rounded-xl font-bold hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {busy ? 'Sending…' : 'Send verification code'}
+          </button>
+        </div>
 
       <div aria-hidden="true" className="pointer-events-none relative mt-4">
         <NegotiationFlow />
@@ -171,6 +235,7 @@ export default function TrackHero() {
           </li>
         ))}
       </ul>
+    </div>
     </section>
   );
 }
