@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Mail, ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, ListOrdered } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import NetampsLogo from '../NetampsLogo';
-import NegotiationHero from './NegotiationHero';
 import { formatPaise, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
 import { ORDER_STATUS, CHRONOLOGY, normalizeStatus, statusRank, isNegotiable, isClosedStatus, statusChip, kindLabel } from '../lib/status';
 
@@ -396,7 +395,6 @@ export default function TrackOrderPage() {
           <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5 contain-[layout_paint]">
             {/* Hero FIRST: the visitor reads what this page is for, then the
                 form below is self-evidently how to get at it. */}
-            <NegotiationHero />
 
             <div>
               <label htmlFor="track-email" className="block text-sm font-medium text-slate-700">Email address on your requests</label>
