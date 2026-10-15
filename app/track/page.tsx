@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Mail, ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, ListOrdered } from 'lucide-react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import NetampsLogo from '../NetampsLogo';
+import NegotiationHero from './NegotiationHero';
 import { formatPaise, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
 import { ORDER_STATUS, CHRONOLOGY, normalizeStatus, statusRank, isNegotiable, isClosedStatus, statusChip, kindLabel } from '../lib/status';
 
@@ -389,56 +390,6 @@ export default function TrackOrderPage() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-10">
-        <h1 className="text-[clamp(1.375rem,3.5vw,1.875rem)] font-black text-slate-900">Track &amp; Negotiate</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Verify with your email address — every request filed under it will be listed, and you choose which one to negotiate.
-        </p>
-
-        {/* ── Negotiation simplified banner ── */}
-        <section aria-label="Negotiation simplified with Netamps" className="mt-6 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-amber-50 px-5 py-4 flex items-center gap-5 contain-[layout_paint]">
-          <div className="shrink-0 order-1 hidden sm:block" aria-hidden="true">
-            <svg viewBox="0 0 220 72" className="w-44 h-auto" role="presentation">
-              <defs>
-                <linearGradient id="trackBannerBg" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#eef2ff" />
-                  <stop offset="100%" stopColor="#fffbeb" />
-                </linearGradient>
-              </defs>
-              <rect x="2" y="6" width="216" height="60" rx="14" fill="url(#trackBannerBg)" stroke="#e0e7ff" strokeWidth="1.5" />
-              {/* connector line */}
-              <path d="M62 36 H96 M124 36 H158" fill="none" stroke="#c7d2fe" strokeWidth="2" strokeLinecap="round" />
-              {/* step 1: offer */}
-              <g>
-                <rect x="22" y="20" width="40" height="32" rx="8" fill="#ffffff" stroke="#6366f1" strokeWidth="1.5" />
-                <rect x="28" y="27" width="28" height="4" rx="2" fill="#c7d2fe" />
-                <rect x="28" y="34" width="20" height="4" rx="2" fill="#e0e7ff" />
-                <circle cx="52" cy="44" r="3" fill="#6366f1" />
-              </g>
-              {/* step 2: counter */}
-              <g>
-                <rect x="96" y="20" width="40" height="32" rx="8" fill="#ffffff" stroke="#f59e0b" strokeWidth="1.5" />
-                <rect x="102" y="27" width="28" height="4" rx="2" fill="#fde68a" />
-                <rect x="102" y="34" width="20" height="4" rx="2" fill="#fef3c7" />
-                <path d="M128 32 l4 4 l-4 4" fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </g>
-              {/* step 3: deal */}
-              <g>
-                <rect x="158" y="20" width="40" height="32" rx="8" fill="#ffffff" stroke="#10b981" strokeWidth="1.5" />
-                <rect x="164" y="27" width="28" height="4" rx="2" fill="#a7f3d0" />
-                <rect x="164" y="34" width="20" height="4" rx="2" fill="#d1fae5" />
-                <path d="M182 32 l4 4 l8 -9" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </g>
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0 order-2">
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900">
-              Negotiation simplified with Netamps
-            </h2>
-            <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">
-              Make an offer, counter, or accept — every round is recorded against a frozen price version, so you always know exactly where you stand.
-            </p>
-          </div>
-        </section>
 
         {/* ── Step 1: email ── */}
         {step === 'identify' && (
@@ -456,6 +407,12 @@ export default function TrackOrderPage() {
                 No order number needed. We send a code to this mailbox; it proves the requests are yours.
               </p>
             </div>
+
+            {/* Hero sits directly above the action it explains: the visitor
+                reads what negotiating looks like, then sends the code that gets
+                them into it. */}
+            <NegotiationHero />
+
             {trackSiteKey && (
               <div className="flex justify-center">
                 <Turnstile

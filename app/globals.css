@@ -107,6 +107,39 @@ h1, h2, h3, h4, h5, h6 {
   background-size: 32px 32px;
 }
 
+/* Track hero — the negotiation thread connector. Animates stroke-dashoffset
+   only, which is a paint-only property on an SVG stroke: no layout, no
+   reflow, and it survives being composited rather than re-rasterised. The
+   dash pattern is 6/6 so a -24 offset loops seamlessly. */
+@keyframes dash-flow {
+  to { stroke-dashoffset: -24; }
+}
+.animate-dash-flow {
+  stroke-dasharray: 6 6;
+  animation: dash-flow 1.4s linear infinite;
+}
+
+/* A round travelling the negotiation wire. CSS transforms on an SVG child run
+   in the view-box coordinate system by default, so the 160px here is 160
+   user units — exactly the wire's span in the 300-wide viewBox. Transform-only,
+   so it stays off the layout path. */
+@keyframes thread-travel {
+  0%   { transform: translateX(0);    opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateX(160px); opacity: 0; }
+}
+.thread-travel {
+  animation: thread-travel 3.2s ease-in-out infinite;
+}
+
+/* Finer texture than .bg-grid-pattern, for surfaces small enough that a 32px
+   grid reads as blotches rather than texture. */
+.bg-dot-fine {
+  background-image: radial-gradient(rgba(79, 70, 229, 0.16) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
 /* Accessibility: Respect OS-level reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

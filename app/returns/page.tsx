@@ -1453,13 +1453,6 @@ export default function ReturnsPage() {
             </div>
           )}
         </motion.div>
-
-        {/* Service summary - plain informational text, no projection or hover */}
-        <footer className="relative z-10 pb-8 pt-2 border-t border-slate-200/70">
-          <p className="mt-1 text-center text-[11px] leading-relaxed text-slate-400">
-            No limits: request any enterprise hardware, and we&apos;ll get it.
-          </p>
-        </footer>
       </div>
     </div>
   );
