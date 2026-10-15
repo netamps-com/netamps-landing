@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, type ReactNode, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -111,6 +111,165 @@ interface ProductItem {
 // ── Money contract lives in app/lib/money.ts (paise integers end-to-end,
 // null = unstated, never 0). Line consideration already includes all units;
 // evaluated price is per-unit. ──
+
+/* ── Floating-label field ───────────────────────────────────────────────────
+   The label IS the placeholder: it sits inside the empty box, then shrinks to
+   a caption above the text the moment the field gains focus or a value (pure
+   CSS via peer + :placeholder-shown, so no JS state per keystroke). The icon
+   tints toward the intent colour on focus so the active field reads as one
+   unit instead of three detached parts. Uncontrolled on purpose — submit reads
+   FormData, and a controlled twin would re-render the whole card per key. */
+type FloatAccent = 'indigo' | 'amber';
+const FLOAT_ACCENTS: Record<FloatAccent, { ring: string; label: string; icon: string }> = {
+  indigo: {
+    ring: 'focus:border-indigo-500 focus:ring-indigo-500/25',
+    label: 'peer-focus:text-indigo-600',
+    icon: 'peer-focus:text-indigo-500',
+  },
+  amber: {
+    ring: 'focus:border-amber-500 focus:ring-amber-500/25',
+    label: 'peer-focus:text-amber-600',
+    icon: 'peer-focus:text-amber-500',
+  },
+};
+
+function FloatField({
+  id,
+  label,
+  icon,
+  accent = 'indigo',
+  required,
+  type = 'text',
+  name,
+  maxLength,
+  pattern,
+  inputMode,
+  autoComplete,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  accent?: FloatAccent;
+  required?: boolean;
+  type?: string;
+  name?: string;
+  maxLength?: number;
+  pattern?: string;
+  inputMode?: 'text' | 'tel' | 'email' | 'numeric';
+  autoComplete?: string;
+  value?: string;
+  onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const a = FLOAT_ACCENTS[accent];
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        name={name ?? id}
+        type={type}
+        required={required}
+        maxLength={maxLength}
+        pattern={pattern}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={onChange}
+        placeholder=" "
+        aria-label={label + (required ? ' (required)' : '')}
+        className={`peer block w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 pt-7 pb-2 text-sm text-slate-900 outline-none transition focus:ring-4 ${a.ring}`}
+      />
+      <span aria-hidden className={`pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400 transition-colors ${a.icon}`}>
+        {icon}
+      </span>
+      <label
+        htmlFor={id}
+        className={`pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 truncate text-sm text-slate-400 transition-all duration-150 peer-focus:top-2.5 peer-focus:translate-y-0 peer-focus:text-[11px] peer-focus:font-semibold ${a.label} peer-[:not(:placeholder-shown)]:top-2.5 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:font-semibold peer-[:not(:placeholder-shown)]:text-slate-500`}
+      >
+        {label}{required ? ' *' : ''}
+      </label>
+    </div>
+  );
+}
+
+/* ── Intent tab ─────────────────────────────────────────────────────────────
+   One card per choice, not one lit pill among grey text. Every option carries
+   its own icon and a one-line caption, so the unselected ones still read as
+   tappable; the active one carries its intent colour. Full class strings per
+   accent — Tailwind JIT only emits literals, never interpolated names. */
+type TabAccent = 'indigo' | 'emerald' | 'amber';
+const TAB_ACCENTS: Record<TabAccent, {
+  active: string; idle: string; hoverBorder: string; focus: string;
+  iconActive: string; iconIdle: string; subActive: string; subIdle: string;
+}> = {
+  indigo: {
+    active: 'border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/25',
+    idle: 'border-slate-200 bg-white text-slate-600',
+    hoverBorder: 'hover:border-indigo-300 hover:shadow-sm',
+    focus: 'focus-visible:ring-indigo-500',
+    iconActive: 'bg-white/20 text-white',
+    iconIdle: 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600',
+    subActive: 'text-white/75',
+    subIdle: 'text-slate-400',
+  },
+  emerald: {
+    active: 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/25',
+    idle: 'border-slate-200 bg-white text-slate-600',
+    hoverBorder: 'hover:border-emerald-300 hover:shadow-sm',
+    focus: 'focus-visible:ring-emerald-500',
+    iconActive: 'bg-white/20 text-white',
+    iconIdle: 'bg-slate-100 text-slate-400 group-hover:bg-emerald-50 group-hover:text-emerald-600',
+    subActive: 'text-white/75',
+    subIdle: 'text-slate-400',
+  },
+  amber: {
+    active: 'border-amber-600 bg-amber-600 text-white shadow-md shadow-amber-600/25',
+    idle: 'border-slate-200 bg-white text-slate-600',
+    hoverBorder: 'hover:border-amber-300 hover:shadow-sm',
+    focus: 'focus-visible:ring-amber-500',
+    iconActive: 'bg-white/20 text-white',
+    iconIdle: 'bg-slate-100 text-slate-400 group-hover:bg-amber-50 group-hover:text-amber-600',
+    subActive: 'text-white/75',
+    subIdle: 'text-slate-400',
+  },
+};
+
+function IntentTab({
+  active,
+  onClick,
+  accent,
+  icon,
+  title,
+  sub,
+}: {
+  active: boolean;
+  onClick: () => void;
+  accent: TabAccent;
+  icon: ReactNode;
+  title: string;
+  sub: string;
+}) {
+  const a = TAB_ACCENTS[accent];
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      aria-label={`${title} — ${sub}`}
+      onClick={onClick}
+      className={`group flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${a.focus} ${active ? a.active : `${a.idle} ${a.hoverBorder}`}`}
+    >
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg transition-colors ${active ? a.iconActive : a.iconIdle}`}>
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[13px] font-bold leading-tight">{title}</span>
+        <span className={`block truncate text-[11px] font-medium leading-tight ${active ? a.subActive : a.subIdle}`}>{sub}</span>
+      </span>
+    </button>
+  );
+}
 
 export default function ReturnsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -781,48 +940,48 @@ export default function ReturnsPage() {
           ) : (
             <div className="p-5 sm:p-7">
               
-              {/* Intent Toggle */}
-              <div role="radiogroup" aria-label="Request type" className="flex flex-wrap sm:flex-nowrap bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200 gap-1">
-                <button 
-                  type="button"
-                  role="radio"
-                  aria-checked={intent === 'sell'}
+              {/* Intent selector — three equal cards, not one lit pill among
+                  grey text. Every option carries its own icon and a one-line
+                  caption, so the unselected ones still read as tappable; the
+                  active one carries its intent colour. */}
+              <div role="radiogroup" aria-label="Request type" className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <IntentTab
+                  accent="indigo"
+                  active={intent === 'sell'}
                   onClick={() => { setIntent('sell'); setShowOtp(false); setTrackingResult(null); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
-                  className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${intent === 'sell' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  One-Click Liquidation(Sell)
-                </button>
-                <button 
-                  type="button"
-                  role="radio"
-                  aria-checked={intent === 'buy'}
+                  icon={<Box className="h-5 w-5" />}
+                  title="One-Click Liquidation"
+                  sub="Sell your assets"
+                />
+                <IntentTab
+                  accent="emerald"
+                  active={intent === 'buy'}
                   onClick={() => { setIntent('buy'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); }}
-                  className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${intent === 'buy' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Buy with Confidence
-                </button>
-                <button 
-                  type="button"
-                  role="radio"
-                  aria-checked={intent === 'track'}
+                  icon={<ShieldCheck className="h-5 w-5" />}
+                  title="Buy with Confidence"
+                  sub="Source hardware"
+                />
+                <IntentTab
+                  accent="amber"
+                  active={intent === 'track'}
                   onClick={() => { setIntent('track'); setShowOtp(false); setTrackingResult(null); setUploadedSecureFiles([]); setUploadReset((n) => n + 1); }}
-                  className={`flex-1 py-3 px-2 text-xs sm:text-[13px] whitespace-nowrap font-bold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${intent === 'track' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Track Request
-                </button>
+                  icon={<Search className="h-5 w-5" />}
+                  title="Track Request"
+                  sub="Check live status"
+                />
               </div>
 
               {intent === 'track' ? (
                 <div className="space-y-6">
-                  <div>
-                    <label htmlFor="trackingId" className="block text-sm font-medium text-slate-700">Tracking ID</label>
-                    <div className="mt-2 relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-slate-400" />
-                      </div>
-                      <input type="text" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-amber-500 sm:text-sm" />
-                    </div>
-                  </div>
+                  <FloatField
+                    id="trackingId"
+                    label="Tracking ID"
+                    accent="amber"
+                    icon={<Search className="h-[18px] w-[18px]" />}
+                    value={trackingId}
+                    onChange={(e) => setTrackingId(e.target.value)}
+                    autoComplete="off"
+                  />
                   <button type="button" onClick={handleTrackSubmit} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900">
                     Track Request
                   </button>
@@ -955,62 +1114,55 @@ export default function ReturnsPage() {
                 <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setPendingDelete(null); }}>
                 {/* Contact row. One line of four on desktop rather than a 2x2 block: the
                     four fields are the same kind of thing at the same depth in
-                    the form, so they read as one band of identity details
-                    instead of two stacked pairs. Degrades to two columns on
-                    small tablets and one on phones, where 170px columns would
-                    not hold an email address.
-                    Icon padding is pl-8 rather than pl-10 and the glyphs are
-                    h-4: at four-up, 40px of reserved gutter was eating a
-                    quarter of each field's usable width. */}
-                <div className="grid grid-cols-1 gap-x-3 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name *</label>
-                    <div className="mt-1.5 relative">
-                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                        <User className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <input type="text" name="name" id="name" required pattern="^[a-zA-Z\s.,'-]+$" maxLength={100} className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
-                    </div>
-                  </div>
+                    the form, so they read as one band of identity details.
+                    Two columns on small tablets, one on phones, where 170px
+                    columns would not hold an email address. Floating labels
+                    throughout: the label sits inside the empty box and shrinks
+                    to a caption on focus or value. */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <FloatField
+                    id="name"
+                    label="Full Name"
+                    required
+                    icon={<User className="h-[18px] w-[18px]" />}
+                    pattern="^[a-zA-Z\s.,'-]+$"
+                    maxLength={100}
+                    autoComplete="name"
+                  />
 
-                  <div>
-                    <label htmlFor="company" className="block text-sm font-medium text-slate-700">Company {intent === 'sell' ? '*' : ''}</label>
-                    <div className="mt-1.5 relative">
-                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                        <Building2 className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <input type="text" name="company" id="company" required={intent === 'sell'} pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
-                    </div>
-                  </div>
+                  <FloatField
+                    id="company"
+                    label="Company"
+                    required={intent === 'sell'}
+                    icon={<Building2 className="h-[18px] w-[18px]" />}
+                    pattern="^[a-zA-Z0-9\s.,&'-]+$"
+                    maxLength={150}
+                    autoComplete="organization"
+                  />
 
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
-                    <div className="mt-1.5 relative">
-                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                        <span className="text-slate-400 font-bold text-base leading-none">@</span>
-                      </div>
-                      <input type="email" name="email" id="email" required maxLength={100} className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
-                    </div>
-                  </div>
+                  <FloatField
+                    id="email"
+                    label="Email"
+                    required
+                    type="email"
+                    icon={<span className="text-[15px] font-bold leading-none">@</span>}
+                    maxLength={100}
+                    inputMode="email"
+                    autoComplete="email"
+                  />
 
-                  <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Mobile Number *</label>
-                    <div className="mt-1.5 relative">
-                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                        <Phone className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <input 
-                        type="tel" 
-                        name="phone" 
-                        id="phone" 
-                        required 
-                        pattern="^\+?[0-9]+$" 
-                        maxLength={20} 
-                        onChange={(e) => { e.target.value = e.target.value.replace(/(?!^\+)[^\d]/g, ''); }}
-                        className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
-                      />
-                    </div>
-                  </div>
+                  <FloatField
+                    id="phone"
+                    label="Mobile Number"
+                    required
+                    type="tel"
+                    icon={<Phone className="h-[18px] w-[18px]" />}
+                    pattern="^\+?[0-9]+$"
+                    maxLength={20}
+                    inputMode="tel"
+                    autoComplete="tel"
+                    onChange={(e) => { e.target.value = e.target.value.replace(/(?!^\+)[^\d]/g, ''); }}
+                  />
                 </div>
 
                 <div className="border-t border-slate-200 pt-4 mt-5">
