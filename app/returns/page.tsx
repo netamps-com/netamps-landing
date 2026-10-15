@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
 import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Link2, ChevronUp, ChevronDown, AlertCircle, Heart, Zap, DollarSign, Shield, Cpu, Laptop2, Mouse, Package, Folder } from 'lucide-react';
-import BuyModuleScroll from './BuyModuleScroll';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
