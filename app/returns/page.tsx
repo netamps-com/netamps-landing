@@ -703,7 +703,7 @@ export default function ReturnsPage() {
             <NetampsLogo />
           </Link>
         </div>
-        <h2 className="mt-2 text-center text-3xl font-black tracking-tight text-slate-900">
+        <h2 className="mt-2 text-center text-[clamp(1.5rem,4vw,2.25rem)] font-black tracking-tight text-slate-900">
           Enterprise IT Liquidation, Simplified
         </h2>
         <p className="mt-2 text-center text-base sm:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
@@ -1114,7 +1114,7 @@ export default function ReturnsPage() {
                           setDragOverCard(null);
                           if (e.dataTransfer.files?.length) uploaderRef.current?.stageFiles(Array.from(e.dataTransfer.files), product.id);
                         } : undefined}
-                        className={`p-4 bg-slate-50/50 border rounded-xl flex flex-col gap-4 relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)] transition-all ${dragOverCard === product.id ? 'border-indigo-500 ring-2 ring-indigo-500/40 bg-indigo-50/40' : 'border-slate-200/80'}`}
+                        className={`p-4 bg-slate-50/50 border rounded-xl flex flex-col gap-4 relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)] transition-all contain-[layout_paint] ${dragOverCard === product.id ? 'border-indigo-500 ring-2 ring-indigo-500/40 bg-indigo-50/40' : 'border-slate-200/80'}`}
                       >
                         {products.length > 1 && (
                           <button type="button" onClick={() => removeProduct(product.id)} aria-label={`Remove product ${index + 1}`} className="absolute top-2 right-2 p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">

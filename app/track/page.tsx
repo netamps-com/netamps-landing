@@ -389,13 +389,13 @@ export default function TrackOrderPage() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-black text-slate-900">Track &amp; Negotiate</h1>
+        <h1 className="text-[clamp(1.375rem,3.5vw,1.875rem)] font-black text-slate-900">Track &amp; Negotiate</h1>
         <p className="mt-1 text-sm text-slate-500">
           Verify with your email address — every request filed under it will be listed, and you choose which one to negotiate.
         </p>
 
         {/* ── Negotiation simplified banner ── */}
-        <section aria-label="Negotiation simplified with Netamps" className="mt-6 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-amber-50 px-5 py-4 flex items-center gap-5">
+        <section aria-label="Negotiation simplified with Netamps" className="mt-6 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-amber-50 px-5 py-4 flex items-center gap-5 contain-[layout_paint]">
           <div className="flex-1 min-w-0">
             <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900">
               Negotiation simplified with Netamps
@@ -442,7 +442,7 @@ export default function TrackOrderPage() {
 
         {/* ── Step 1: email ── */}
         {step === 'identify' && (
-          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5 contain-[layout_paint]">
             <div>
               <label htmlFor="track-email" className="block text-sm font-medium text-slate-700">Email address on your requests</label>
               <div className="mt-2 relative">
@@ -476,7 +476,7 @@ export default function TrackOrderPage() {
 
         {/* ── Step 2: OTP ── */}
         {step === 'otp' && (
-          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5 text-center">
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5 text-center contain-[layout_paint]">
             <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto">
               <ShieldCheck className="w-7 h-7 text-indigo-600" />
             </div>
@@ -494,7 +494,7 @@ export default function TrackOrderPage() {
 
         {/* ── Step 3: the buyer's own requests — choose one ── */}
         {step === 'orders' && (
-          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm contain-[layout_paint]">
             <div className="flex items-center gap-2 mb-1">
               <ListOrdered className="w-5 h-5 text-indigo-600" />
               <h2 className="text-lg font-bold text-slate-900">Your requests</h2>
@@ -547,7 +547,7 @@ export default function TrackOrderPage() {
         {/* ── Step 4: one verified request + negotiate ── */}
         {step === 'view' && order && (
           <div className="mt-8 space-y-6">
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm contain-[layout_paint]">
               <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
                 <span className="font-mono font-bold text-slate-900 text-lg">{order.id}</span>
                 <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusChip(order.status)}`}>{normalizeStatus(order.status)}</span>
@@ -620,7 +620,7 @@ export default function TrackOrderPage() {
             </section>
 
             {/* Negotiation */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm contain-[layout_paint]">
               <div className="flex items-center gap-2 mb-1">
                 <Handshake className="w-5 h-5 text-indigo-600" />
                 <h2 className="text-lg font-bold text-slate-900">Price negotiation</h2>
