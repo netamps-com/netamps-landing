@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
@@ -1422,26 +1422,8 @@ export default function ReturnsPage() {
           )}
         </motion.div>
 
-        {/* Compliance & handling trust strip — every claim traceable to code:
-            TLS/HSTS headers and a D1 audit trail. No attestation badges
-            without a CPA letter. */}
-        <div className="mt-5 flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-500 relative z-10 pb-6">
-          <div className="flex items-center gap-2">
-            <Lock className="w-5 h-5 text-indigo-600" />
-            <span>TLS 1.3 Enforced</span>
-          </div>
-          <span className="hidden sm:inline text-slate-400">|</span>
-          <div className="flex items-center gap-2">
-            <FileCheck className="w-5 h-5 text-indigo-600" />
-            <span>Full Audit Trail</span>
-          </div>
-        </div>
-
-        {/* Service summary — plain informational text, no projection or hover */}
+        {/* Service summary - plain informational text, no projection or hover */}
         <footer className="relative z-10 pb-8 pt-2 border-t border-slate-200/70">
-          <p className="text-center text-[11px] leading-relaxed text-slate-400">
-            Fast quotes · Zero risk · Fully tested hardware · Enterprise-grade quality · Custom sourcing
-          </p>
           <p className="mt-1 text-center text-[11px] leading-relaxed text-slate-400">
             No limits: request any enterprise hardware, and we&apos;ll get it.
           </p>
