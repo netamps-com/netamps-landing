@@ -953,42 +953,51 @@ export default function ReturnsPage() {
               ) : (
                 <div className="space-y-6">
                 <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setPendingDelete(null); }}>
-                <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+                {/* Contact row. One line of four on desktop rather than a 2x2 block: the
+                    four fields are the same kind of thing at the same depth in
+                    the form, so they read as one band of identity details
+                    instead of two stacked pairs. Degrades to two columns on
+                    small tablets and one on phones, where 170px columns would
+                    not hold an email address.
+                    Icon padding is pl-8 rather than pl-10 and the glyphs are
+                    h-4: at four-up, 40px of reserved gutter was eating a
+                    quarter of each field's usable width. */}
+                <div className="grid grid-cols-1 gap-x-3 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-slate-700">Full Name *</label>
-                    <div className="mt-2 relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-slate-400" />
+                    <div className="mt-1.5 relative">
+                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                        <User className="h-4 w-4 text-slate-400" />
                       </div>
-                      <input type="text" name="name" id="name" required pattern="^[a-zA-Z\s.,'-]+$" maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
+                      <input type="text" name="name" id="name" required pattern="^[a-zA-Z\s.,'-]+$" maxLength={100} className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
 
                   <div>
                     <label htmlFor="company" className="block text-sm font-medium text-slate-700">Company {intent === 'sell' ? '*' : ''}</label>
-                    <div className="mt-2 relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Building2 className="h-5 w-5 text-slate-400" />
+                    <div className="mt-1.5 relative">
+                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                        <Building2 className="h-4 w-4 text-slate-400" />
                       </div>
-                      <input type="text" name="company" id="company" required={intent === 'sell'} pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
+                      <input type="text" name="company" id="company" required={intent === 'sell'} pattern="^[a-zA-Z0-9\s.,&'-]+$" maxLength={150} className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
 
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email *</label>
-                    <div className="mt-2 relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-slate-400 font-bold text-lg">@</span>
+                    <div className="mt-1.5 relative">
+                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                        <span className="text-slate-400 font-bold text-base leading-none">@</span>
                       </div>
-                      <input type="email" name="email" id="email" required maxLength={100} className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
+                      <input type="email" name="email" id="email" required maxLength={100} className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" />
                     </div>
                   </div>
 
                   <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-slate-700">Mobile Number *</label>
-                    <div className="mt-2 relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Phone className="h-5 w-5 text-slate-400" />
+                    <div className="mt-1.5 relative">
+                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                        <Phone className="h-4 w-4 text-slate-400" />
                       </div>
                       <input 
                         type="tel" 
@@ -998,13 +1007,13 @@ export default function ReturnsPage() {
                         pattern="^\+?[0-9]+$" 
                         maxLength={20} 
                         onChange={(e) => { e.target.value = e.target.value.replace(/(?!^\+)[^\d]/g, ''); }}
-                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                        className="block w-full pl-8 pr-2.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="border-t border-slate-200 pt-6 mt-6">
+                <div className="border-t border-slate-200 pt-4 mt-5">
 
                   {/* Pricing basis — SELL only. BUY carries no stated pricing at all:
                       the visitor supplies equipment + quantity only, and we evaluate.
