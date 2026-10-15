@@ -396,15 +396,7 @@ export default function TrackOrderPage() {
 
         {/* ── Negotiation simplified banner ── */}
         <section aria-label="Negotiation simplified with Netamps" className="mt-6 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-amber-50 px-5 py-4 flex items-center gap-5 contain-[layout_paint]">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900">
-              Negotiation simplified with Netamps
-            </h2>
-            <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">
-              Make an offer, counter, or accept — every round is recorded against a frozen price version, so you always know exactly where you stand.
-            </p>
-          </div>
-          <div className="shrink-0 hidden sm:block" aria-hidden="true">
+          <div className="shrink-0 order-1 hidden sm:block" aria-hidden="true">
             <svg viewBox="0 0 220 72" className="w-44 h-auto" role="presentation">
               <defs>
                 <linearGradient id="trackBannerBg" x1="0" y1="0" x2="1" y2="0">
@@ -437,6 +429,14 @@ export default function TrackOrderPage() {
                 <path d="M182 32 l4 4 l8 -9" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </g>
             </svg>
+          </div>
+          <div className="flex-1 min-w-0 order-2">
+            <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900">
+              Negotiation simplified with Netamps
+            </h2>
+            <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">
+              Make an offer, counter, or accept — every round is recorded against a frozen price version, so you always know exactly where you stand.
+            </p>
           </div>
         </section>
 
