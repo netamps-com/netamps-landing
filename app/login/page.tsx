@@ -60,7 +60,7 @@ const HealthStatusWidget = () => {
 
   if (healthLoading || !healthStatus) {
     return (
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-white/90 rounded-lg border border-slate-200">
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-white/90 rounded-lg border border-slate-200 shadow-md">
         <div className="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></div>
         <span className="text-xs text-slate-500">Loading health...</span>
       </div>
@@ -78,7 +78,7 @@ const HealthStatusWidget = () => {
   const overall = getOverallStatus();
 
   return (
-    <div className="absolute top-4 right-4 z-50 relative flex items-center gap-3">
+    <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
       {/* Overall Status Indicator */}
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors bg-white/90 backdrop-blur-md shadow-md cursor-pointer hover:scale-105"
         onClick={() => setIsOpen(!isOpen)}
@@ -98,7 +98,7 @@ const HealthStatusWidget = () => {
       </div>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+        <div className="absolute right-0 top-full mt-2 z-50 w-72 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
           <div className="p-3 border-b border-slate-200 flex justify-between items-start">
             <div>
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
