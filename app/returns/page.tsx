@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle, Zap, BadgeCheck, Award } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle, Zap, BadgeCheck, Award, Truck, Package, Clock, FileText, Timer, Boxes, Container, Warehouse, Route, ArrowLeftRight } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
@@ -947,6 +947,45 @@ export default function ReturnsPage() {
                         </li>
                       ))}
                     </ul>
+
+                    {/* Logistics — hover each bullet for industry-standard terminology */}
+                    <div className="mt-5 border-t border-emerald-100 pt-4">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <Truck className="w-4 h-4 text-emerald-600" aria-hidden="true" />
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Logistics</h4>
+                      </div>
+                      <ul className="space-y-1.5">
+                        {[
+                          { icon: Package, label: '3PL', tip: 'Third-Party Logistics — outsourced transportation, warehousing & fulfillment (e.g. DHL, XPO). You pay per pallet/order; no fleet overhead.' },
+                          { icon: Link2, label: '4PL', tip: 'Fourth-Party Logistics — a supply-chain orchestrator managing multiple 3PLs, carriers & customs brokers end-to-end. Your outsourced logistics COO.' },
+                          { icon: Clock, label: 'OTIF', tip: 'On Time In Full — the gold-standard delivery KPI: % of orders arriving by the promised date with complete quantities. >95% is best-in-class.' },
+                          { icon: FileText, label: 'ASN', tip: 'Advanced Shipping Notice — electronic notification sent before a shipment arrives, listing contents, quantities & carrier details so receivers can plan labor and space.' },
+                          { icon: Timer, label: 'ETA', tip: 'Estimated Time of Arrival — the predicted moment a shipment will reach its destination, calculated from carrier data, traffic & weather.' },
+                          { icon: Boxes, label: 'LTL', tip: 'Less Than Truckload — shipping a freight that doesn\'t fill a full trailer. You pay only for the space you use; ideal for 1–6 pallets.' },
+                          { icon: Container, label: 'FTL', tip: 'Full Truckload — dedicating an entire trailer to one shipment. Faster & safer for large volumes; no intermediate handling.' },
+                          { icon: Warehouse, label: 'WMS', tip: 'Warehouse Management System — software that controls inventory put-away, picking, packing & shipping inside a warehouse (e.g. SAP EWM, Manhattan).' },
+                          { icon: Route, label: 'TMS', tip: 'Transportation Management System — software for planning, executing & optimizing the physical movement of goods (route selection, carrier tendering, freight audit).' },
+                          { icon: ArrowLeftRight, label: 'Cross-docking', tip: 'Unloading incoming freight and directly reloading it onto outbound vehicles with little or no storage in between — cuts handling time & warehouse cost.' }
+                        ].map(({ icon: Icon, label, tip }) => (
+                          <li key={label} className="group relative">
+                            <div className="flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50/60 hover:text-emerald-700 cursor-help">
+                              <span className="flex items-center justify-center w-5 h-5 rounded-md bg-emerald-100/80 text-emerald-600 shrink-0">
+                                <Icon className="w-3 h-3" aria-hidden="true" />
+                              </span>
+                              {label}
+                            </div>
+                            {/* Tooltip — appears on hover / focus */}
+                            <div
+                              role="tooltip"
+                              className="pointer-events-none absolute left-full top-0 z-50 ml-2 w-64 rounded-xl border border-emerald-200 bg-white/95 p-3 text-[11px] leading-relaxed text-slate-600 shadow-lg shadow-emerald-900/10 opacity-0 translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-focus-within:opacity-100 group-focus-within:translate-x-0"
+                            >
+                              <span className="block font-bold text-emerald-800 mb-0.5">{label}</span>
+                              {tip}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                     <p className="mt-4 text-[13px] text-slate-600 leading-relaxed">
                       <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
                     </p>
