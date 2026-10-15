@@ -197,6 +197,20 @@ export default function ReturnsPage() {
     setProducts([...products, { id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]);
   };
 
+  /**
+   * Whether any product has been described enough to justify another line.
+   *
+   * Drives BOTH Add Product controls. Without this, the very first thing a
+   * visitor can do is add three blank product cards, which then have to be
+   * removed again. A category or free-text details is the minimum that makes a
+   * line meaningful — and it is also exactly what the submit-time validation
+   * requires, so the gate cannot disagree with the form's own rules.
+   */
+  const hasProductInput = products.some(
+    (p) => (p.category && String(p.category).trim() !== '') ||
+           (p.details && String(p.details).trim() !== '')
+  );
+
   const removeProduct = (id: string) => {
     if (products.length <= 1) return;
     const mapped = queueSnapshot.filter((f) => f.productId === id);
@@ -690,7 +704,7 @@ export default function ReturnsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-8 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-8 sm:px-6 lg:px-8 relative overflow-x-clip">
       {/* Ambient Glassmorphism Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-grid-pattern opacity-50">
         <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-indigo-200/50 blur-[100px] rounded-full mix-blend-multiply opacity-50"></div>
@@ -715,7 +729,7 @@ export default function ReturnsPage() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/90 backdrop-blur-xl py-6 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl border border-slate-200/60 overflow-hidden"
+          className="bg-white/90 backdrop-blur-xl py-6 px-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:rounded-3xl border border-slate-200/60 overflow-clip"
         >
           {isSuccess ? (
             <div className="p-12 text-center">
@@ -961,18 +975,6 @@ export default function ReturnsPage() {
                 </div>
 
                 <div className="border-t border-slate-200 pt-6 mt-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-lg font-bold text-slate-900">Product Inventory</h4>
-                    <button
-                      type="button"
-                      onClick={addProduct}
-                      aria-hidden={products.length >= 2}
-                      tabIndex={products.length >= 2 ? -1 : 0}
-                      className={`flex items-center gap-1 text-sm bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition-colors ${products.length >= 2 ? 'invisible' : ''}`}
-                    >
-                      <Plus className="w-4 h-4" /> Add Product
-                    </button>
-                  </div>
 
                   {/* Pricing basis — SELL only. BUY carries no stated pricing at all:
                       the visitor supplies equipment + quantity only, and we evaluate.
@@ -1046,6 +1048,53 @@ export default function ReturnsPage() {
                     {buyListStrip}
 
                     <div className="space-y-4">
+                    {/* STICKY SECTION HEADER — the scroll-aware Add Product.
+                        The header itself travels with the list instead of a
+                        button floating on top of it, which is what makes this
+                        safe: a floating control necessarily covers whatever it
+                        passes over, and the top-right of a product card is
+                        exactly where its Remove button lives. As a header bar
+                        covering content is expected, and the action it carries
+                        is always on screen while you are in the products.
+
+                        It appears when you reach the product line and leaves
+                        when the list does — both are the same property of
+                        `sticky`, not two behaviours to script. No scroll
+                        listener, no layout read, no re-render.
+
+                        Enabled only once a product has been described (a
+                        category or details text), so a visitor cannot stack up
+                        blank rows; the control says why rather than hiding.
+
+                        Requires the page and card `overflow-clip` (see the
+                        class on the form card): under `overflow-hidden` this
+                        element would pin to a box that never scrolls. */}
+                    <div className="sticky top-2 z-30 -mx-1 mb-1 flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/90 px-3 py-2 backdrop-blur-md shadow-sm">
+                      <h4 className="flex items-baseline gap-2 text-sm font-bold text-slate-900">
+                        Product Inventory
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          {products.length} {products.length === 1 ? 'line' : 'lines'}
+                        </span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={addProduct}
+                        disabled={!hasProductInput || isSubmitting || isUploading}
+                        title={hasProductInput
+                          ? 'Add another product'
+                          : 'Describe a product first'}
+                        className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300 disabled:shadow-none"
+                      >
+                        <Plus className="h-4 w-4" aria-hidden="true" />
+                        Add Product
+                        <span className="sr-only">
+                          {hasProductInput
+                            ? ' — adds another product line to this request'
+                            : ' — unavailable until a product category or details are entered'}
+                        </span>
+                      </button>
+                    </div>
+
                     {pendingDelete && (
                       <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm flex flex-wrap items-center gap-3">
                         <p className="text-red-700 flex-1 min-w-[200px]">
@@ -1357,23 +1406,6 @@ export default function ReturnsPage() {
                       );
                     })()}
                   </div>
-                )}
-
-                {/* Floating Add-Product: takes over from Product #2 so long
-                    multi-product forms never require scrolling back up.
-                    Overlays content (no layout shift); the inline button above
-                    keeps its slot via visibility:hidden. Hidden while
-                    submitting; lives only in the sell/buy form branch. */}
-                {products.length >= 2 && !isSubmitting && (
-                  <button
-                    type="button"
-                    onClick={addProduct}
-                    aria-label="Add another product"
-                    title="Add another product"
-                    className="fixed z-40 bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white pl-4 pr-5 py-3.5 rounded-full font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 motion-reduce:transition-none motion-reduce:hover:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                  >
-                    <Plus className="w-5 h-5" /> Add Product
-                  </button>
                 )}
 
                 {/* Submit */}
