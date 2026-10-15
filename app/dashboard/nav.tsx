@@ -19,6 +19,7 @@
  */
 
 import {
+  Database,
   FileJson,
   FileSpreadsheet,
   Handshake,
@@ -44,6 +45,23 @@ export type NavActions = {
 };
 
 export function buildNavSections(a: NavActions = {}): NavSection[] {
+  // Intake leads the rail. It is the one destination that creates work rather
+  // than reporting on it, so it belongs above the read-only views — and in the
+  // rail rather than the header, where a fifth control would crowd the page
+  // toolbar at exactly the widths where it already wraps.
+  const workspace: NavSection['items'] = [
+    {
+      key: 'intake',
+      label: 'Intake Workbench',
+      icon: Database,
+      accent: 'indigo',
+      href: '/intake',
+      title: 'Create and commit new requests',
+    },
+    { key: 'orders', label: 'Orders', icon: Package, accent: 'emerald', href: '/dashboard' },
+    { key: 'search', label: 'Search', icon: Search, accent: 'sky', href: '/dashboard/search' },
+  ];
+
   const tools: NavSection['items'] = [
     {
       key: 'webmail',
@@ -105,10 +123,7 @@ export function buildNavSections(a: NavActions = {}): NavSection[] {
     {
       id: 'workspace',
       label: 'Workspace',
-      items: [
-        { key: 'orders', label: 'Orders', icon: Package, accent: 'emerald', href: '/dashboard' },
-        { key: 'search', label: 'Search', icon: Search, accent: 'sky', href: '/dashboard/search' },
-      ],
+      items: workspace,
     },
     {
       id: 'commerce',

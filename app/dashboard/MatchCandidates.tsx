@@ -205,15 +205,15 @@ export default function MatchCandidates({
   const lineIndexes = Array.from(byLine.keys()).sort((a, b) => a - b);
 
   return (
-    <div className="mt-4 rounded-lg bg-slate-950/60 border border-indigo-500/20 px-4 py-3">
+    <div className="mt-4 rounded-lg bg-indigo-50/50 border border-indigo-200 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <Sparkles className="w-4 h-4 text-indigo-400" />
-        <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Suggested stock (best-match)</span>
-        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <Sparkles className="w-4 h-4 text-indigo-500" />
+        <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Suggested stock (best-match)</span>
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
           Advisory — not a match
         </span>
         {data?.stale && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-300 border border-slate-600 inline-flex items-center gap-1">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-300 inline-flex items-center gap-1">
             <Info className="w-3 h-3" /> stock changed since computed
           </span>
         )}
@@ -224,7 +224,7 @@ export default function MatchCandidates({
               disabled={regenerating}
               onClick={regenerate}
               title="Recompute these suggestions now (runs the ranker again)"
-              className="text-[11px] font-semibold text-indigo-300 hover:text-white inline-flex items-center gap-1 disabled:opacity-60"
+              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 disabled:opacity-60"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />
               {regenerating ? 'Regenerating…' : 'Regenerate'}
@@ -234,7 +234,7 @@ export default function MatchCandidates({
             type="button"
             onClick={load}
             title="Refresh (read cache)"
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-slate-400 hover:text-slate-700 transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -245,11 +245,11 @@ export default function MatchCandidates({
         (() => {
           const es = emptyState(data);
           return (
-            <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/40 px-3 py-3">
-              <p className="text-xs font-semibold text-slate-300">{es.title}</p>
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3">
+              <p className="text-xs font-semibold text-slate-700">{es.title}</p>
               <p className="mt-1 text-[11px] text-slate-500">{es.detail}</p>
               {data?.lastRun?.model && (
-                <p className="mt-1.5 text-[10px] font-mono text-slate-600">
+                <p className="mt-1.5 text-[10px] font-mono text-slate-400">
                   {data.lastRun.model}
                   {data.lastRun.at ? ` · ${new Date(data.lastRun.at).toLocaleString()}` : ''}
                 </p>
@@ -263,25 +263,25 @@ export default function MatchCandidates({
             const product = (products || [])[lineIdx] || {};
             return (
               <div key={lineIdx}>
-                <div className="text-[11px] text-slate-400 mb-1.5">
-                  Requested: <span className="text-slate-200 font-semibold capitalize">{product.category || '—'}</span>
+                <div className="text-[11px] text-slate-500 mb-1.5">
+                  Requested: <span className="text-slate-700 font-semibold capitalize">{product.category || '—'}</span>
                   <span className="text-slate-500"> · {product.details || ''}</span>
                 </div>
                 <div className="space-y-2">
                   {(byLine.get(lineIdx) || []).map((c) => {
                     const key = `${c.buyLineIdx}:${c.sellOrderId}:${c.sellLineIdx}`;
                     return (
-                      <div key={key} className="rounded-md bg-slate-900 border border-slate-800 px-3 py-2">
+                      <div key={key} className="rounded-md bg-white border border-slate-200 px-3 py-2">
                         <div className="flex items-start justify-between gap-3 flex-wrap">
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-200 capitalize">
+                            <div className="text-xs font-bold text-slate-800 capitalize">
                               {c.sellCategory || '—'}
-                              {c.sellDetails ? <span className="font-normal text-slate-400"> · {c.sellDetails}</span> : null}
+                              {c.sellDetails ? <span className="font-normal text-slate-500"> · {c.sellDetails}</span> : null}
                               {c.sellQty ? <span className="ml-2 text-slate-500">qty {c.sellQty}</span> : null}
                             </div>
-                            {c.rationale && <div className="text-[11px] text-slate-400 mt-0.5">{c.rationale}</div>}
+                            {c.rationale && <div className="text-[11px] text-slate-500 mt-0.5">{c.rationale}</div>}
                             {c.gaps && (
-                              <div className="text-[11px] text-amber-400/90 mt-0.5 inline-flex items-center gap-1">
+                              <div className="text-[11px] text-amber-600 mt-0.5 inline-flex items-center gap-1">
                                 <ShieldAlert className="w-3 h-3" /> {c.gaps}
                               </div>
                             )}
@@ -289,7 +289,7 @@ export default function MatchCandidates({
                           <div className="flex items-center gap-3 shrink-0">
                             <div className="text-right" title="Confidence computed by our validator from grounded evidence — not the model's self-report">
                               <div className="text-[10px] text-slate-500 uppercase tracking-wider">Confidence</div>
-                              <div className="text-sm font-mono font-bold text-emerald-400">{pct(c.confidence)}</div>
+                              <div className="text-sm font-mono font-bold text-emerald-600">{pct(c.confidence)}</div>
                             </div>
                             {isAdmin && (
                               <button

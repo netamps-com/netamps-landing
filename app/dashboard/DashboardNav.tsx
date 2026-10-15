@@ -26,9 +26,10 @@
  * also shrink the drawer to 76px on a phone, where there is no expand button
  * to undo it.
  *
- * `variant` exists because the dashboard is dark and its sub-pages are light —
- * a pre-existing split. The navigation is identical in structure and behaviour
- * on both; only its surface changes, so the two do not read as two products.
+ * `variant` is retained as a no-op-compatible prop so existing call sites keep
+ * compiling. Every page in /dashboard now uses the same light surface; the dark
+ * theme that used to sit behind `variant="dark"` has been deleted rather than
+ * left dormant.
  */
 
 import { useEffect, useState } from 'react';
@@ -82,9 +83,9 @@ const ACCENTS = {
 const RAIL = { open: 264, closed: 76 } as const;
 
 /**
- * The two surfaces. Typed as an explicit `Theme` rather than left to inference
- * — the dark and light class strings differ, so letting TypeScript infer the
- * shape from the dark theme makes the light one unassignable to it.
+ * The shell's surface contract. Kept as an explicit type rather than inferred
+ * from `THEME` so a call site that reaches for a token this shell does not
+ * define fails to compile instead of silently rendering unstyled.
  */
 type Theme = {
   canvas: string;
@@ -102,37 +103,34 @@ type Theme = {
   accentBar: (k: keyof typeof ACCENTS) => string;
 };
 
-const THEMES: Record<'dark' | 'light', Theme> = {
-  dark: {
-    canvas: 'bg-[#020817] text-white',
-    rail: 'bg-[#040a17] border-slate-800/80',
-    scrim: 'bg-slate-950/70',
-    topbar: 'border-slate-800/80 bg-[#040a17]/90 text-slate-400',
-    label: 'text-slate-500',
-    divider: 'bg-slate-800/70',
-    itemIdle: 'text-slate-400 hover:text-white hover:bg-white/[0.06]',
-    itemActive: 'bg-white/[0.08] text-white',
-    chrome: 'text-slate-500 hover:text-white hover:bg-white/[0.06]',
-    footer: 'border-slate-800/80 bg-black/20',
-    identity: 'text-slate-300',
-    accentText: (k: keyof typeof ACCENTS) => ACCENTS[k].text,
-    accentBar: (k: keyof typeof ACCENTS) => ACCENTS[k].bar,
-  },
-  light: {
-    canvas: 'bg-slate-50 text-slate-900',
-    rail: 'bg-white border-slate-200',
-    scrim: 'bg-slate-950/40',
-    topbar: 'border-slate-200 bg-white/90 text-slate-500',
-    label: 'text-slate-400',
-    divider: 'bg-slate-200',
-    itemIdle: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100',
-    itemActive: 'bg-slate-100 text-slate-900',
-    chrome: 'text-slate-400 hover:text-slate-900 hover:bg-slate-100',
-    footer: 'border-slate-200 bg-slate-50',
-    identity: 'text-slate-700',
-    accentText: (k: keyof typeof ACCENTS) => ACCENTS[k].light,
-    accentBar: (k: keyof typeof ACCENTS) => ACCENTS[k].bar,
-  },
+/**
+ * ONE surface, not two.
+ *
+ * This used to carry a dark and a light theme, with `/dashboard` on dark and the
+ * three sub-pages on light — so four pages in one area presented two different
+ * products. The near-black (`#020817`/`#040a17`) was the outlier and has been
+ * removed rather than left dormant: keeping an unreachable theme is how a
+ * surface quietly comes back and re-splits the area.
+ *
+ * The token names are kept (canvas, rail, topbar…) even though there is one
+ * value each, because they still say what each part of the shell IS, and
+ * adding a second surface later should be a matter of values rather than a
+ * rewrite of every call site.
+ */
+const THEME: Theme = {
+  canvas: 'bg-slate-50 text-slate-900',
+  rail: 'bg-white border-slate-200',
+  scrim: 'bg-slate-900/40',
+  topbar: 'border-slate-200 bg-white/90 text-slate-500',
+  label: 'text-slate-400',
+  divider: 'bg-slate-200',
+  itemIdle: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100',
+  itemActive: 'bg-slate-100 text-slate-900',
+  chrome: 'text-slate-400 hover:text-slate-900 hover:bg-slate-100',
+  footer: 'border-slate-200 bg-slate-50',
+  identity: 'text-slate-700',
+  accentText: (k: keyof typeof ACCENTS) => ACCENTS[k].light,
+  accentBar: (k: keyof typeof ACCENTS) => ACCENTS[k].bar,
 };
 
 /** `/dashboard` is a prefix of every sub-route, so it must match exactly. */
@@ -161,17 +159,17 @@ function titleFor(pathname: string): string {
 export function DashboardShell({
   sections,
   footer,
-  variant = 'dark',
   topRight,
   children,
 }: {
   sections: NavSection[];
   footer: NavFooter;
+  /** Accepted and ignored — one surface now covers every dashboard page. */
   variant?: 'dark' | 'light';
   topRight?: ReactNode;
   children: ReactNode;
 }) {
-  const t = THEMES[variant];
+  const t = THEME;
   const pathname = usePathname() || '/dashboard';
 
   // Read after mount: the rail's width feeds layout padding, and a mismatch
@@ -292,9 +290,7 @@ export function DashboardShell({
             {/* At 76px an avatar and a sign-out cannot both fit, and the
                 control that ends the session is the one worth keeping. */}
             {!collapsed && (
-              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black ${
-                variant === 'dark' ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'
-              }`}>
+              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black bg-indigo-50 text-indigo-700`}>
                 {(footer.email || '?').slice(0, 1).toUpperCase()}
               </span>
             )}

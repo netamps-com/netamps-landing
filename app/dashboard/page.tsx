@@ -3,17 +3,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Package, Search, Filter, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake } from 'lucide-react';
+import { Package, Search, Filter, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake } from 'lucide-react';
 import { DashboardShell } from './DashboardNav';
 import { buildNavSections } from './nav';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
 import MatchCandidates from './MatchCandidates';
 import EvidenceGallery from './EvidenceGallery';
+import StatsBar from './StatsBar';
 import { useIdleTimeout, IdleTimeoutModal } from '../lib/idle-timeout';
 import { formatPaise as paiseToDisplay, evalUnitPaise, lineFinalOf } from '../lib/money';
 import {
-  ORDER_STATUS, normalizeStatus, isClosedStatus, isPriceLocked, isNegotiable, statusChipDark
+  ORDER_STATUS, normalizeStatus, isClosedStatus, isPriceLocked, isNegotiable, statusChip
 } from '../lib/status';
 
 interface ProductItem {
@@ -103,7 +104,7 @@ function evalTotalOf(req: ReturnRequest): { total: number | null; partial: boole
 function RowTimeline({ data }: { data: any }) {
   if (!data) {
     return (
-      <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-xs text-slate-500">
+      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
         Loading audit trail…
       </div>
     );
@@ -120,7 +121,7 @@ function RowTimeline({ data }: { data: any }) {
   return (
     <div className="mt-4 grid gap-4 md:grid-cols-2">
       {/* ── Ladder ── */}
-      <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">
           Chronological audit trail
         </div>
@@ -134,16 +135,16 @@ function RowTimeline({ data }: { data: any }) {
               return (
                 <li key={`${step.rung}-${i}`} className="flex items-start gap-2">
                   <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
-                    isCurrent ? 'bg-amber-400 ring-2 ring-amber-400/30'
-                    : isLast ? 'bg-emerald-400'
-                    : 'bg-slate-600'}`} />
+                    isCurrent ? 'bg-amber-500 ring-2 ring-amber-500/30'
+                    : isLast ? 'bg-emerald-500'
+                    : 'bg-slate-400'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs font-semibold ${isCurrent ? 'text-amber-300' : 'text-slate-200'}`}>
+                      <span className={`text-xs font-semibold ${isCurrent ? 'text-amber-700' : 'text-slate-700'}`}>
                         {step.rung}
                       </span>
                       {isCurrent && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400">Current</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600">Current</span>
                       )}
                       {typeof step.touches === 'number' && step.touches > 1 && (
                         <span className="text-[9px] text-slate-500">×{step.touches}</span>
@@ -161,31 +162,31 @@ function RowTimeline({ data }: { data: any }) {
       </div>
 
       {/* ── Email triggers ── */}
-      <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <div className="flex items-center justify-between gap-2 mb-3">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email triggers</span>
-          <span className="text-xs font-mono font-bold text-slate-200">{emails.count ?? 0}</span>
+          <span className="text-xs font-mono font-bold text-slate-700">{emails.count ?? 0}</span>
         </div>
         {emails.count ? (
           <>
             <ul className="space-y-1.5 mb-3">
               {(emails.items || []).slice(0, 6).map((m: any, i: number) => (
                 <li key={i} className="flex items-start justify-between gap-3 text-[11px]">
-                  <span className="text-slate-400 truncate">
+                  <span className="text-slate-600 truncate">
                     {m.cause}
                     <span className={`ml-1.5 font-semibold ${
-                      m.outcome === 'delivered' || m.outcome === 'sent' ? 'text-emerald-400'
-                      : m.outcome === 'failed' || m.outcome === 'bounced' ? 'text-rose-400'
+                      m.outcome === 'delivered' || m.outcome === 'sent' ? 'text-emerald-600'
+                      : m.outcome === 'failed' || m.outcome === 'bounced' ? 'text-rose-600'
                       : 'text-slate-500'}`}>
                       {m.outcome}
                     </span>
                   </span>
-                  <span className="font-mono text-slate-600 whitespace-nowrap">{stamp(m.at)}</span>
+                  <span className="font-mono text-slate-400 whitespace-nowrap">{stamp(m.at)}</span>
                 </li>
               ))}
             </ul>
             {(emails.items || []).length > 6 && (
-              <p className="text-[10px] text-slate-600">+{(emails.items.length - 6)} more</p>
+              <p className="text-[10px] text-slate-400">+{(emails.items.length - 6)} more</p>
             )}
           </>
         ) : (
@@ -843,6 +844,7 @@ export default function DashboardPage() {
   return (
     <DashboardShell
       sections={navSections}
+      variant="light"
       footer={{
         email: userRole,
         role: isAdmin ? 'Administrator' : 'Staff',
@@ -871,64 +873,76 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {headerNotice && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-            <p className="text-sm text-amber-200">{headerNotice}</p>
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-sm text-amber-800">{headerNotice}</p>
             <button
               onClick={() => setHeaderNotice(null)}
-              className="shrink-0 text-amber-300 hover:text-amber-100 text-sm font-bold"
+              className="shrink-0 text-amber-700 hover:text-amber-900 text-sm font-bold"
               aria-label="Dismiss"
             >
               Dismiss
             </button>
           </div>
         )}
+
+        <StatsBar />
+
         <div className="flex justify-between items-end mb-8">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Active Requests Dashboard</h1>
-            <p className="mt-2 text-sm text-slate-400">Manage all IT asset procurement (BUY) and liquidation (SELL) orders.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Active Requests Dashboard</h1>
+            <p className="mt-2 text-sm text-slate-500">Manage all IT asset procurement (BUY) and liquidation (SELL) orders.</p>
           </div>
-          
+
+          {/* Intake moved to the left rail — it is a destination, not a
+              toolbar action, and the rail already carries every other module. */}
           <div className="flex items-center gap-3">
             <button 
               onClick={() => fetchReturns(false)}
               disabled={isRefreshing}
               title="Refresh Data"
-              className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50 shadow-lg"
+              aria-label="Refresh data"
+              className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
             >
-              <RefreshCw className={`w-4 h-4 text-slate-300 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
-            <Link href="/intake" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20 mr-2">
-              <Database className="w-4 h-4" /> Intake Workbench
-            </Link>
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input type="text" placeholder="Search orders..." className="pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 w-64" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search orders..."
+                aria-label="Search orders"
+                className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 w-64 shadow-sm"
+              />
             </div>
-            <button className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors">
-              <Filter className="w-4 h-4 text-slate-300" />
+            <button
+              className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+              aria-label="Filter orders"
+              title="Filter orders"
+            >
+              <Filter className="w-4 h-4 text-slate-500" />
             </button>
           </div>
         </div>
 
         {/* Data Table */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-800">
-              <thead className="bg-slate-800/50">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
                 <tr>
                   <th scope="col" className="w-10 px-4 py-4"></th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Tracking ID</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Client Details</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Order Size</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Date Submitted</th>
-                  <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tracking ID</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Client Details</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Order Size</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Date Submitted</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50 bg-slate-900">
+              <tbody className="divide-y divide-slate-100 bg-white">
                 {returns.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                      <ArchiveX className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                      <ArchiveX className="w-12 h-12 mx-auto mb-3 opacity-30" />
                       <p>No active requests found in the database.</p>
                       <p className="text-xs mt-1">New requests from the portal will appear here.</p>
                     </td>
@@ -942,32 +956,32 @@ export default function DashboardPage() {
                       <React.Fragment key={req.id}>
                         <tr 
                           id={`order-${req.id}`}
-                          className="hover:bg-slate-800/30 transition-colors cursor-pointer group"
+                          className="hover:bg-slate-50 transition-colors cursor-pointer group"
                           onClick={() => toggleRow(req.id)}
                         >
-                          <td className="px-4 py-4 whitespace-nowrap text-slate-500 group-hover:text-white">
+                          <td className="px-4 py-4 whitespace-nowrap text-slate-400 group-hover:text-slate-700">
                             {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${isSell ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                            <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${isSell ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
                               {req.id}
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm font-bold text-white">{req.name}</div>
-                            <div className="text-xs text-slate-400">{req.company} &bull; {req.email}</div>
+                            <div className="text-sm font-bold text-slate-900">{req.name}</div>
+                            <div className="text-xs text-slate-500">{req.company} &bull; {req.email}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <Package className="w-4 h-4 text-slate-500" />
-                              <span className="text-sm text-slate-300 font-medium">{req.products?.length || 0} Products</span>
+                              <Package className="w-4 h-4 text-slate-400" />
+                              <span className="text-sm text-slate-600 font-medium">{req.products?.length || 0} Products</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                             {new Date(req.date).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <span className={`px-2.5 py-1 text-xs font-medium border rounded-full ${statusChipDark(req.status)}`}>
+                            <span className={`px-2.5 py-1 text-xs font-medium border rounded-full ${statusChip(req.status)}`}>
                               {normalizeStatus(req.status)}
                             </span>
                           </td>
@@ -975,58 +989,58 @@ export default function DashboardPage() {
                         {/* Expandable Tree Row */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={6} className="px-0 py-0 bg-slate-950/50">
-                              <div className="px-14 py-6 border-l-2 border-indigo-500/30 ml-8 my-4">
+                            <td colSpan={6} className="px-0 py-0 bg-slate-50/60">
+                              <div className="px-14 py-6 border-l-2 border-indigo-200 ml-8 my-4">
                                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                                   <Tag className="w-4 h-4" /> Order Manifest
                                 </h4>
                                 {req.pricingBasis === 'lot' && (
-                                  <div className="mb-4 p-3 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-300">
-                                    Lot consideration (whole request): <span className="font-mono font-bold text-white">{paiseToDisplay(req.lotConsiderationPaise ?? null)}</span>
+                                  <div className="mb-4 p-3 rounded-lg bg-white border border-slate-200 text-sm text-slate-600">
+                                    Lot consideration (whole request): <span className="font-mono font-bold text-slate-900">{paiseToDisplay(req.lotConsiderationPaise ?? null)}</span>
                                   </div>
                                 )}
                                 <div className="space-y-3">
                                   {req.products && req.products.length > 0 ? (
                                     req.products.map((product, idx) => (
-                                      <div key={product.id || idx} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 flex flex-col gap-3">
+                                      <div key={product.id || idx} className="bg-white rounded-lg p-4 border border-slate-200 flex flex-col gap-3 shadow-sm">
                                         <div className="flex justify-between items-start gap-4 flex-wrap">
                                           <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                               {product.strategicTarget && (
-                                                <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${product.strategicTarget === 'resale' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                                                <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${product.strategicTarget === 'resale' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
                                                   {product.strategicTarget === 'resale' ? 'Resale Value Opt.' : 'Compliance Recycling'}
                                                 </span>
                                               )}
                                               {product.lifecycleAge && (
-                                                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-300 border border-slate-600">
+                                                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                                                   {product.lifecycleAge}
                                                 </span>
                                               )}
                                             </div>
-                                            <div className="text-sm font-bold text-slate-200 capitalize mb-1">
+                                            <div className="text-sm font-bold text-slate-800 capitalize mb-1">
                                               {product.category.replace('_', ' ')}
                                             </div>
-                                            <div className="text-xs text-slate-400 max-w-2xl">
+                                            <div className="text-xs text-slate-500 max-w-2xl">
                                               {product.details}
                                             </div>
                                           </div>
                                           <div className="flex items-start gap-3 shrink-0 flex-wrap">
                                             <div className="flex flex-col items-end">
                                               <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 whitespace-nowrap leading-4 min-h-4">Base Price (Per Unit)</label>
-                                              <div className="px-3 py-1.5 min-w-[7.5rem] flex items-center justify-end text-sm font-mono font-bold tabular-nums text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated base per unit — read-only, sealed in manifest">
+                                              <div className="px-3 py-1.5 min-w-[7.5rem] flex items-center justify-end text-sm font-mono font-bold tabular-nums text-slate-700 bg-slate-50 border border-slate-200 rounded-lg" title="Visitor-stated base per unit — read-only, sealed in manifest">
                                                 {paiseToDisplay(product.basePricePaise ?? null)}
                                               </div>
                                             </div>
                                             <div className="flex flex-col items-end">
                                               <label className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 whitespace-nowrap leading-4 min-h-4">Line Consideration (Upfront Discount)</label>
-                                              <div className="px-3 py-1.5 min-w-[7.5rem] flex items-center justify-end text-sm font-mono font-bold tabular-nums text-slate-200 bg-slate-900 border border-slate-700 rounded-lg" title="Visitor-stated upfront total for this line — read-only">
+                                              <div className="px-3 py-1.5 min-w-[7.5rem] flex items-center justify-end text-sm font-mono font-bold tabular-nums text-slate-700 bg-slate-50 border border-slate-200 rounded-lg" title="Visitor-stated upfront total for this line — read-only">
                                                 {paiseToDisplay(lineAskOf(req, product))}
                                               </div>
                                               {(() => {
                                                 const final = lineFinalOf(Number(product.quantity) || 1, product.basePricePaise ?? null);
                                                 return (
-                                                  <div className="text-[11px] text-slate-400 mt-1 min-h-[1.25rem]" title="Quantity × base price — computed, read-only">
-                                                    {final === null ? <>&nbsp;</> : <>Final: <span className="font-mono font-bold tabular-nums text-slate-200">{paiseToDisplay(final)}</span></>}
+                                                  <div className="text-[11px] text-slate-500 mt-1 min-h-[1.25rem]" title="Quantity × base price — computed, read-only">
+                                                    {final === null ? <>&nbsp;</> : <>Final: <span className="font-mono font-bold tabular-nums text-slate-700">{paiseToDisplay(final)}</span></>}
                                                   </div>
                                                 );
                                               })()}
@@ -1044,17 +1058,17 @@ export default function DashboardPage() {
                                                   onBlur={(e) => commitPrice(req.id, product.id, e.target.value.replace(/[^0-9.]/g, ''))}
                                                   onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                                   placeholder={userRole === 'admin@netamps.com' ? "Enter price" : "Pending"}
-                                                  className="w-32 bg-slate-900 border border-slate-600 rounded-lg pl-6 pr-3 py-1.5 text-sm tabular-nums text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                                                  className="w-32 bg-white border border-slate-300 rounded-lg pl-6 pr-3 py-1.5 text-sm tabular-nums text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                                                 />
                                               </div>
                                             </div>
-                                            <div className="shrink-0 self-start mt-[1.25rem] text-sm font-mono font-bold tabular-nums text-indigo-400 bg-indigo-500/10 px-3 py-1.5 rounded-lg border border-indigo-500/20">
+                                            <div className="shrink-0 self-start mt-[1.25rem] text-sm font-mono font-bold tabular-nums text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200">
                                               x{product.quantity}
                                             </div>
                                           </div>
                                         </div>
                                         {product.attachedFiles && product.attachedFiles.length > 0 && (
-                                          <div className="mt-4 pt-4 border-t border-slate-700/50">
+                                          <div className="mt-4 pt-4 border-t border-slate-200">
                                             <EvidenceGallery
                                               files={product.attachedFiles}
                                               cdnBase={process.env.NEXT_PUBLIC_CDN_URL || '/api/cdn'}
@@ -1075,20 +1089,20 @@ export default function DashboardPage() {
                                     const final = req.finalPrice ?? null;
                                     const row = (label: string, value: string, sub: string | null, accent: string) => (
                                       <div className="flex justify-between items-center py-1.5">
-                                        <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">{label}</div>
+                                        <div className="text-sm font-bold text-slate-500 uppercase tracking-wider">{label}</div>
                                         <div className="text-right">
                                           <div className={`text-2xl font-mono font-bold ${accent}`}>{value}</div>
-                                          {sub && <div className="text-[11px] text-amber-400">{sub}</div>}
+                                          {sub && <div className="text-[11px] text-amber-600">{sub}</div>}
                                         </div>
                                       </div>
                                     );
                                     return (
-                                      <div className="mt-4 p-4 rounded-lg bg-slate-900 border border-slate-700">
-                                        {row('Total Asked', paiseToDisplay(ask.total), ask.partial ? 'Partial — some lines unstated' : null, 'text-sky-400')}
-                                        <div className="border-t border-slate-700/60 my-1" />
-                                        {row('Total Evaluated Value', paiseToDisplay(ev.total), ev.partial ? 'Partial — some lines unevaluated' : null, 'text-emerald-400')}
-                                        <div className="border-t border-slate-700/60 my-1" />
-                                        {row('Final', final ? `${paiseToDisplay(final.totalPaise)} (v${final.version})` : '—', null, 'text-white')}
+                                      <div className="mt-4 p-4 rounded-lg bg-white border border-slate-200 shadow-sm">
+                                        {row('Total Asked', paiseToDisplay(ask.total), ask.partial ? 'Partial — some lines unstated' : null, 'text-sky-600')}
+                                        <div className="border-t border-slate-200 my-1" />
+                                        {row('Total Evaluated Value', paiseToDisplay(ev.total), ev.partial ? 'Partial — some lines unevaluated' : null, 'text-emerald-600')}
+                                        <div className="border-t border-slate-200 my-1" />
+                                        {row('Final', final ? `${paiseToDisplay(final.totalPaise)} (v${final.version})` : '—', null, 'text-slate-900')}
                                         {/* Price history deliberately does NOT render here: it is an
                                             order-level audit of decisions, and belongs in its own
                                             Price Tracker rather than scattered through this list. */}
@@ -1121,14 +1135,14 @@ export default function DashboardPage() {
 
                                 {/* Key reconciliation — admin only. Report-first; prune is explicit + audited. */}
                                 {userRole === 'admin@netamps.com' && (
-                                  <div className="mt-4 rounded-lg bg-slate-950/60 border border-slate-800 px-4 py-3">
+                                  <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
                                     <div className="flex flex-wrap items-center gap-3">
-                                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Key reconciliation</span>
+                                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Key reconciliation</span>
                                       <button
                                         type="button"
                                         disabled={reconciling === `${req.id}:report`}
                                         onClick={(e) => { e.stopPropagation(); runReconcile(req, false); }}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors disabled:opacity-50"
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition-colors disabled:opacity-50"
                                       >
                                         {reconciling === `${req.id}:report` ? 'Checking…' : 'Verify attachment keys'}
                                       </button>
@@ -1141,7 +1155,7 @@ export default function DashboardPage() {
                                             type="button"
                                             disabled={reconciling === `${req.id}:prune`}
                                             onClick={(e) => { e.stopPropagation(); runReconcile(req, true); }}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 transition-colors disabled:opacity-50"
+                                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors disabled:opacity-50"
                                           >
                                             {reconciling === `${req.id}:prune` ? 'Pruning…' : `Remove ${rep.missing.length} dead reference${rep.missing.length > 1 ? 's' : ''}`}
                                           </button>
@@ -1181,7 +1195,7 @@ export default function DashboardPage() {
                                   </div>
                                 )}
 
-                                <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-800 pt-4 items-center">
+                                <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-200 pt-4 items-center">
                                   {approveError && (
                                     <div className="w-full text-xs text-red-400">{approveError}</div>
                                   )}
@@ -1240,7 +1254,7 @@ export default function DashboardPage() {
                                           {userRole === 'admin@netamps.com' && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); handleDeleteRequest(req.id); }}
-                                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-sm font-medium rounded-lg transition-colors border border-red-500/20"
+                                              className="px-4 py-2 bg-white hover:bg-red-50 text-red-600 text-sm font-medium rounded-lg transition-colors border border-red-200"
                                             >
                                               Delete Request
                                             </button>
