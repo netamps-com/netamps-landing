@@ -122,26 +122,26 @@ export default function StatusPage() {
   const getStatusIcon = (status: StatusType) => {
     switch (status) {
       case 'operational':
-        return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
+        return <CheckCircle2 className="w-5 h-5 text-emerald-600" />;
       case 'degraded':
-        return <AlertTriangle className="w-5 h-5 text-amber-400" />;
+        return <AlertTriangle className="w-5 h-5 text-amber-600" />;
       case 'outage':
-        return <XCircle className="w-5 h-5 text-red-400" />;
+        return <XCircle className="w-5 h-5 text-red-600" />;
       case 'maintenance':
-        return <Clock className="w-5 h-5 text-blue-400" />;
+        return <Clock className="w-5 h-5 text-blue-600" />;
     }
   };
 
   const getStatusColor = (status: StatusType) => {
     switch (status) {
       case 'operational':
-        return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50';
+        return 'bg-emerald-100 text-emerald-700 border-emerald-300';
       case 'degraded':
-        return 'bg-amber-500/20 text-amber-400 border-amber-500/50';
+        return 'bg-amber-100 text-amber-700 border-amber-300';
       case 'outage':
-        return 'bg-red-500/20 text-red-400 border-red-500/50';
+        return 'bg-red-100 text-red-700 border-red-300';
       case 'maintenance':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
+        return 'bg-blue-100 text-blue-700 border-blue-300';
     }
   };
 
@@ -149,7 +149,7 @@ export default function StatusPage() {
 
   const bannerTone =
     !feedOk && services.length === 0
-      ? 'bg-slate-800/60 text-slate-300 border-slate-700'
+      ? 'bg-slate-100 text-slate-700 border-slate-300'
       : getStatusColor(overallStatus());
 
   const grouped = (['Core Infrastructure', 'Edge/CDN'] as ServiceCategory[])
@@ -160,8 +160,8 @@ export default function StatusPage() {
     .filter((g) => g.items.length > 0);
 
   return (
-    <div className="min-h-screen bg-[#020817] text-white">
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="border-b border-slate-200 bg-white backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -175,8 +175,8 @@ export default function StatusPage() {
                 onClick={() => setAutoRefresh(!autoRefresh)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   autoRefresh
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                    : 'bg-white text-slate-500 border border-slate-300'
                 }`}
               >
                 <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
@@ -195,7 +195,7 @@ export default function StatusPage() {
         >
           {!feedOk && services.length === 0 ? (
             <div className="flex items-center gap-4">
-              <Clock className="w-8 h-8 text-slate-400 shrink-0" />
+              <Clock className="w-8 h-8 text-slate-500 shrink-0" />
               <div>
                 <h2 className="text-2xl font-bold">Status feed unavailable</h2>
                 <p className="text-sm opacity-80 mt-1">
@@ -235,7 +235,7 @@ export default function StatusPage() {
         >
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Server className="w-5 h-5 text-slate-400" />
+              <Server className="w-5 h-5 text-slate-500" />
               Service Status
             </h3>
             <div className="flex items-center gap-2">
@@ -246,8 +246,8 @@ export default function StatusPage() {
                     onClick={() => setSelectedCategory(category)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                       selectedCategory === category
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
-                        : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
+                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                        : 'bg-white text-slate-500 border border-slate-300 hover:bg-slate-100'
                     }`}
                   >
                     {category}
@@ -260,7 +260,7 @@ export default function StatusPage() {
           {grouped.map((group) => (
             <div key={group.category} className="mb-6">
               <div className="flex items-baseline justify-between mb-3">
-                <h4 className="text-md font-semibold text-slate-200">{group.category}</h4>
+                <h4 className="text-md font-semibold text-slate-900">{group.category}</h4>
                 <p className="text-xs text-slate-500">{CATEGORY_META[group.category].blurb}</p>
               </div>
               <div className="grid gap-4">
@@ -269,7 +269,7 @@ export default function StatusPage() {
                     key={service.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-all"
+                    className="bg-white backdrop-blur-xl border border-slate-200 rounded-xl p-5 hover:border-slate-300 transition-all"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -284,9 +284,9 @@ export default function StatusPage() {
                             {service.status.charAt(0).toUpperCase() + service.status.slice(1)}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-400 mb-3">{service.description}</p>
+                        <p className="text-sm text-slate-500 mb-3">{service.description}</p>
                         {service.note && (
-                          <p className="text-[11px] font-mono text-amber-300/80 mb-3 truncate" title={service.note}>
+                          <p className="text-[11px] font-mono text-amber-700 mb-3 truncate" title={service.note}>
                             Probe note: {service.note}
                           </p>
                         )}
@@ -302,7 +302,7 @@ export default function StatusPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500 px-2 py-1 bg-slate-800 rounded whitespace-nowrap">
+                        <span className="text-xs text-slate-500 px-2 py-1 bg-slate-100 rounded whitespace-nowrap">
                           {service.category}
                         </span>
                       </div>
@@ -315,17 +315,17 @@ export default function StatusPage() {
         </motion.div>
       </main>
 
-      <footer className="border-t border-slate-800 mt-16 py-8">
+      <footer className="border-t border-slate-200 mt-16 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between text-sm text-slate-500">
             <div className="flex items-center gap-4">
-              <Link href="/" className="hover:text-slate-300 transition-colors">
+              <Link href="/" className="hover:text-slate-700 transition-colors">
                 Back to Home
               </Link>
-              <Link href={`/login?sid=${sessionId}`} className="hover:text-slate-300 transition-colors">
+              <Link href={`/login?sid=${sessionId}`} className="hover:text-slate-700 transition-colors">
                 Login
               </Link>
-              <Link href={`/returns?sid=${sessionId}`} className="hover:text-slate-300 transition-colors">
+              <Link href={`/returns?sid=${sessionId}`} className="hover:text-slate-700 transition-colors">
                 Returns
               </Link>
             </div>

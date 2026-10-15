@@ -177,7 +177,6 @@ export default function OrderSearchPage() {
 
   return (
     <DashboardShell
-      variant="light"
       sections={navSections}
       footer={{ email: session.email, role: session.role, onTerminate: session.terminate }}
     >
@@ -309,7 +308,7 @@ export default function OrderSearchPage() {
 
         {!loading && applied && items.length === 0 && !error && (
           <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500">
-            <Inbox className="w-6 h-6 mx-auto mb-3 text-slate-300" />
+            <Inbox className="w-6 h-6 mx-auto mb-3 text-slate-400" />
             No order matched
             <div className="mt-2 text-xs text-slate-400 max-w-md mx-auto">
               {plan.fallback === 'no_candidates'

@@ -16,6 +16,11 @@
  * only the dashboard mounts. A row never appears as a dead control, and a
  * section with no rows renders nothing, so an admin-only group costs a
  * non-admin user no pixels.
+ *
+ * NAVIGATION ONLY. The rail carries routes and route-like jumps — nothing that
+ * is a preference or a setting. `Best-match` used to live here as an ON/OFF
+ * box; it is an order-list preference, so it now sits on the order list where
+ * the list it changes is visible while you change it.
  */
 
 import {
@@ -28,7 +33,6 @@ import {
   Package,
   ScrollText,
   Search,
-  Sparkles,
   Users,
 } from 'lucide-react';
 import type { NavSection } from './DashboardNav';
@@ -38,9 +42,6 @@ export type NavActions = {
   isAdmin?: boolean;
   onOpenLogs?: () => void;
   onOpenUsers?: () => void;
-  /** `null` means the flag has not loaded yet and is reported as unknown. */
-  bestMatch?: boolean | null;
-  onToggleBestMatch?: () => void;
   onExport?: (format: 'json' | 'csv') => void;
 };
 
@@ -96,27 +97,6 @@ export function buildNavSections(a: NavActions = {}): NavSection[] {
 
   if (a.isAdmin && a.onOpenUsers) {
     admin.push({ key: 'users', label: 'Manage Users', icon: Users, accent: 'emerald', onClick: a.onOpenUsers });
-  }
-
-  if (a.isAdmin && a.onToggleBestMatch) {
-    const loaded = a.bestMatch !== null && a.bestMatch !== undefined;
-    admin.push({
-      key: 'candidates',
-      label: 'Best-match',
-      icon: Sparkles,
-      accent: 'emerald',
-      onClick: a.onToggleBestMatch,
-      title: 'Model suggestions for BUY orders — advisory only, staff decide',
-      trailing: (
-        <span
-          className={`font-mono text-[10px] font-bold uppercase tracking-wider ${
-            loaded && a.bestMatch ? 'text-emerald-400' : 'text-slate-500'
-          }`}
-        >
-          {loaded ? (a.bestMatch ? 'ON' : 'OFF') : '…'}
-        </span>
-      ),
-    });
   }
 
   return [

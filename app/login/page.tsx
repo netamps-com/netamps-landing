@@ -9,11 +9,11 @@ import { Lock, ArrowRight, ShieldCheck, Laptop, AlertCircle, Activity, ExternalL
 import NetampsLogo from '../NetampsLogo';
 
 const statusColors = {
-  operational: 'bg-emerald-500 text-emerald-400',
-  degraded: 'bg-amber-500 text-amber-400',
-  maintenance: 'bg-blue-500 text-blue-400',
-  outage: 'bg-red-500 text-red-400',
-  unknown: 'bg-slate-500 text-slate-400'
+  operational: 'bg-emerald-500 text-emerald-600',
+  degraded: 'bg-amber-500 text-amber-600',
+  maintenance: 'bg-blue-500 text-blue-600',
+  outage: 'bg-red-500 text-red-600',
+  unknown: 'bg-slate-500 text-slate-500'
 };
 
 const HealthStatusWidget = () => {
@@ -60,9 +60,9 @@ const HealthStatusWidget = () => {
 
   if (healthLoading || !healthStatus) {
     return (
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700">
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-white/90 rounded-lg border border-slate-200">
         <div className="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></div>
-        <span className="text-xs text-slate-400">Loading health...</span>
+        <span className="text-xs text-slate-500">Loading health...</span>
       </div>
     );
   }
@@ -98,70 +98,70 @@ const HealthStatusWidget = () => {
       </div>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
-          <div className="p-3 border-b border-slate-700 flex justify-between items-start">
+        <div className="absolute right-0 top-full mt-2 z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+          <div className="p-3 border-b border-slate-200 flex justify-between items-start">
             <div>
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <Activity className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
                 Live System Metrics
               </h4>
               <p className="text-[10px] text-slate-500 mt-1">Updated: {healthStatus.timestamp ? new Date(healthStatus.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</p>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-300">
+            <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-700">
                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
           
           <div className="p-3 space-y-3">
             {/* Internet Connection */}
-            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'} split x`}></div>
-                <span className="text-xs font-medium text-slate-200">Internet Connection</span>
+                <span className="text-xs font-medium text-slate-900">Internet Connection</span>
               </div>
               <div className="text-right">
-                <span className="text-xs font-mono text-slate-400">{isOnline ? 'Connected' : 'Offline'}</span>
+                <span className="text-xs font-mono text-slate-500">{isOnline ? 'Connected' : 'Offline'}</span>
               </div>
             </div>
 
             {/* Database */}
-            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.database?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
-                <span className="text-xs font-medium text-slate-200">Database</span>
+                <span className="text-xs font-medium text-slate-900">Database</span>
               </div>
               <div className="text-right">
-                <span className="text-xs font-mono text-emerald-400">{healthStatus.database?.latency ? `${healthStatus.database.latency}ms` : 'N/A'}</span>
+                <span className="text-xs font-mono text-emerald-600">{healthStatus.database?.latency ? `${healthStatus.database.latency}ms` : 'N/A'}</span>
               </div>
             </div>
 
             {/* API */}
-            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.api?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
-                <span className="text-xs font-medium text-slate-200">API Gateway</span>
+                <span className="text-xs font-medium text-slate-900">API Gateway</span>
               </div>
               <div className="text-right">
-                <span className="text-xs font-mono text-slate-400">Online</span>
+                <span className="text-xs font-mono text-slate-500">Online</span>
               </div>
             </div>
 
             {/* Payload */}
-            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.payload?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
-                <span className="text-xs font-medium text-slate-200">Website Payload</span>
+                <span className="text-xs font-medium text-slate-900">Website Payload</span>
               </div>
               <div className="text-right">
-                <span className="text-xs font-mono text-indigo-400">{healthStatus.payload?.latency ? `${healthStatus.payload.latency}ms` : 'N/A'}</span>
+                <span className="text-xs font-mono text-indigo-600">{healthStatus.payload?.latency ? `${healthStatus.payload.latency}ms` : 'N/A'}</span>
               </div>
             </div>
 
             {/* CDN */}
-            <div className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${statusColors[healthStatus.cdn?.status as keyof typeof statusColors] || statusColors.unknown} split x`}></div>
-                <span className="text-xs font-medium text-slate-200">Edge CDN</span>
+                <span className="text-xs font-medium text-slate-900">Edge CDN</span>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider">{healthStatus.cdn?.colo || 'Global'}</span>
@@ -579,7 +579,7 @@ export default function LoginPage() {
               </div>
             )}
             {errorMsg && (
-              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-400 text-sm">
+              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-600 text-sm">
                 <AlertCircle className="w-4 h-4" />
                 {errorMsg}
               </div>
@@ -590,7 +590,7 @@ export default function LoginPage() {
               </label>
               <div className="mt-2 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" />
+                  <Mail className="h-5 w-5 text-slate-500" />
                 </div>
                 <input
                   id="email"
@@ -611,7 +611,7 @@ export default function LoginPage() {
               </label>
               <div className="mt-2 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
+                  <Lock className="h-5 w-5 text-slate-500" />
                 </div>
                 <input
                   id="password"

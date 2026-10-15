@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -105,33 +105,33 @@ export default function ServerStatusWidget() {
   }, []);
 
   const statusColor: Record<InfraStatus, string> = {
-    ONLINE:   'text-emerald-400',
-    DEGRADED: 'text-amber-400',
-    OFFLINE:  'text-red-500',
+    ONLINE:   'text-emerald-600',
+    DEGRADED: 'text-amber-600',
+    OFFLINE:  'text-red-600',
     CHECKING: 'text-slate-500',
   };
   const dotColor: Record<InfraStatus, string> = {
     ONLINE:   'bg-emerald-500',
-    DEGRADED: 'bg-amber-400',
+    DEGRADED: 'bg-amber-500',
     OFFLINE:  'bg-red-500',
     CHECKING: 'bg-slate-500',
   };
 
   return (
-    <div className="hidden lg:flex items-center bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-lg shadow-inner overflow-hidden font-mono text-[9px] uppercase tracking-[0.2em] divide-x divide-slate-700/60 cursor-crosshair">
+    <div className="hidden lg:flex items-center bg-white/90 backdrop-blur-xl border border-slate-200 rounded-lg shadow-inner overflow-hidden font-mono text-[9px] uppercase tracking-[0.2em] divide-x divide-slate-200 cursor-crosshair">
 
       {/* ── WEBSITE ONLINE/OFFLINE STATUS ── */}
-      <div className={`flex items-center gap-2 px-3 py-1.5 transition-colors ${isOnline ? 'bg-slate-800/80' : 'bg-red-950/60'}`}>
+      <div className={`flex items-center gap-2 px-3 py-1.5 transition-colors ${isOnline ? 'bg-slate-50' : 'bg-red-50'}`}>
         <div className="relative flex items-center justify-center w-2 h-2">
           <div className={`absolute inset-0 ${isOnline ? 'bg-emerald-500' : 'bg-red-500'} rounded-full ${isOnline ? 'animate-ping' : ''} opacity-75`}></div>
           <div className={`relative ${isOnline ? 'bg-emerald-500' : 'bg-red-500'} w-1 h-1 rounded-full`}></div>
         </div>
         {isOnline
-          ? <Wifi className="w-3 h-3 text-emerald-500" />
-          : <WifiOff className="w-3 h-3 text-red-500" />
+          ? <Wifi className="w-3 h-3 text-emerald-600" />
+          : <WifiOff className="w-3 h-3 text-red-600" />
         }
-        <span className="font-bold text-slate-300">
-          NET: <span className={isOnline ? 'text-emerald-400' : 'text-red-400'}>{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+        <span className="font-bold text-slate-600">
+          NET: <span className={isOnline ? 'text-emerald-600' : 'text-red-600'}>{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
         </span>
         {isOnline && networkType && (
           <span className="text-cyan-600 font-black">{networkType}</span>
@@ -140,9 +140,9 @@ export default function ServerStatusWidget() {
 
       {/* ── SERVER INFRASTRUCTURE NODES ── */}
       {infraNodes.map((node) => (
-        <div key={node.label} className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 group">
-          <Radio className="w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-colors" />
-          <span className="font-black text-slate-500 group-hover:text-slate-300 transition-colors">{node.label}</span>
+        <div key={node.label} className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 group">
+          <Radio className="w-3 h-3 text-slate-600 group-hover:text-slate-700 transition-colors" />
+          <span className="font-black text-slate-500 group-hover:text-slate-800 transition-colors">{node.label}</span>
           <div className="relative flex items-center justify-center w-1.5 h-1.5">
             {node.status === 'ONLINE' && <div className={`absolute inset-0 ${dotColor[node.status]} rounded-full animate-ping opacity-50`}></div>}
             <div className={`relative ${dotColor[node.status]} w-1.5 h-1.5 rounded-full`}></div>
@@ -157,16 +157,16 @@ export default function ServerStatusWidget() {
       ))}
 
       {/* ── BROWSER PERFORMANCE API (DOM LOAD, measured) ── */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 group bg-slate-800/40">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 group bg-slate-50">
         <Zap className="w-3 h-3 text-fuchsia-500 group-hover:text-fuchsia-400 transition-colors" />
-        <span className="font-black text-slate-500 group-hover:text-slate-300 transition-colors">DOM_LOAD:</span>
+        <span className="font-black text-slate-500 group-hover:text-slate-800 transition-colors">DOM_LOAD:</span>
         <span className="text-fuchsia-500 font-bold tracking-tighter drop-shadow-md group-hover:text-fuchsia-400">{loadTime}ms</span>
       </div>
 
       {/* ── STATUS PAGE LINK ── */}
       <Link
         href="/status"
-        className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-800/60 transition-all cursor-pointer"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-emerald-600 hover:bg-slate-100 transition-all cursor-pointer"
         title="View System Status Page"
       >
         <ExternalLink className="w-3 h-3" />

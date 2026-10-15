@@ -230,14 +230,14 @@ export default function AdminInvitesPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#020817] flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020817] text-white font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
       {idle.warning && (
         <IdleTimeoutModal
           remainingMs={idle.remainingMs}
@@ -245,16 +245,16 @@ export default function AdminInvitesPage() {
           onTerminate={idle.terminateNow}
         />
       )}
-      <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
+      <nav className="border-b border-slate-200 bg-white backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-4">
               <NetampsLogo />
-              <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+              <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
                 Invite Console
               </span>
             </div>
-            <Link href="/dashboard" className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+            <Link href="/dashboard" className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors">
               <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </Link>
           </div>
@@ -263,20 +263,20 @@ export default function AdminInvitesPage() {
 
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
         {!isAdmin && (
-          <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 text-sm text-amber-300">
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-700">
             View-only: invite actions require an admin session. The server enforces this regardless of what this page shows.
           </div>
         )}
         {errorMsg && (
-          <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-4 text-sm text-red-300">{errorMsg}</div>
+          <div className="bg-red-50 border border-red-300 rounded-xl p-4 text-sm text-red-700">{errorMsg}</div>
         )}
         {notice && (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-sm text-emerald-300">{notice}</div>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700">{notice}</div>
         )}
 
-        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-            <UserPlus className="w-5 h-5 text-indigo-400" /> Invite a staff member
+        <div className="bg-white border border-slate-200 p-6 rounded-2xl">
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-4">
+            <UserPlus className="w-5 h-5 text-indigo-600" /> Invite a staff member
           </h3>
           <form onSubmit={createInvite} className="flex flex-col sm:flex-row gap-3">
             <input
@@ -285,13 +285,13 @@ export default function AdminInvitesPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="colleague@netamps.com"
-              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="flex-1 bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as 'staff' | 'admin')}
               aria-label="Invited role"
-              className="bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+              className="bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500"
             >
               <option value="staff">staff</option>
               <option value="admin">admin (needs 2nd approval)</option>
@@ -311,23 +311,23 @@ export default function AdminInvitesPage() {
             onClick={dedupeInvite}
             disabled={!isAdmin || !email.trim() || actingId === 'dedupe'}
             title="Revoke older live invitations for the address above, keeping the newest"
-            className="mt-2 text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
+            className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50"
           >
             {actingId === 'dedupe' ? 'Pruning…' : 'Prune duplicate invitations for this mailbox'}
           </button>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-          <div className="p-6 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-indigo-400" /> Invitations ({invites.length})
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="p-6 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-indigo-600" /> Invitations ({invites.length})
             </h3>
             <div className="flex items-center gap-2">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 aria-label="Filter by lifecycle state"
-                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
               >
                 <option value="">Active (pending + approved)</option>
                 <option value="all">All states</option>
@@ -337,7 +337,7 @@ export default function AdminInvitesPage() {
                 <option value="expired">Expired</option>
                 <option value="revoked">Revoked</option>
               </select>
-              <button onClick={() => fetchInvites()} disabled={loading} aria-label="Refresh invitations" className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50">
+              <button onClick={() => fetchInvites()} disabled={loading} aria-label="Refresh invitations" className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
@@ -349,7 +349,7 @@ export default function AdminInvitesPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm min-w-[760px]">
-                <thead className="bg-slate-800/50 text-slate-300">
+                <thead className="bg-slate-50 text-slate-700">
                   <tr>
                     <th className="px-4 py-3 font-medium">Email</th>
                     <th className="px-4 py-3 font-medium">Role</th>
@@ -359,26 +359,26 @@ export default function AdminInvitesPage() {
                     <th className="px-4 py-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-slate-200">
                   {invites.map((inv) => {
                     const life = lifecycleOf(inv);
                     const actionable = inv.status === 'pending-second' || inv.status === 'approved';
                     return (
-                    <tr key={inv.id} className="hover:bg-slate-800/50">
-                      <td className="px-4 py-3 text-slate-200">{inv.email}</td>
+                    <tr key={inv.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-slate-900">{inv.email}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${inv.role === 'admin' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'}`}>
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${inv.role === 'admin' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>
                           {inv.role}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="flex items-center gap-2 text-xs font-bold text-slate-200">
+                        <span className="flex items-center gap-2 text-xs font-bold text-slate-900">
                           <span className={`w-2 h-2 rounded-full shrink-0 ${life.dot}`} aria-hidden />
                           {life.label}
                         </span>
                         {life.sub && <span className="block text-[11px] text-slate-500 font-mono mt-0.5 ml-4">{life.sub}</span>}
                       </td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">
+                      <td className="px-4 py-3 text-slate-500 text-xs">
                         <div>{inv.invited_by}</div>
                         {inv.approved_by && (
                           <div className="text-[10px] text-slate-500 mt-0.5" title={inv.approved_by}>
@@ -413,7 +413,7 @@ export default function AdminInvitesPage() {
                           <button
                             onClick={() => actOnInvite(inv.id, 'revoke')}
                             disabled={!isAdmin || actingId === inv.id}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors disabled:opacity-50"
                           >
                             <XCircle className="w-3.5 h-3.5" /> Revoke
                           </button>

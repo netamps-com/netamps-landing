@@ -30,11 +30,11 @@ export default function AdSenseBlock({
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
       viewport={{ once: true }}
-      className={`w-full bg-slate-900/40 border border-slate-800/60 rounded-lg overflow-hidden relative group ${className}`}
+      className={`w-full bg-slate-50 border border-slate-200 rounded-lg overflow-hidden relative group ${className}`}
     >
-      <div className="absolute top-0 right-0 bg-slate-800/80 backdrop-blur-md px-2 py-0.5 rounded-bl-lg border-b border-l border-slate-700/50 z-10 flex items-center gap-1.5">
-        <Megaphone className="w-3 h-3 text-slate-400" />
-        <span className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Advertisement</span>
+      <div className="absolute top-0 right-0 bg-slate-200 backdrop-blur-md px-2 py-0.5 rounded-bl-lg border-b border-l border-slate-300 z-10 flex items-center gap-1.5">
+        <Megaphone className="w-3 h-3 text-slate-600" />
+        <span className="text-[9px] uppercase tracking-widest text-slate-600 font-bold">Advertisement</span>
       </div>
       
       <div className="p-4 flex items-center justify-center min-h-[120px]">

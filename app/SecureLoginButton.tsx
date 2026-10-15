@@ -43,13 +43,13 @@ export default function SecureLoginButton() {
           isOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-2'
         }`}
       >
-        <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden p-2 flex flex-col gap-1 backdrop-blur-xl">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden p-2 flex flex-col gap-1 backdrop-blur-xl">
           <a
             href="/login"
             target="_blank"
             rel="noopener noreferrer"
             role="menuitem"
-            className="flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-emerald-400 hover:bg-slate-800/60 transition-colors px-3 py-2.5 rounded-lg w-full text-left"
+            className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-emerald-600 hover:bg-slate-100 transition-colors px-3 py-2.5 rounded-lg w-full text-left"
           >
             <Shield className="w-4 h-4" />
             Netamps Connect
@@ -59,7 +59,7 @@ export default function SecureLoginButton() {
             target="_blank"
             rel="noopener noreferrer"
             role="menuitem"
-            className="flex items-center gap-2 text-sm font-semibold text-slate-300 hover:text-indigo-400 hover:bg-slate-800/60 transition-colors px-3 py-2.5 rounded-lg w-full text-left"
+            className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-100 transition-colors px-3 py-2.5 rounded-lg w-full text-left"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
             Webmail Login

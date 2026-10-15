@@ -178,7 +178,7 @@ function Lifecycle({ status, ladder }: { status: string; ladder?: LadderStep[] }
                   </span>
                 )}
               </span>
-              {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 mx-1 text-slate-300" />}
+              {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 mx-1 text-slate-400" />}
             </li>
           );
         })}

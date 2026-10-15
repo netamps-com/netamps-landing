@@ -1421,7 +1421,7 @@ export default function ReturnsPage() {
             <Lock className="w-5 h-5 text-indigo-600" />
             <span>TLS 1.3 Enforced</span>
           </div>
-          <span className="hidden sm:inline text-slate-300">|</span>
+          <span className="hidden sm:inline text-slate-400">|</span>
           <div className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-indigo-600" />
             <span>Full Audit Trail</span>

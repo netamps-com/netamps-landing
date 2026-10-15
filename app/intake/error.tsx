@@ -17,19 +17,19 @@ export default function IntakeErrorBoundary({
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-[#020817] flex items-center justify-center p-4 font-sans text-white">
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center animate-in fade-in zoom-in duration-300">
-        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-          <AlertTriangle className="w-8 h-8 text-red-500" />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-slate-900">
+      <div className="max-w-md w-full bg-white border border-slate-200 p-8 rounded-2xl shadow-2xl text-center animate-in fade-in zoom-in duration-300">
+        <div className="w-16 h-16 bg-red-50 border border-red-200 rounded-full flex items-center justify-center mx-auto mb-6">
+          <AlertTriangle className="w-8 h-8 text-red-600" />
         </div>
         
-        <h2 className="text-xl font-bold text-white mb-2">Workbench Application Error</h2>
-        <p className="text-slate-400 text-sm mb-6">
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Workbench Application Error</h2>
+        <p className="text-slate-500 text-sm mb-6">
           A client-side exception has occurred in the Intake module. Our systems have logged the failure.
         </p>
 
-        <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-left overflow-auto mb-8 max-h-32">
-          <p className="text-xs font-mono text-red-400 break-words">
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-left overflow-auto mb-8 max-h-32">
+          <p className="text-xs font-mono text-red-600 break-words">
             {error.message || 'Unknown runtime exception'}
           </p>
         </div>
@@ -44,7 +44,7 @@ export default function IntakeErrorBoundary({
           
           <Link
             href="/dashboard"
-            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" /> Return to Dashboard
           </Link>

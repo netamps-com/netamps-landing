@@ -148,7 +148,6 @@ export default function NegotiationsPage() {
 
   return (
     <DashboardShell
-      variant="light"
       sections={navSections}
       footer={{ email: session.email, role: session.role, onTerminate: session.terminate }}
     >
@@ -162,18 +161,31 @@ export default function NegotiationsPage() {
               Buyer ↔ seller price threads. Staff act for the seller; only “{ORDER_STATUS.DEAL}” closes one.
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {FILTERS.map((f) => (
-              <button key={f.key} onClick={() => setFilter(f.key)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${filter === f.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}>
-                {f.label}
-              </button>
-            ))}
-            <button onClick={() => load(filter)} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Refresh">
-              <RefreshCw className="w-4 h-4 text-slate-600" />
-            </button>
-          </div>
+          <button onClick={() => load(filter)} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Refresh">
+            <RefreshCw className="w-4 h-4 text-slate-600" />
+          </button>
         </div>
+
+        {/* These are views of one list, not four actions - so they read as tabs:
+            an underline marks the current one and the rest sit on the rule,
+            instead of a row of boxed buttons competing with the header for
+            attention. Same tab idiom /intake already uses. */}
+        <nav aria-label="Filter negotiations" className="mt-5 flex items-center gap-1 border-b border-slate-200">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              aria-current={filter === f.key ? 'true' : undefined}
+              className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-bold transition-colors ${
+                filter === f.key
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </nav>
 
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
         {notice && <p className="mt-4 text-sm text-emerald-700">{notice}</p>}
@@ -239,7 +251,7 @@ export default function NegotiationsPage() {
                               {s.at ? new Date(s.at).toLocaleString() : '—'}
                             </span>
                           </span>
-                          {i < (n.ladder || []).length - 1 && <span className="mx-1 text-slate-300 text-xs">→</span>}
+                          {i < (n.ladder || []).length - 1 && <span className="mx-1 text-slate-400 text-xs">→</span>}
                         </li>
                       );
                     })}

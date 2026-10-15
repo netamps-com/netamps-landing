@@ -14,8 +14,8 @@ const seals = [
     label: 'TLS 1.3',
     sublabel: 'Encrypted',
     icon: ShieldCheck,
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/20',
+    color: 'text-emerald-600',
+    bg: 'bg-emerald-50',
     ping: 'bg-emerald-500',
   },
   {
@@ -30,16 +30,16 @@ const seals = [
     label: 'Scanned',
     sublabel: 'Uploads',
     icon: Lock,
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/20',
+    color: 'text-amber-600',
+    bg: 'bg-amber-50',
     ping: 'bg-amber-500',
   },
   {
     label: 'Audit',
     sublabel: 'Trail',
     icon: Award,
-    color: 'text-indigo-400',
-    bg: 'bg-indigo-500/20',
+    color: 'text-indigo-600',
+    bg: 'bg-indigo-50',
     ping: 'bg-indigo-500',
   },
 ] as const;
@@ -86,14 +86,14 @@ export default function TrustSeal() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ delay: i * 0.05, duration: 0.2 }}
-                className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-slate-700/40 p-1.5 pr-3 rounded-full shadow-lg"
+                className="flex items-center gap-2 bg-white/90 backdrop-blur-md border border-slate-200 p-1.5 pr-3 rounded-full shadow-lg"
               >
                 <div className={`${seal.bg} p-1.5 rounded-full relative`}>
                   <seal.icon className={`w-3 h-3 ${seal.color} relative z-10`} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-tight">{seal.sublabel}</span>
-                  <span className="text-[10px] font-bold text-white leading-tight">{seal.label}</span>
+                  <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-tight">{seal.sublabel}</span>
+                  <span className="text-[10px] font-bold text-slate-900 leading-tight">{seal.label}</span>
                 </div>
               </motion.div>
             ))}
@@ -102,14 +102,14 @@ export default function TrustSeal() {
       </AnimatePresence>
 
       {/* Collapsed main badge */}
-      <div className="flex items-center gap-2 bg-slate-900/60 backdrop-blur-sm border border-slate-700/30 p-1.5 pr-3 rounded-full shadow-lg hover:bg-slate-800 transition-colors">
-        <div className="bg-emerald-500/20 p-1.5 rounded-full relative">
+      <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-slate-200 p-1.5 pr-3 rounded-full shadow-lg hover:bg-slate-50 transition-colors">
+        <div className="bg-emerald-50 p-1.5 rounded-full relative">
           <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-20"></div>
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 relative z-10" />
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 relative z-10" />
         </div>
         <div className="flex flex-col">
-          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-tight">TLS 1.3 · Secured</span>
-          <span className="text-[10px] font-bold text-white flex items-center gap-1 leading-tight"><Lock className="w-2 h-2" /> TLS Encrypted</span>
+          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-tight">TLS 1.3 · Secured</span>
+          <span className="text-[10px] font-bold text-slate-900 flex items-center gap-1 leading-tight"><Lock className="w-2 h-2" /> TLS Encrypted</span>
         </div>
       </div>
     </motion.div>

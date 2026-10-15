@@ -1413,14 +1413,14 @@ export default function IntakeWorkbench() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#020817] flex items-center justify-center text-indigo-500">
-        <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-indigo-500">
+        <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020817] text-white font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
       {idle.warning && (
         <IdleTimeoutModal
           remainingMs={idle.remainingMs}
@@ -1429,40 +1429,40 @@ export default function IntakeWorkbench() {
         />
       )}
       {/* Navbar */}
-      <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
+      <nav className="border-b border-slate-200 bg-white backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-4">
               <NetampsLogo />
-              <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+              <span className="bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
                 Intake Workbench
               </span>
             </div>
-            <Link href="/dashboard" className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+            <Link href="/dashboard" className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors">
               <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </Link>
           </div>
         </div>
       </nav>
 
-      <div className="border-b border-slate-800 bg-slate-900/30">
+      <div className="border-b border-slate-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8">
             <button 
               onClick={() => setActiveTab('manual')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'manual' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'manual' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
               <FileSpreadsheet className="w-4 h-4" /> Intake (Manual)
             </button>
             <button 
               onClick={() => setActiveTab('auto')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'auto' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'auto' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
               <Activity className="w-4 h-4" /> Auto-Ingest Monitor
             </button>
             <button 
               onClick={() => setActiveTab('matching')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'matching' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${activeTab === 'matching' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
               <ListChecks className="w-4 h-4" /> Stock Match Overview
             </button>
@@ -1473,7 +1473,7 @@ export default function IntakeWorkbench() {
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {/* General error banner */}
         {errorMsg && activeTab === 'manual' && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-center gap-3 text-red-400 text-sm">
+          <div className="mb-6 bg-red-50 border border-red-300 rounded-lg p-4 flex items-center gap-3 text-red-600 text-sm">
             <AlertTriangle className="w-5 h-5 shrink-0" />
             <p>{errorMsg}</p>
           </div>
@@ -1481,18 +1481,18 @@ export default function IntakeWorkbench() {
 
         {/* ── INSUFFICIENT schema rejection panel (inline, not alert()) ── */}
         {validationResult && validationResult.tier === 'insufficient' && activeTab === 'manual' && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/40 rounded-2xl p-6 space-y-4">
+          <div className="mb-6 bg-red-50 border border-red-300 rounded-2xl p-6 space-y-4">
             <div className="flex items-start gap-3">
-              <XCircle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+              <XCircle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-base font-bold text-red-300">Could not be processed</h3>
-                <p className="text-sm text-red-400/80 mt-1">
+                <h3 className="text-base font-bold text-red-700">Could not be processed</h3>
+                <p className="text-sm text-red-600/80 mt-1">
                   {validationResult.totalRows === 0
                     ? <>No data rows found{validationResult.missing.length > 0 && (<> — missing {validationResult.missing.map(missingLabel).join(', ')}</>)}. Upload a file with a header row plus at least one data row.</>
                     : <>Missing {validationResult.missing.map(missingLabel).join(', ')} — found {REQUIRED_SCHEMA_KEYS.length - validationResult.missing.length} of {REQUIRED_SCHEMA_KEYS.length} required columns.</>}
                 </p>
                 {validationResult.duplicateHeaders.length > 0 && (
-                  <p className="text-sm text-red-400/80 mt-1">
+                  <p className="text-sm text-red-600/80 mt-1">
                     Duplicate headers: &quot;{validationResult.duplicateHeaders.join('", "')}&quot; — each column must be unique.
                   </p>
                 )}
@@ -1506,13 +1506,13 @@ export default function IntakeWorkbench() {
               </div>
             </div>
 
-            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4">
-              <h4 className="text-xs font-bold text-red-300/70 uppercase tracking-wider mb-3">Required Columns</h4>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <h4 className="text-xs font-bold text-red-700/70 uppercase tracking-wider mb-3">Required Columns</h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {SCHEMA_FIELDS.filter(f => f.required).map(f => {
                   const isMissing = validationResult.missing.includes(f.key);
                   return (
-                    <div key={f.key} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${isMissing ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'}`}>
+                    <div key={f.key} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${isMissing ? 'border-red-200 bg-red-50 text-red-600' : 'border-emerald-200 bg-emerald-50 text-emerald-600'}`}>
                       {isMissing ? <XCircle className="w-3.5 h-3.5 shrink-0" /> : <CheckCircle className="w-3.5 h-3.5 shrink-0" />}
                       <span className="font-medium">{f.label}</span>
                     </div>
@@ -1536,20 +1536,20 @@ export default function IntakeWorkbench() {
 
         {/* ── Tracking-ID review notice (A4: held for manual review, not auto-committed) ── */}
         {trackingNotice && activeTab === 'manual' && step !== 1 && (
-          <div className="mb-6 bg-indigo-500/10 border border-indigo-500/40 rounded-2xl p-5 flex items-start gap-3">
-            <FileSpreadsheet className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-            <p className="text-sm text-indigo-300">{trackingNotice}</p>
+          <div className="mb-6 bg-indigo-50 border border-indigo-300 rounded-2xl p-5 flex items-start gap-3">
+            <FileSpreadsheet className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+            <p className="text-sm text-indigo-700">{trackingNotice}</p>
           </div>
         )}
 
         {/* ── PARTIAL schema info banner ── */}
         {validationResult && validationResult.tier === 'partial' && step === 2 && activeTab === 'manual' && (
-          <div className="mb-6 bg-amber-500/10 border border-amber-500/40 rounded-2xl p-5 space-y-3">
+          <div className="mb-6 bg-amber-50 border border-amber-300 rounded-2xl p-5 space-y-3">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-sm font-bold text-amber-300">Partial schema match — review mapping below</h3>
-                <p className="text-xs text-amber-400/70 mt-1">
+                <h3 className="text-sm font-bold text-amber-700">Partial schema match — review mapping below</h3>
+                <p className="text-xs text-amber-600/70 mt-1">
                   Missing columns will default: {validationResult.missing.map(missingLabel).join(', ')}. 
                   {Object.keys(validationResult.fuzzyMappings).length > 0 && (
                     <> Fuzzy-matched (review): {Object.keys(validationResult.fuzzyMappings).map(missingLabel).join(', ')}.</>
@@ -1558,8 +1558,8 @@ export default function IntakeWorkbench() {
               </div>
             </div>
             {validationResult.totalFailedRows > 0 && (
-              <details className="text-xs text-amber-400/60">
-                <summary className="cursor-pointer font-bold text-amber-300/80">{validationResult.totalFailedRows} invalid row(s) — all {validationResult.totalRows} rows checked</summary>
+              <details className="text-xs text-amber-600/60">
+                <summary className="cursor-pointer font-bold text-amber-700/80">{validationResult.totalFailedRows} invalid row(s) — all {validationResult.totalRows} rows checked</summary>
                 <ul className="mt-2 space-y-1 pl-4 list-disc">
                   {validationResult.rowErrors.slice(0, 10).map((re, i) => (
                     <li key={i}>Row {re.rowIndex}: {re.reasons.join('; ')}</li>
@@ -1573,9 +1573,9 @@ export default function IntakeWorkbench() {
 
         {/* ── ALL tier info banner (row-level issues only, if any) ── */}
         {validationResult && validationResult.tier === 'all' && step === 3 && activeTab === 'manual' && validationResult.totalFailedRows > 0 && (
-          <div className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
-            <details className="text-xs text-amber-400/70">
-              <summary className="cursor-pointer font-bold text-amber-300 text-sm">{validationResult.totalFailedRows} invalid row(s) detected (all {validationResult.totalRows} rows checked)</summary>
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <details className="text-xs text-amber-600/70">
+              <summary className="cursor-pointer font-bold text-amber-700 text-sm">{validationResult.totalFailedRows} invalid row(s) detected (all {validationResult.totalRows} rows checked)</summary>
               <ul className="mt-2 space-y-1 pl-4 list-disc">
                 {validationResult.rowErrors.slice(0, 15).map((re, i) => (
                   <li key={i}>Row {re.rowIndex}: {re.reasons.join('; ')}</li>
@@ -1588,9 +1588,9 @@ export default function IntakeWorkbench() {
 
         {/* ── Duplicate-file notice (byte-identical to an already-committed job) ── */}
         {dupNotice && !dupAck && activeTab === 'manual' && step !== 1 && (
-          <div className="mb-6 bg-amber-500/10 border border-amber-500/40 rounded-2xl p-5 flex flex-wrap items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-            <p className="text-sm text-amber-300 flex-1 min-w-[200px]">
+          <div className="mb-6 bg-amber-50 border border-amber-300 rounded-2xl p-5 flex flex-wrap items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <p className="text-sm text-amber-700 flex-1 min-w-[200px]">
               This exact file was already processed as job <span className="font-mono">{dupNotice.jobId}</span> ({dupNotice.requestIds.length} request(s): {dupNotice.requestIds.slice(0, 3).join(', ')}{dupNotice.requestIds.length > 3 ? '…' : ''}). Committing again will duplicate every request.
             </p>
             <button
@@ -1606,18 +1606,18 @@ export default function IntakeWorkbench() {
         {activeTab === 'manual' && (
           <div className="animate-in fade-in duration-300">
             <div className="flex items-center gap-4 mb-8">
-              <div className={`flex items-center gap-2 ${step >= 1 ? 'text-indigo-400' : 'text-slate-600'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 1 ? 'bg-indigo-500/20 border border-indigo-500' : 'bg-slate-800 border border-slate-700'}`}>1</div>
+              <div className={`flex items-center gap-2 ${step >= 1 ? 'text-indigo-600' : 'text-slate-600'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 1 ? 'bg-indigo-100 border border-indigo-500' : 'bg-white border border-slate-300'}`}>1</div>
                 <span className="font-medium hidden sm:inline">Raw Import</span>
               </div>
-              <div className={`h-px w-12 ${step >= 2 ? 'bg-indigo-500/50' : 'bg-slate-800'}`}></div>
-              <div className={`flex items-center gap-2 ${step >= 2 ? 'text-indigo-400' : 'text-slate-600'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 2 ? 'bg-indigo-500/20 border border-indigo-500' : 'bg-slate-800 border border-slate-700'}`}>2</div>
+              <div className={`h-px w-12 ${step >= 2 ? 'bg-indigo-500/50' : 'bg-slate-200'}`}></div>
+              <div className={`flex items-center gap-2 ${step >= 2 ? 'text-indigo-600' : 'text-slate-600'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 2 ? 'bg-indigo-100 border border-indigo-500' : 'bg-white border border-slate-300'}`}>2</div>
                 <span className="font-medium hidden sm:inline">Schema Map</span>
               </div>
-              <div className={`h-px w-12 ${step >= 3 ? 'bg-indigo-500/50' : 'bg-slate-800'}`}></div>
-              <div className={`flex items-center gap-2 ${step >= 3 ? 'text-indigo-400' : 'text-slate-600'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 3 ? 'bg-indigo-500/20 border border-indigo-500' : 'bg-slate-800 border border-slate-700'}`}>3</div>
+              <div className={`h-px w-12 ${step >= 3 ? 'bg-indigo-500/50' : 'bg-slate-200'}`}></div>
+              <div className={`flex items-center gap-2 ${step >= 3 ? 'text-indigo-600' : 'text-slate-600'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 3 ? 'bg-indigo-100 border border-indigo-500' : 'bg-white border border-slate-300'}`}>3</div>
                 <span className="font-medium hidden sm:inline">Preview & Commit</span>
               </div>
             </div>
@@ -1627,11 +1627,11 @@ export default function IntakeWorkbench() {
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleFileDrop}
-                className={`border-2 border-dashed rounded-2xl p-16 flex flex-col items-center justify-center text-center transition-colors ${dragging ? 'border-indigo-400 bg-indigo-500/10' : 'border-slate-700 bg-slate-900/50 hover:border-indigo-500 hover:bg-slate-800/50'}`}
+                className={`border-2 border-dashed rounded-2xl p-16 flex flex-col items-center justify-center text-center transition-colors ${dragging ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300 bg-white hover:border-indigo-500 hover:bg-slate-100'}`}
               >
                 <Database className="w-16 h-16 text-slate-500 mb-6" />
-                <h2 className="text-2xl font-bold text-white mb-2">Import Business Data</h2>
-                <p className="text-slate-400 mb-8 max-w-md">Drop CSV, JSON, or XLSX files here, or browse. Files with a &quot;Tracking ID&quot; column auto-commit only when fully valid — anything else stays here for review.</p>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Import Business Data</h2>
+                <p className="text-slate-500 mb-8 max-w-md">Drop CSV, JSON, or XLSX files here, or browse. Files with a &quot;Tracking ID&quot; column auto-commit only when fully valid — anything else stays here for review.</p>
                 <label className="relative cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2">
                   <UploadCloud className="w-5 h-5" /> Browse Files
                   <input type="file" className="hidden" accept=".csv,.json,.xlsx" onChange={handleFileUpload} />
@@ -1641,7 +1641,7 @@ export default function IntakeWorkbench() {
                     <Turnstile
                       key={upKey}
                       siteKey={uploadSiteKey}
-                      options={{ theme: 'dark', action: 'intake-upload' }}
+                      options={{ theme: 'light', action: 'intake-upload' }}
                       onSuccess={(token) => setUpToken(token)}
                       onExpire={() => setUpToken('')}
                       onError={() => setUpToken('')}
@@ -1650,11 +1650,11 @@ export default function IntakeWorkbench() {
                 )}
                 {parseProgress && (
                   <div className="mt-4 w-full max-w-md">
-                    <div className="flex justify-between text-[11px] text-slate-400 mb-1.5">
+                    <div className="flex justify-between text-[11px] text-slate-500 mb-1.5">
                       <span>{parseProgress.phase}</span>
                       {parseProgress.total > 0 && <span className="font-mono">{parseProgress.done.toLocaleString()} / {parseProgress.total.toLocaleString()}</span>}
                     </div>
-                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
                       {parseProgress.total > 0 ? (
                         <div className="h-full bg-indigo-500 transition-all" style={{ width: `${Math.round((parseProgress.done / parseProgress.total) * 100)}%` }} />
                       ) : (
@@ -1671,9 +1671,9 @@ export default function IntakeWorkbench() {
             )}
 
             {/* R2-backed server parse: preview staged files without downloading them */}
-            <div className="mt-6 bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Database className="w-4 h-4 text-indigo-400" /> Parse from storage (R2)
+            <div className="mt-6 bg-white border border-slate-200 rounded-2xl p-6">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Database className="w-4 h-4 text-indigo-600" /> Parse from storage (R2)
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 Parses the bytes storage holds — same guards as the browser path. Preview only; ingestion still runs locally.
@@ -1685,22 +1685,22 @@ export default function IntakeWorkbench() {
                   onChange={(e) => setStoredScope(e.target.value)}
                   placeholder="Request scope (sid from the returns URL)"
                   aria-label="Request scope for stored files"
-                  className="flex-1 min-w-[220px] px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="flex-1 min-w-[220px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
                 <button
                   onClick={listStoredFiles}
                   disabled={storedBusy}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
                 >
                   {storedBusy ? 'Listing…' : 'List files'}
                 </button>
               </div>
-              {storedMsg && <p className="mt-2 text-xs text-amber-300">{storedMsg}</p>}
+              {storedMsg && <p className="mt-2 text-xs text-amber-700">{storedMsg}</p>}
               {storedFiles.length > 0 && (
                 <ul className="mt-3 space-y-1.5">
                   {storedFiles.map((f) => (
-                    <li key={f.key} className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-lg text-xs">
-                      <span className="font-mono text-slate-400 truncate" title={f.key}>
+                    <li key={f.key} className="flex items-center justify-between gap-3 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs">
+                      <span className="font-mono text-slate-500 truncate" title={f.key}>
                         {f.key.split('/').pop()}
                         <span className="text-slate-600"> · {f.ext.toUpperCase()}{typeof f.size === 'number' ? ` · ${(f.size / 1024).toFixed(1)} KB` : ''}</span>
                       </span>
@@ -1716,8 +1716,8 @@ export default function IntakeWorkbench() {
                 </ul>
               )}
               {storedPreview && (
-                <div className="mt-3 p-3 bg-slate-950/60 border border-slate-800 rounded-lg text-xs">
-                  <div className="text-slate-300 font-bold">
+                <div className="mt-3 p-3 bg-white border border-slate-200 rounded-lg text-xs">
+                  <div className="text-slate-700 font-bold">
                     {storedPreview.totalRows} row{storedPreview.totalRows === 1 ? '' : 's'} × {storedPreview.cols.length} columns
                     {storedPreview.sheetName && <> · sheet &quot;{storedPreview.sheetName}&quot;</>}
                     {storedPreview.delimiter && <> · delimiter &quot;{storedPreview.delimiter}&quot;</>}
@@ -1725,7 +1725,7 @@ export default function IntakeWorkbench() {
                   </div>
                   <div className="mt-1 font-mono text-slate-500 truncate">{storedPreview.cols.join(' · ')}</div>
                   {storedPreview.rows.slice(0, 5).map((row: any, i: number) => (
-                    <div key={i} className="mt-1 font-mono text-slate-400 truncate">
+                    <div key={i} className="mt-1 font-mono text-slate-500 truncate">
                       {storedPreview.cols.map((c: string) => String(row[c] ?? '')).join(' | ')}
                     </div>
                   ))}
@@ -1735,9 +1735,9 @@ export default function IntakeWorkbench() {
 
             {step === 2 && (
               <div className="space-y-6">
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-                  <h3 className="text-lg font-bold text-white mb-4">Map Columns to Target Schema</h3>
-                  <p className="text-sm text-slate-400 mb-6">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Map Columns to Target Schema</h3>
+                  <p className="text-sm text-slate-500 mb-6">
                     Found {parsedData.length} records
                     {validationResult?.sheetName && <> from sheet &quot;{validationResult.sheetName}&quot;</>}
                     {validationResult?.delimiter === ';' && <> (semicolon-delimited)</>}
@@ -1746,19 +1746,19 @@ export default function IntakeWorkbench() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {targetSchema.map(schema => (
-                      <div key={schema.key} className="flex items-center gap-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                      <div key={schema.key} className="flex items-center gap-4 bg-white p-4 rounded-xl border border-slate-300">
                         <div className="w-1/2">
-                          <div className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                          <div className="text-sm font-bold text-slate-700 flex items-center gap-2">
                             {schema.label}
                             {validationResult?.fuzzyMappings[schema.key] && (
-                              <span className="text-[10px] font-mono bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">~fuzzy</span>
+                              <span className="text-[10px] font-mono bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">~fuzzy</span>
                             )}
                           </div>
-                          {schema.required && <div className="text-[10px] text-emerald-400 uppercase tracking-wider">Required</div>}
+                          {schema.required && <div className="text-[10px] text-emerald-600 uppercase tracking-wider">Required</div>}
                         </div>
                         <div className="w-1/2">
                           <select
-                            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                            className="w-full bg-white border border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
                             value={mapping[schema.key] || ''}
                             onChange={(e) => setMapping({ ...mapping, [schema.key]: e.target.value })}
                           >
@@ -1773,7 +1773,7 @@ export default function IntakeWorkbench() {
                   </div>
                   
                   <div className="mt-8 flex justify-end gap-3">
-                    <button onClick={() => { setStep(1); setValidationResult(null); }} className="px-6 py-2 rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors">
+                    <button onClick={() => { setStep(1); setValidationResult(null); }} className="px-6 py-2 rounded-lg text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors">
                       Back
                     </button>
                     <button onClick={() => generatePreview()} className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors flex items-center gap-2">
@@ -1782,20 +1782,20 @@ export default function IntakeWorkbench() {
                   </div>
                 </div>
                 
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                     <FileSpreadsheet className="w-5 h-5" /> Raw Data Preview
                   </h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-400">
-                      <thead className="text-xs uppercase bg-slate-800 text-slate-300">
+                    <table className="w-full text-left text-sm text-slate-500">
+                      <thead className="text-xs uppercase bg-white text-slate-700">
                         <tr>
                           {columns.slice(0, 10).map((col, i) => <th key={i} className="px-4 py-3">{col}</th>)}
                         </tr>
                       </thead>
                       <tbody>
                         {parsedData.slice(0, 3).map((row, idx) => (
-                          <tr key={idx} className="border-b border-slate-800">
+                          <tr key={idx} className="border-b border-slate-200">
                             {columns.slice(0, 10).map((col, i) => <td key={i} className="px-4 py-3">{row[col]}</td>)}
                           </tr>
                         ))}
@@ -1808,16 +1808,16 @@ export default function IntakeWorkbench() {
 
             {step === 3 && (
               <div className="space-y-6">
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl">
                   <div className="flex justify-between items-center mb-6">
                     <div>
-                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <FileJson className="w-5 h-5 text-indigo-400" /> Export Payload Preview
+                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <FileJson className="w-5 h-5 text-indigo-600" /> Export Payload Preview
                       </h3>
-                      <p className="text-sm text-slate-400">Generated {previewData.length} structured records ready for the backend.</p>
+                      <p className="text-sm text-slate-500">Generated {previewData.length} structured records ready for the backend.</p>
                     </div>
                     <div className="flex gap-3">
-                      <button onClick={() => setStep(2)} className="px-4 py-2 rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors text-sm">
+                      <button onClick={() => setStep(2)} className="px-4 py-2 rounded-lg text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors text-sm">
                         Edit Mapping
                       </button>
                       <button 
@@ -1833,8 +1833,8 @@ export default function IntakeWorkbench() {
 
                   {/* Commit scope: invalid rows are excluded by default; including them needs explicit inline confirmation */}
                   {validationResult && validationResult.totalFailedRows > 0 && (
-                    <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
-                      <label className="flex items-center gap-2 text-xs text-amber-200 font-medium cursor-pointer">
+                    <div className="mb-4 flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                      <label className="flex items-center gap-2 text-xs text-amber-700 font-medium cursor-pointer">
                         <input
                           type="checkbox"
                           checked={excludeInvalidRows}
@@ -1845,20 +1845,20 @@ export default function IntakeWorkbench() {
                       </label>
                       <button
                         onClick={() => generatePreview()}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
                       >
                         Rebuild preview
                       </button>
                       {!excludeInvalidRows && (
-                        <span className="text-[11px] text-red-300">Including invalid rows will ask for confirmation at commit.</span>
+                        <span className="text-[11px] text-red-700">Including invalid rows will ask for confirmation at commit.</span>
                       )}
                     </div>
                   )}
                   {/* Inline override confirmation (no blocking dialogs) */}
                   {overrideNeeded && !overrideAck && (
-                    <div className="mb-4 flex flex-wrap items-center gap-3 bg-red-500/10 border border-red-500/40 rounded-xl px-4 py-3">
-                      <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                      <p className="text-xs text-red-300 flex-1 min-w-[200px]">
+                    <div className="mb-4 flex flex-wrap items-center gap-3 bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+                      <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                      <p className="text-xs text-red-700 flex-1 min-w-[200px]">
                         {validationResult?.totalFailedRows} invalid row(s) will be committed as quantity-0 lines and the server will refuse them per item. This is recorded, not recommended.
                       </p>
                       <button
@@ -1869,23 +1869,23 @@ export default function IntakeWorkbench() {
                       </button>
                       <button
                         onClick={() => { setOverrideNeeded(false); setExcludeInvalidRows(true); generatePreview(true); }}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
                       >
                         Keep valid-only
                       </button>
                     </div>
                   )}
 
-                  <div className="bg-[#0f111a] border border-slate-800 rounded-xl p-4 overflow-auto max-h-96">
-                    <pre className="text-xs text-indigo-300 font-mono">
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 overflow-auto max-h-96">
+                    <pre className="text-xs text-indigo-700 font-mono">
                       {JSON.stringify(previewData, null, 2)}
                     </pre>
                   </div>
 
                   {/* Per-item commit report (A5: partial failures stated, retry offered) */}
                   {commitReport && (
-                    <div className="mt-4 border border-slate-800 rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 bg-slate-800/50 text-sm font-bold text-slate-200 flex items-center justify-between">
+                    <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                      <div className="px-4 py-3 bg-white text-sm font-bold text-slate-900 flex items-center justify-between">
                         <span>Commit report — {commitReport.okIds.length} committed, {commitReport.failed.length} failed</span>
                         {commitReport.failed.length > 0 && (
                           <button
@@ -1898,16 +1898,16 @@ export default function IntakeWorkbench() {
                         )}
                       </div>
                       {commitReport.failed.length > 0 ? (
-                        <ul className="divide-y divide-slate-800 text-xs">
+                        <ul className="divide-y divide-slate-200 text-xs">
                           {commitReport.failed.map((f) => (
                             <li key={f.id} className="px-4 py-2.5 flex items-start justify-between gap-3">
-                              <span className="font-mono text-red-300 break-all">{f.id}</span>
-                              <span className="text-red-400/80 text-right shrink-0 max-w-[60%]">{f.error}</span>
+                              <span className="font-mono text-red-700 break-all">{f.id}</span>
+                              <span className="text-red-600/80 text-right shrink-0 max-w-[60%]">{f.error}</span>
                             </li>
                           ))}
                         </ul>
                       ) : (
-                        <div className="px-4 py-3 text-xs text-emerald-400">All items committed.</div>
+                        <div className="px-4 py-3 text-xs text-emerald-600">All items committed.</div>
                       )}
                     </div>
                   )}
@@ -1920,20 +1920,20 @@ export default function IntakeWorkbench() {
         {/* Tab 2: Auto-Ingest Monitor */}
         {activeTab === 'auto' && (
           <div className="animate-in fade-in duration-300 space-y-6">
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-2">
-                <Activity className="w-5 h-5 text-indigo-400" /> Automated Tracking ID Ingestion Pipeline
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-2">
+                <Activity className="w-5 h-5 text-indigo-600" /> Automated Tracking ID Ingestion Pipeline
               </h3>
-              <p className="text-sm text-slate-400 mb-6">Background tasks initiated by structured payloads with a valid Tracking ID. Failed file validations are also captured here. Expand a job for validation, generated request IDs, chain of custody, reviewer sign-off, and request-mapped download.</p>
+              <p className="text-sm text-slate-500 mb-6">Background tasks initiated by structured payloads with a valid Tracking ID. Failed file validations are also captured here. Expand a job for validation, generated request IDs, chain of custody, reviewer sign-off, and request-mapped download.</p>
 
               {autoJobs.length === 0 ? (
-                <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-xl">
+                <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
                   <p className="text-slate-500">No automated ingestion jobs running.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
                   <table className="w-full text-left text-sm min-w-[640px]">
-                    <thead className="bg-slate-800/50 text-slate-300">
+                    <thead className="bg-white text-slate-700">
                       <tr>
                         <th className="px-4 py-3 font-medium w-8"></th>
                         <th className="px-4 py-3 font-medium">Job ID</th>
@@ -1943,29 +1943,29 @@ export default function IntakeWorkbench() {
                         <th className="px-4 py-3 font-medium text-right">Timestamp</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800 bg-slate-900">
+                    <tbody className="divide-y divide-slate-200 bg-white">
                       {autoJobs.map(job => (
                         <React.Fragment key={job.id}>
-                        <tr className="hover:bg-slate-800/50 cursor-pointer" onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}>
+                        <tr className="hover:bg-slate-100 cursor-pointer" onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}>
                           <td className="px-4 py-3 text-slate-500">
                             {expandedJobId === job.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </td>
-                          <td className="px-4 py-3 font-mono text-xs text-indigo-300">{job.id}</td>
-                          <td className="px-4 py-3 text-slate-300">
+                          <td className="px-4 py-3 font-mono text-xs text-indigo-700">{job.id}</td>
+                          <td className="px-4 py-3 text-slate-700">
                             {job.fileName}
                             {(job.requestIds || []).length > 0 && (
-                              <span className="ml-2 text-[11px] font-mono text-emerald-400">{(job.requestIds || []).length} req</span>
+                              <span className="ml-2 text-[11px] font-mono text-emerald-600">{(job.requestIds || []).length} req</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-slate-400">{job.size > 1048576 ? `${(job.size / 1048576).toFixed(1)} MB` : `${(job.size / 1024).toFixed(1)} KB`}</td>
+                          <td className="px-4 py-3 text-slate-500">{job.size > 1048576 ? `${(job.size / 1048576).toFixed(1)} MB` : `${(job.size / 1024).toFixed(1)} KB`}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
-                              job.status === 'Done' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              job.status.includes('Failed') ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                              'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              job.status === 'Done' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                              job.status.includes('Failed') ? 'bg-red-50 text-red-600 border-red-200' :
+                              'bg-amber-50 text-amber-600 border-amber-200'
                             }`}>
                               {job.status !== 'Done' && !job.status.includes('Failed') && (
-                                <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
                               )}
                               {job.status}
                             </span>
@@ -1976,16 +1976,16 @@ export default function IntakeWorkbench() {
                         </tr>
                         {expandedJobId === job.id && (
                           <tr>
-                            <td colSpan={6} className="px-4 py-4 bg-[#020817]/60">
+                            <td colSpan={6} className="px-4 py-4 bg-slate-50">
                               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
                                 {/* Validation + generated request IDs */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                                <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                                   <div>
                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Validation</div>
                                     {job.tier ? (
-                                      <div className="text-slate-300">
-                                        Tier <span className="font-mono font-bold text-indigo-300">{String(job.tier).toUpperCase()}</span>
-                                        {(job.rowErrors || []).length > 0 && <span className="text-amber-300"> · {(job.rowErrors || []).length} row issue(s)</span>}
+                                      <div className="text-slate-700">
+                                        Tier <span className="font-mono font-bold text-indigo-700">{String(job.tier).toUpperCase()}</span>
+                                        {(job.rowErrors || []).length > 0 && <span className="text-amber-700"> · {(job.rowErrors || []).length} row issue(s)</span>}
                                         {job.sheetName && <span className="text-slate-500"> · sheet &quot;{job.sheetName}&quot;</span>}
                                         {job.delimiter && <span className="text-slate-500"> · delimiter &quot;{job.delimiter}&quot;</span>}
                                       </div>
@@ -1993,7 +1993,7 @@ export default function IntakeWorkbench() {
                                       <div className="text-slate-500">No validation on record (legacy entry).</div>
                                     )}
                                     {(job.rowErrors || []).length > 0 && (
-                                      <ul className="mt-2 space-y-1 text-amber-400/80 list-disc pl-4">
+                                      <ul className="mt-2 space-y-1 text-amber-600/80 list-disc pl-4">
                                         {(job.rowErrors || []).slice(0, 8).map((re: any, i: number) => (
                                           <li key={i}>Row {re.rowIndex}: {(re.reasons || []).join('; ')}</li>
                                         ))}
@@ -2008,11 +2008,11 @@ export default function IntakeWorkbench() {
                                     ) : (
                                       <ul className="space-y-1">
                                         {(job.requestIds || []).map((id: string) => (
-                                          <li key={id} className="flex items-center gap-2 font-mono text-emerald-300">
+                                          <li key={id} className="flex items-center gap-2 font-mono text-emerald-700">
                                             <span className="truncate" title={id}>{id}</span>
                                             <button
                                               onClick={(e) => { e.stopPropagation(); copyText(id, `${job.id}:${id}`); }}
-                                              className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
+                                              className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 shrink-0"
                                             >
                                               {copiedId === `${job.id}:${id}` ? 'Copied' : 'Copy'}
                                             </button>
@@ -2022,11 +2022,11 @@ export default function IntakeWorkbench() {
                                     )}
                                   </div>
                                   <div className="text-[11px] text-slate-500 font-mono break-all" title={job.sha256}>
-                                    Upload SHA-256: <span className="text-slate-400">{job.sha256 || 'legacy-unknown'}</span>
+                                    Upload SHA-256: <span className="text-slate-500">{job.sha256 || 'legacy-unknown'}</span>
                                   </div>
                                 </div>
                                 {/* Custody timeline + review + download */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                                <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                                   <div>
                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Chain of custody ({(job.custody || []).length})</div>
                                     {(job.custody || []).length === 0 ? (
@@ -2034,12 +2034,12 @@ export default function IntakeWorkbench() {
                                     ) : (
                                       <ol className="space-y-1.5">
                                         {(job.custody || []).map((c: any, i: number) => (
-                                          <li key={i} className="flex items-start gap-2 text-slate-300">
+                                          <li key={i} className="flex items-start gap-2 text-slate-700">
                                             <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                                             <div>
                                               <span className="font-bold">{c.stage}</span>
                                               <span className="text-slate-500 font-mono"> · {c.at ? new Date(c.at).toLocaleString() : ''} · {c.by}</span>
-                                              {c.note && <div className="text-slate-400 break-words">{c.note}</div>}
+                                              {c.note && <div className="text-slate-500 break-words">{c.note}</div>}
                                             </div>
                                           </li>
                                         ))}
@@ -2048,11 +2048,11 @@ export default function IntakeWorkbench() {
                                   </div>
                                   <div className="flex flex-wrap items-center gap-3 pt-1">
                                     {job.reviewedAt ? (
-                                      <span className="text-[11px] text-emerald-400">Reviewed by {job.reviewedBy} · {new Date(job.reviewedAt).toLocaleString()}</span>
+                                      <span className="text-[11px] text-emerald-600">Reviewed by {job.reviewedBy} · {new Date(job.reviewedAt).toLocaleString()}</span>
                                     ) : (
                                       <button
                                         onClick={(e) => { e.stopPropagation(); handleJobReview(job); }}
-                                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors"
+                                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors"
                                       >
                                         Mark reviewed
                                       </button>
@@ -2070,7 +2070,7 @@ export default function IntakeWorkbench() {
                                     </button>
                                   </div>
                                   {downloadError[job.id] && (
-                                    <div className="text-[11px] text-red-400">{downloadError[job.id]}</div>
+                                    <div className="text-[11px] text-red-600">{downloadError[job.id]}</div>
                                   )}
                                   <div className="text-[11px] text-slate-600">Download regenerates from staged records with request IDs in the filename — a custody copy, not the original bytes.</div>
                                 </div>
@@ -2091,76 +2091,76 @@ export default function IntakeWorkbench() {
         {/* Tab 3: Stock Match Overview */}
         {activeTab === 'matching' && (
           <div className="animate-in fade-in duration-300 space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-              <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+              <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                 <div>
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <ListChecks className="w-5 h-5 text-emerald-400" /> Buy/Sell Intelligent Stock Matching Engine
+                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <ListChecks className="w-5 h-5 text-emerald-600" /> Buy/Sell Intelligent Stock Matching Engine
                   </h3>
-                  <p className="text-sm text-slate-400 mt-1">Cross-referencing exact [Product Name] and [Model Number] matches across supply and demand — every product line, matched server-side.</p>
+                  <p className="text-sm text-slate-500 mt-1">Cross-referencing exact [Product Name] and [Model Number] matches across supply and demand — every product line, matched server-side.</p>
                 </div>
-                <button onClick={() => fetchMatches(true)} disabled={matchLoading} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
+                <button onClick={() => fetchMatches(true)} disabled={matchLoading} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
                    {matchLoading ? 'Matching…' : 'Refresh'}
                 </button>
               </div>
 
               {matchError && (
-                <div className="mx-6 mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-300" role="alert">
+                <div className="mx-6 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700" role="alert">
                   {matchError}
                 </div>
               )}
               {matchTotals.truncated && !matchError && (
-                <div className="mx-6 mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                <div className="mx-6 mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
                   Large backlog — matching scanned the 20,000 most recent orders. Older orders are excluded from this view.
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-800">
+              <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
                 
                 {/* Matched Pairs Pane */}
                 <div className="p-6">
-                  <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1 flex items-center gap-2">
                     <CheckCircle className="w-4 h-4" /> Ready for Fulfillment ({matchTotals.totalMatches})
                   </h4>
                   <p className="text-[11px] text-slate-500 mb-4">Showing {stockMatches.length} of {matchTotals.totalMatches}</p>
                   
                   {stockMatches.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-800 rounded-xl">
+                    <div className="text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-200 rounded-xl">
                       No exact matches found.
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {stockMatches.map((match) => (
-                        <div key={match.id} className="border border-emerald-500/20 bg-emerald-500/5 rounded-xl overflow-hidden">
+                        <div key={match.id} className="border border-emerald-200 bg-emerald-50 rounded-xl overflow-hidden">
                           <button 
                             onClick={() => setExpandedMatchId(expandedMatchId === match.id ? null : match.id)}
-                            className="w-full p-4 flex items-center justify-between text-left hover:bg-emerald-500/10 transition-colors"
+                            className="w-full p-4 flex items-center justify-between text-left hover:bg-emerald-100 transition-colors"
                           >
                             <div>
-                              <div className="font-bold text-emerald-300 mb-1">{match.productName}</div>
-                              <div className="text-xs text-slate-400 font-mono">{match.modelNumber}</div>
+                              <div className="font-bold text-emerald-700 mb-1">{match.productName}</div>
+                              <div className="text-xs text-slate-500 font-mono">{match.modelNumber}</div>
                             </div>
-                            <div className="text-slate-400">
+                            <div className="text-slate-500">
                               {expandedMatchId === match.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </div>
                           </button>
                           
                           {expandedMatchId === match.id && (
-                            <div className="p-4 border-t border-emerald-500/20 bg-[#020817]/50 text-sm">
+                            <div className="p-4 border-t border-emerald-200 bg-slate-50 text-sm">
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                   <div className="text-xs font-bold text-slate-500 uppercase mb-1">Buyer Details</div>
-                                  <div className="text-slate-200">{match.buyer.name}</div>
-                                  <div className="text-slate-400 text-xs">{match.buyer.email}</div>
-                                  <div className="text-indigo-300 text-xs mt-1">Req Qty: {match.buyerQty}</div>
-                                  <div className="text-slate-400 text-xs mt-1">Ask: <span className="font-mono text-slate-200">{formatPaise(askTotalOfOrder(match.buyer))}</span></div>
+                                  <div className="text-slate-900">{match.buyer.name}</div>
+                                  <div className="text-slate-500 text-xs">{match.buyer.email}</div>
+                                  <div className="text-indigo-700 text-xs mt-1">Req Qty: {match.buyerQty}</div>
+                                  <div className="text-slate-500 text-xs mt-1">Ask: <span className="font-mono text-slate-900">{formatPaise(askTotalOfOrder(match.buyer))}</span></div>
                                 </div>
                                 <div>
                                   <div className="text-xs font-bold text-slate-500 uppercase mb-1">Seller Details</div>
-                                  <div className="text-slate-200">{match.seller.name}</div>
-                                  <div className="text-slate-400 text-xs">{match.seller.email}</div>
-                                  <div className="text-indigo-300 text-xs mt-1">Avail Qty: {match.sellerQty}</div>
-                                  <div className="text-slate-400 text-xs mt-1">Ask: <span className="font-mono text-slate-200">{formatPaise(askTotalOfOrder(match.seller))}</span></div>
+                                  <div className="text-slate-900">{match.seller.name}</div>
+                                  <div className="text-slate-500 text-xs">{match.seller.email}</div>
+                                  <div className="text-indigo-700 text-xs mt-1">Avail Qty: {match.sellerQty}</div>
+                                  <div className="text-slate-500 text-xs mt-1">Ask: <span className="font-mono text-slate-900">{formatPaise(askTotalOfOrder(match.seller))}</span></div>
                                 </div>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
@@ -2173,14 +2173,14 @@ export default function IntakeWorkbench() {
                                       <div className="space-y-1">
                                         {(order.products || []).map((p: any, i: number) => (
                                           <div key={p.id || i} className="flex justify-between gap-2 text-xs">
-                                            <span className="text-slate-400 truncate">{p.category} · Qty {p.quantity}</span>
-                                            <span className="font-mono text-slate-200 shrink-0">{formatPaise(order.pricingBasis === 'lot' ? null : (p.lineConsiderationPaise ?? null))}</span>
+                                            <span className="text-slate-500 truncate">{p.category} · Qty {p.quantity}</span>
+                                            <span className="font-mono text-slate-900 shrink-0">{formatPaise(order.pricingBasis === 'lot' ? null : (p.lineConsiderationPaise ?? null))}</span>
                                           </div>
                                         ))}
                                         {order.pricingBasis === 'lot' && (
-                                          <div className="flex justify-between gap-2 text-xs pt-1 border-t border-slate-800">
-                                            <span className="text-slate-400">Lot ask</span>
-                                            <span className="font-mono text-slate-200 shrink-0">{formatPaise(order.lotConsiderationPaise ?? null)}</span>
+                                          <div className="flex justify-between gap-2 text-xs pt-1 border-t border-slate-200">
+                                            <span className="text-slate-500">Lot ask</span>
+                                            <span className="font-mono text-slate-900 shrink-0">{formatPaise(order.lotConsiderationPaise ?? null)}</span>
                                           </div>
                                         )}
                                       </div>
@@ -2190,11 +2190,11 @@ export default function IntakeWorkbench() {
                               </div>
                               {/* Request IDs + match ID (traceability for sales handoff) */}
                               <div className="mt-3 space-y-0.5 text-[11px] font-mono">
-                                <div className="text-slate-500 truncate" title={match.id}>Match <span className="text-slate-300">{match.id}</span></div>
+                                <div className="text-slate-500 truncate" title={match.id}>Match <span className="text-slate-700">{match.id}</span></div>
                                 <div className="text-slate-500 truncate" title={`Buy ${match.buyer?.id} / Sell ${match.seller?.id}`}>
-                                  Buy <span className="text-indigo-300">{match.buyer?.id}</span>
+                                  Buy <span className="text-indigo-700">{match.buyer?.id}</span>
                                   <span className="text-slate-600"> · </span>
-                                  Sell <span className="text-indigo-300">{match.seller?.id}</span>
+                                  Sell <span className="text-indigo-700">{match.seller?.id}</span>
                                 </div>
                               </div>
 
@@ -2207,14 +2207,14 @@ export default function IntakeWorkbench() {
                                 const sOthers = Math.max(0, (match.seller?.products || []).length - 1);
                                 const bOthers = Math.max(0, (match.buyer?.products || []).length - 1);
                                 return (
-                                  <div className="mt-3 bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-2.5 text-xs space-y-1">
+                                  <div className="mt-3 bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs space-y-1">
                                     <div className="flex justify-between gap-2">
-                                      <span className="text-slate-400">Matched-line ask (Buyer / Seller)</span>
-                                      <span className="font-mono text-slate-200 shrink-0">{formatPaise(bLine)} / {formatPaise(sLine)}</span>
+                                      <span className="text-slate-500">Matched-line ask (Buyer / Seller)</span>
+                                      <span className="font-mono text-slate-900 shrink-0">{formatPaise(bLine)} / {formatPaise(sLine)}</span>
                                     </div>
                                     <div className="flex justify-between gap-2">
-                                      <span className="text-slate-400">Line delta (seller − buyer)</span>
-                                      <span className={`font-mono font-bold shrink-0 ${d !== null && d > 0 ? 'text-amber-300' : d !== null && d < 0 ? 'text-emerald-300' : 'text-slate-200'}`}>
+                                      <span className="text-slate-500">Line delta (seller − buyer)</span>
+                                      <span className={`font-mono font-bold shrink-0 ${d !== null && d > 0 ? 'text-amber-700' : d !== null && d < 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
                                         {formatSignedPaise(d)} <span className="font-normal text-slate-500">({pct})</span>
                                       </span>
                                     </div>
@@ -2238,16 +2238,16 @@ export default function IntakeWorkbench() {
                                   {escalateState[match.id]?.status === 'sent' ? 'Escalated to Sales' : `Escalate to ${SALES_ESCALATION_EMAIL}`}
                                 </button>
                                 {escalateState[match.id]?.status === 'sent' && (
-                                  <span className="text-[11px] text-emerald-400">Sales notified — see audit log.</span>
+                                  <span className="text-[11px] text-emerald-600">Sales notified — see audit log.</span>
                                 )}
                                 {escalateState[match.id]?.status === 'failed' && (
-                                  <span className="text-[11px] text-red-400">Failed: {escalateState[match.id]?.error} Click Escalate to retry.</span>
+                                  <span className="text-[11px] text-red-600">Failed: {escalateState[match.id]?.error} Click Escalate to retry.</span>
                                 )}
                               </div>
 
-                              <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
+                              <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
                                 <span className="flex items-center gap-1 font-mono"><Clock className="w-3 h-3" /> {new Date(match.timestamp).toLocaleString()}</span>
-                                <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded">Match Confirmed</span>
+                                <span className="px-2 py-1 bg-emerald-100 text-emerald-600 rounded">Match Confirmed</span>
                               </div>
                             </div>
                           )}
@@ -2257,7 +2257,7 @@ export default function IntakeWorkbench() {
                         <button
                           onClick={() => fetchMatches(false, 'matches')}
                           disabled={matchLoading}
-                          className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors disabled:opacity-50"
+                          className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors disabled:opacity-50"
                         >
                           {matchLoading ? 'Loading…' : `Show more (${matchTotals.totalMatches - stockMatches.length} remaining)`}
                         </button>
@@ -2268,34 +2268,34 @@ export default function IntakeWorkbench() {
 
                 {/* Unmatched / Orphaned Pane */}
                 <div className="p-6">
-                  <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                     <Package className="w-4 h-4" /> Unmatched Orders ({matchTotals.totalUnmatched})
                   </h4>
                   <p className="text-[11px] text-slate-500 mb-4">Showing {unmatchedOrders.length} of {matchTotals.totalUnmatched}</p>
                   
                   {unmatchedOrders.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-800 rounded-xl">
+                    <div className="text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-200 rounded-xl">
                       No unmatched orders.
                     </div>
                   ) : (
                     <div className="space-y-2 overflow-auto max-h-[500px] pr-2 custom-scrollbar">
                       {unmatchedOrders.map(order => (
-                        <div key={order.id} className="p-3 border border-slate-800 bg-slate-900/50 rounded-lg flex items-center justify-between">
+                        <div key={order.id} className="p-3 border border-slate-200 bg-white rounded-lg flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium text-slate-300">
+                            <div className="text-sm font-medium text-slate-700">
                               {order.products?.[0]?.category || 'Unknown Product'}
                             </div>
                             <div className="text-xs text-slate-500 font-mono mt-0.5">
                               {order.products?.[0]?.details || 'Unknown Model'}
                             </div>
                             <div className="text-xs text-slate-500 mt-0.5">
-                              Ask: <span className="font-mono text-slate-300">{formatPaise(askTotalOfOrder(order))}</span>
+                              Ask: <span className="font-mono text-slate-700">{formatPaise(askTotalOfOrder(order))}</span>
                             </div>
                             <div className="text-[11px] text-slate-600 font-mono mt-0.5 truncate" title={order.id}>
-                              Req <span className="text-slate-400">{order.id}</span>
+                              Req <span className="text-slate-500">{order.id}</span>
                             </div>
                           </div>
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${order.intent?.toLowerCase() === 'buy' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${order.intent?.toLowerCase() === 'buy' ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-amber-50 text-amber-600 border border-amber-200'}`}>
                             {order.intent?.toUpperCase()}
                           </span>
                         </div>
@@ -2304,7 +2304,7 @@ export default function IntakeWorkbench() {
                         <button
                           onClick={() => fetchMatches(false, 'unmatched')}
                           disabled={matchLoading}
-                          className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors disabled:opacity-50"
+                          className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors disabled:opacity-50"
                         >
                           {matchLoading ? 'Loading…' : `Show more (${matchTotals.totalUnmatched - unmatchedOrders.length} remaining)`}
                         </button>

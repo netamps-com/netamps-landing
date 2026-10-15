@@ -524,20 +524,20 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
   const uploadingCount = queuedFiles.filter((f) => f.state === 'UPLOADING').length;
 
   return (
-    <div className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl font-sans text-slate-200">
+    <div className="w-full bg-white border border-slate-300 rounded-2xl p-6 shadow-2xl font-sans text-slate-900">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold text-white">Upload evidence files</h3>
-          <p className="text-xs text-slate-400 mt-1">Supported formats: Images (PNG, JPEG, WEBP, GIF, TIFF, HEIC) · Videos (MP4, MOV, WEBM, MKV, AVI, FLV) · Data (CSV, JSON, XLSX) · Max 300 MB per file, 300 MB per request</p>
+          <h3 className="text-lg font-bold text-slate-900">Upload evidence files</h3>
+          <p className="text-xs text-slate-500 mt-1">Supported formats: Images (PNG, JPEG, WEBP, GIF, TIFF, HEIC) · Videos (MP4, MOV, WEBM, MKV, AVI, FLV) · Data (CSV, JSON, XLSX) · Max 300 MB per file, 300 MB per request</p>
           <button
             onClick={() => downloadIntakeTemplate()}
-            className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition-colors"
+            className="mt-2 text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1.5 transition-colors"
           >
             <Download className="w-3.5 h-3.5" /> Download blank XLSX template
           </button>
         </div>
         {queuedFiles.length > 0 && (
-          <span className="shrink-0 text-xs font-mono text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
+          <span className="shrink-0 text-xs font-mono text-slate-500 bg-white border border-slate-300 rounded-lg px-2.5 py-1">
             {queuedFiles.filter((f) => f.state === 'SUCCESS').length}/{queuedFiles.length} uploaded
           </span>
         )}
@@ -546,10 +546,10 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
       {/* Session meter (real bytes, global across all mapped products) */}
       <div className="mb-5">
         <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider mb-1.5">
-          <span className="text-slate-400">{uploadingCount > 0 ? `Uploading ${uploadingCount} file${uploadingCount > 1 ? 's' : ''}…` : 'Upload quota'}</span>
-          <span className="text-emerald-400 font-mono">{formatBytes(uploadedBytes)} / {formatBytes(MAX_SESSION_BYTES)}</span>
+          <span className="text-slate-500">{uploadingCount > 0 ? `Uploading ${uploadingCount} file${uploadingCount > 1 ? 's' : ''}…` : 'Upload quota'}</span>
+          <span className="text-emerald-600 font-mono">{formatBytes(uploadedBytes)} / {formatBytes(MAX_SESSION_BYTES)}</span>
         </div>
-        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
           <div className="h-full bg-emerald-500 transition-all duration-300 ease-out" style={{ width: `${sessionPercent}%` }} />
         </div>
       </div>
@@ -565,12 +565,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
         onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
         onDrop={onDrop}
         className={`relative flex flex-col items-center justify-center w-full py-8 border-2 border-dashed rounded-xl cursor-pointer transition-all mb-5 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-          isDragging ? 'border-indigo-400 bg-indigo-500/10 scale-[1.01]' : 'border-slate-600 hover:border-indigo-400 hover:bg-slate-800/60'
+          isDragging ? 'border-indigo-600 bg-indigo-50 scale-[1.01]' : 'border-slate-300 hover:border-indigo-600 hover:bg-slate-100'
         }`}
       >
-        <UploadCloud className={`w-9 h-9 mb-2 transition-colors ${isDragging ? 'text-indigo-300' : 'text-slate-400'}`} />
-        <p className="mb-1 text-sm text-slate-300">
-          <span className="font-bold text-white">{isDragging ? 'Drop to start uploading' : 'Click to upload'}</span> or drag and drop
+        <UploadCloud className={`w-9 h-9 mb-2 transition-colors ${isDragging ? 'text-indigo-700' : 'text-slate-500'}`} />
+        <p className="mb-1 text-sm text-slate-700">
+          <span className="font-bold text-slate-900">{isDragging ? 'Drop to start uploading' : 'Click to upload'}</span> or drag and drop
         </p>
         <p className="text-xs text-slate-500">Files upload immediately · up to 3 at a time with speed & ETA · verified automatically</p>
         <input
@@ -587,15 +587,15 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
       {queuedFiles.length > 0 && (
         <ul className="space-y-2.5">
           {queuedFiles.map((qFile) => (
-            <li key={qFile.id} className="bg-slate-800/80 border border-slate-700 rounded-lg p-3">
+            <li key={qFile.id} className="bg-white border border-slate-300 rounded-lg p-3">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden relative">
+                <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-center shrink-0 overflow-hidden relative">
                   {isVideo(qFile.file) ? (
-                    <Film className="w-5 h-5 text-slate-400" />
+                    <Film className="w-5 h-5 text-slate-500" />
                   ) : isData(qFile.file) ? (
-                    <FileText className="w-5 h-5 text-slate-400" />
+                    <FileText className="w-5 h-5 text-slate-500" />
                   ) : (
-                    <ImageIcon className="w-5 h-5 text-slate-400" />
+                    <ImageIcon className="w-5 h-5 text-slate-500" />
                   )}
                   {qFile.previewUrl && isPreviewableVideo(qFile.file) && (
                     <video
@@ -617,7 +617,7 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline gap-2 mb-1">
-                    <p className="text-sm font-semibold text-white truncate">{qFile.file.name}</p>
+                    <p className="text-sm font-semibold text-slate-900 truncate">{qFile.file.name}</p>
                     <span className="text-xs font-mono text-slate-500 shrink-0">
                       {qFile.state === 'UPLOADING' ? `${qFile.progress}%${throughputOf(qFile) ? ` · ${throughputOf(qFile)}` : ''} · ` : ''}{formatBytes(qFile.file.size)}
                     </span>
@@ -641,31 +641,31 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                           setQueuedFiles((prev) => prev.map((f) => (f.id === qFile.id ? { ...f, productId: v } : f)));
                         }
                       }}
-                      className="text-xs bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 max-w-full"
+                      className="text-xs bg-white border border-slate-300 rounded-md px-2 py-1 text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 max-w-full"
                     >
                       <option value="">Select product…</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>{p.label}</option>
                       ))}
                     </select>
-                    {qFile.moving && <span className="text-[11px] text-indigo-300">Moving to selected product…</span>}
+                    {qFile.moving && <span className="text-[11px] text-indigo-700">Moving to selected product…</span>}
                   </div>
                   {qFile.state === 'UPLOADING' && (
-                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden" role="progressbar" aria-valuenow={qFile.progress} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden" role="progressbar" aria-valuenow={qFile.progress} aria-valuemin={0} aria-valuemax={100}>
                       <div className="h-full bg-indigo-500 transition-all duration-200" style={{ width: `${qFile.progress}%` }} />
                     </div>
                   )}
                   {qFile.state === 'SUCCESS' && (
                     <>
-                      <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1.5">
+                      <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">
                       <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Uploaded · Encrypted at rest (AES-256)
-                      {qFile.hash ? <span className="font-mono font-normal text-emerald-400/70 truncate"> · {qFile.hash.slice(0, 12)}…</span> : null}
+                      {qFile.hash ? <span className="font-mono font-normal text-emerald-700/70 truncate"> · {qFile.hash.slice(0, 12)}…</span> : null}
                       {qFile.assetUrl ? (
                         <button
                           type="button"
                           onClick={() => copyAssetUrl(qFile.id, qFile.assetUrl)}
                           title="Copy link"
-                          className="ml-auto flex items-center gap-1 p-2 -m-1 rounded text-emerald-300 hover:text-white shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                          className="ml-auto flex items-center gap-1 p-2 -m-1 rounded text-emerald-700 hover:text-slate-900 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                         >
                           {copiedId === qFile.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
@@ -673,26 +673,26 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                       </p>
                       {/* Server structure verdict (data files, opt-in): warn-only, never blocks submit */}
                       {qFile.verdict?.status === 'checking' && (
-                        <p className="text-[11px] text-indigo-300 flex items-center gap-1.5 mt-1.5">
-                          <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                        <p className="text-[11px] text-indigo-700 flex items-center gap-1.5 mt-1.5">
+                          <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                           Checking structure on server…
                         </p>
                       )}
                       {qFile.verdict?.status === 'ok' && (
-                        <p className="text-[11px] font-mono text-emerald-400/80 mt-1.5">
+                        <p className="text-[11px] font-mono text-emerald-600/80 mt-1.5">
                           Server-verified · {qFile.verdict.rows} row{qFile.verdict.rows === 1 ? '' : 's'} × {qFile.verdict.cols} cols
                         </p>
                       )}
                       {qFile.verdict?.status === 'rejected' && (
-                        <p className="text-[11px] text-amber-300 leading-relaxed mt-1.5" role="note">
+                        <p className="text-[11px] text-amber-700 leading-relaxed mt-1.5" role="note">
                           Server check: {qFile.verdict.reason} You can still submit — staff will review.
                         </p>
                       )}
                     </>
                   )}
                   {qFile.state === 'ERROR' && (
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-md p-2.5" role="alert">
-                      <p className="text-xs font-bold text-red-300 flex items-start gap-1.5 leading-relaxed">
+                    <div className="bg-red-50 border border-red-200 rounded-md p-2.5" role="alert">
+                      <p className="text-xs font-bold text-red-700 flex items-start gap-1.5 leading-relaxed">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> <span>{qFile.errorMessage || 'Upload failed.'}</span>
                       </p>
                     </div>
@@ -701,25 +701,25 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                     <p className="text-xs text-slate-500">Queued — uploads start automatically ({MAX_CONCURRENT_UPLOADS} at a time)…</p>
                   )}
                   {qFile.state === 'HASHING' && (
-                    <p className="text-xs text-indigo-300 flex items-center gap-1.5">
-                      <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-xs text-indigo-700 flex items-center gap-1.5">
+                      <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                       Verifying file integrity (SHA-256)…
                     </p>
                   )}
                 </div>
                 <div className="shrink-0 flex items-center gap-1">
                   {qFile.state === 'UPLOADING' && (
-                    <button type="button" onClick={() => cancelUpload(qFile.id)} title="Cancel upload" aria-label={`Cancel upload of ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-amber-400 hover:bg-slate-900 rounded-lg transition-colors">
+                    <button type="button" onClick={() => cancelUpload(qFile.id)} title="Cancel upload" aria-label={`Cancel upload of ${qFile.file.name}`} className="p-2 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors">
                       <OctagonX className="w-4 h-4" />
                     </button>
                   )}
                   {qFile.state === 'ERROR' && (
-                    <button type="button" onClick={() => retryUpload(qFile)} title="Retry upload from the start" aria-label={`Retry upload of ${qFile.file.name}`} className="p-3 text-slate-500 hover:text-indigo-300 hover:bg-slate-900 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                    <button type="button" onClick={() => retryUpload(qFile)} title="Retry upload from the start" aria-label={`Retry upload of ${qFile.file.name}`} className="p-3 text-slate-500 hover:text-indigo-700 hover:bg-slate-100 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
                       <RotateCcw className="w-4 h-4" />
                     </button>
                   )}
                   {qFile.state !== 'UPLOADING' && (
-                    <button type="button" onClick={() => removeFile(qFile.id)} title="Remove file" aria-label={`Remove ${qFile.file.name}`} className="p-3 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+                    <button type="button" onClick={() => removeFile(qFile.id)} title="Remove file" aria-label={`Remove ${qFile.file.name}`} className="p-3 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Package, Search, Filter, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake } from 'lucide-react';
+import { Package, Search, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake } from 'lucide-react';
 import { DashboardShell } from './DashboardNav';
 import { buildNavSections } from './nav';
 import UserManagementModal from './UserManagementModal';
@@ -836,15 +836,12 @@ export default function DashboardPage() {
     isAdmin,
     onOpenLogs: () => setShowLogsModal(true),
     onOpenUsers: () => setShowPasswordModal(true),
-    bestMatch: candidatesEnabled,
-    onToggleBestMatch: () => setCandidatesFlag(!(candidatesEnabled === true)),
     onExport: exportRequests,
   });
 
   return (
     <DashboardShell
       sections={navSections}
-      variant="light"
       footer={{
         email: userRole,
         role: isAdmin ? 'Administrator' : 'Staff',
@@ -914,15 +911,49 @@ export default function DashboardPage() {
                 className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 w-64 shadow-sm"
               />
             </div>
-            <button
-              className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-              aria-label="Filter orders"
-              title="Filter orders"
-            >
-              <Filter className="w-4 h-4 text-slate-500" />
-            </button>
           </div>
         </div>
+
+        {/* Settings row. A preference that changes what the list shows belongs
+            beside the list, where the thing it changes stays visible — not in
+            the navigation, which is for getting somewhere. */}
+        {isAdmin && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">Best-match suggestions</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Model suggestions for BUY orders. Advisory only — the model suggests, the catalog decides.
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                {candidatesEnabled === null ? '…' : candidatesEnabled ? 'On' : 'Off'}
+              </span>
+              {/* A switch rather than a boxed ON/OFF label: it states the
+                  setting's value by its own position, and the row reads as
+                  configuration rather than as another button to press. */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={candidatesEnabled === true}
+                aria-label="Best-match suggestions"
+                disabled={candidatesFlagBusy || candidatesEnabled === null}
+                onClick={() => setCandidatesFlag(!(candidatesEnabled === true))}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  candidatesEnabled ? 'bg-indigo-600' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    candidatesEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Data Table */}
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">

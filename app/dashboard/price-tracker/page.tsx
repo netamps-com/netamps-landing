@@ -114,7 +114,6 @@ export default function PriceTrackerPage() {
 
   return (
     <DashboardShell
-      variant="light"
       sections={navSections}
       footer={{ email: session.email, role: session.role, onTerminate: session.terminate }}
     >
@@ -175,7 +174,7 @@ export default function PriceTrackerPage() {
 
         {!loading && items.length === 0 && (
           <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500">
-            <Inbox className="w-6 h-6 mx-auto mb-3 text-slate-300" />
+            <Inbox className="w-6 h-6 mx-auto mb-3 text-slate-400" />
             No final price has been recorded yet
             <div className="mt-2 text-xs text-slate-400 max-w-md mx-auto">
               A row appears the moment a deal is approved — the intermediate figures a negotiation

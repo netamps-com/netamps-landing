@@ -574,20 +574,20 @@ export default function Home() {
             </motion.div>
 
             {/* E-Waste & Product Take-Back Banner */}
-            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="mt-12 p-8 lg:p-12 rounded-3xl bg-slate-900 text-white shadow-2xl relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8 border border-slate-800">
+            <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="mt-12 p-8 lg:p-12 rounded-3xl bg-white shadow-2xl relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8 border border-slate-200">
               <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[100px] -z-10"></div>
               <div className="flex-1">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs mb-4 border border-emerald-500/30">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs mb-4 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   Product Stewardship
                 </div>
                 <h3 className="text-3xl font-black mb-4">E-waste and Product Take-Back</h3>
-                <p className="text-slate-300 font-medium leading-relaxed max-w-3xl text-lg mb-4">
+                <p className="text-slate-600 font-medium leading-relaxed max-w-3xl text-lg mb-4">
                   We commit to receiving eligible decommissioned products supplied by Netamps Technologies or other vendors. We assess returned equipment for safe reuse or refurbishment where appropriate and route end-of-life products to authorized channels under applicable requirements.
                 </p>
               </div>
               <div className="shrink-0 w-full lg:w-auto">
-                <a href="/returns" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-white hover:bg-slate-100 text-slate-900 rounded-full transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+                <a href="/returns" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full lg:w-auto px-8 py-4 font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-full transition-colors shadow-lg hover:shadow-xl">
                   Asset Disposition & Procurement
                 </a>
               </div>
@@ -604,7 +604,7 @@ export default function Home() {
               <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center md:items-start text-slate-600 uppercase tracking-widest font-black">
                 <span>Netamps Technologies Private Limited</span>
                 <span className="text-slate-400 font-medium">CIN: U72900KA2022PTC167699</span>
-                <span className="text-slate-300 hidden md:inline">|</span>
+                <span className="text-slate-400 hidden md:inline">|</span>
                 <button 
                   onClick={(e) => {
                     e.preventDefault();
@@ -618,7 +618,7 @@ export default function Home() {
               </div>
               <div className="flex items-center flex-wrap gap-2 justify-center md:justify-start">
                 <p>&copy; {new Date().getFullYear()} Netamps Technologies. All rights reserved. All trademarks, logos and brand names are the property of their respective owners.</p>
-                <span className="text-slate-300 hidden md:inline">|</span>
+                <span className="text-slate-400 hidden md:inline">|</span>
                 <button onClick={(e) => { e.preventDefault(); window.location.href = '/privacy'; }} className="hover:text-primary transition-colors underline decoration-slate-300 underline-offset-2">Privacy Policy</button>
               </div>
               <div className="mt-2 flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-2 text-slate-400">
