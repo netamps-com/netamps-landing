@@ -490,7 +490,7 @@ export default function Home() {
             </motion.div>
           </div>
         </section>
-`n        {/* SECTION: ADVANCED SOLUTIONS */}
+        {/* SECTION: ADVANCED SOLUTIONS */}
         <section id="solutions" className="py-16 lg:py-20 bg-transparent border-y border-white/20">
           <div className="container mx-auto px-6">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }} variants={staggerContainer} className="mb-16 text-center">
