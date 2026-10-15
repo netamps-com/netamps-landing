@@ -1,4 +1,5 @@
 import { verifySession } from './intake/auth';
+import { appendChainedAudit, ensureAuditChain, verifyChain, detectAnomalies } from '../_lib/audit-chain.js';
 
 /**
  * /api/logs — website audit-log store and reader.
@@ -45,6 +46,8 @@ async function ensureTable(env) {
   await env.DB.prepare(
     'CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(timestamp DESC)'
   ).run();
+  // Tamper-evidence columns (idempotent; legacy rows stay NULL = genesis state)
+  await ensureAuditChain(env);
 }
 
 export async function onRequestPost({ request, env }) {
@@ -62,17 +65,17 @@ export async function onRequestPost({ request, env }) {
 
     if (env.DB) {
       await ensureTable(env);
-      await env.DB.prepare(
-        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
-      ).bind(
-        String(log.id).slice(0, 64),
-        String(log.timestamp).slice(0, 64),
-        String(log.eventType).slice(0, 64),
-        String(log.page || '').slice(0, 200),
-        String(log.details || '').slice(0, 4000),
-        String(log.user || '').slice(0, 254),
-        String(log.ipAddress || '').slice(0, 64)
-      ).run();
+      // Hash-chained append (tamper-evident; falls back to a plain insert if
+      // the chain cannot be computed so an audit event is never lost).
+      await appendChainedAudit(env, {
+        id: String(log.id).slice(0, 64),
+        timestamp: String(log.timestamp).slice(0, 64),
+        event_type: String(log.eventType).slice(0, 64),
+        page: String(log.page || '').slice(0, 200),
+        details: String(log.details || '').slice(0, 4000),
+        username: String(log.user || '').slice(0, 254),
+        ip_address: String(log.ipAddress || '').slice(0, 64)
+      });
     } else {
       console.warn('[logs] No DB binding; audit event accepted to local fallback only.');
     }
@@ -160,6 +163,57 @@ export async function onRequestGet({ request, env }) {
   }
 }
 
+/**
+ * GET /api/logs/verify — admin-only integrity check.
+ *
+ * Proves the audit trail has not been edited or truncated: walks the hash chain,
+ * reports the first break, and returns anomaly findings (SOC 2 CC7.2).
+ */
+export async function onRequestGetIntegrity({ request, env }) {
+  try {
+    const user = await verifySession(env, request);
+    const isAdmin = user && (user.role === 'admin' || user.email === 'admin@netamps.com');
+    if (!user) return json({ success: false, message: 'Unauthorized' }, 401);
+    if (!isAdmin) return json({ success: false, message: 'Forbidden' }, 403);
+
+    await ensureTable(env);
+    const chain = await verifyChain(env);
+    const anomalies = await detectAnomalies(env);
+
+    // A detected break or high-severity anomaly is logged so the tampering
+    // attempt is itself part of the (new) chain.
+    if (!chain.valid || anomalies.some((a) => a.severity === 'high')) {
+      try {
+        await appendChainedAudit(env, {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          event_type: chain.valid ? 'AUDIT_ANOMALY' : 'AUDIT_TAMPER_DETECTED',
+          page: 'Dashboard Page',
+          details: JSON.stringify({ chain, anomalies }).slice(0, 4000),
+          username: String(user.email || 'unknown').slice(0, 254),
+          ip_address: (request.headers.get('cf-connecting-ip') || 'unknown').slice(0, 64)
+        });
+      } catch {}
+    }
+
+    return json({
+      success: true,
+      chain: {
+        valid: chain.valid,
+        verifiedRows: chain.checked,
+        legacyUnhashedRows: chain.legacy,
+        brokenAt: chain.brokenAt,
+        reason: chain.reason,
+        headHash: chain.head
+      },
+      anomalies
+    });
+  } catch (err) {
+    console.error('[logs] integrity check error:', err);
+    return json({ success: false, message: 'Failed to verify audit integrity.' }, 500);
+  }
+}
+
 export async function onRequestDelete({ request, env }) {
   try {
     const user = await verifySession(env, request);
@@ -176,17 +230,27 @@ export async function onRequestDelete({ request, env }) {
       if (body && typeof body.reason === 'string') reason = body.reason.slice(0, 280);
     } catch {}
     await ensureTable(env);
+    // Purging the log BREAKS the chain by definition. The tombstone records the
+    // destruction (appended to the new, post-purge chain head) and the
+    // truncation becomes permanently provable rather than invisible.
+    const rowsBefore = await env.DB.prepare('SELECT COUNT(*) as c FROM audit_logs').first().catch(() => null);
     await env.DB.prepare('DELETE FROM audit_logs').run();
     // Tombstone: the destruction is itself recorded, or clearing deletes
     // the evidence of clearing.
     try {
-      await env.DB.prepare(
-        'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
-      ).bind(
-        crypto.randomUUID(), new Date().toISOString(), 'LOGS_CLEARED', 'Dashboard Page',
-        JSON.stringify({ reason: reason || 'not stated' }), String(user.email || 'unknown').slice(0, 254),
-        request.headers.get('cf-connecting-ip') || 'unknown'
-      ).run();
+      await appendChainedAudit(env, {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        event_type: 'LOGS_CLEARED',
+        page: 'Dashboard Page',
+        details: JSON.stringify({
+          reason: reason || 'not stated',
+          purgedRows: rowsBefore && typeof rowsBefore.c === 'number' ? rowsBefore.c : null,
+          note: 'chain truncated here by an authorized purge'
+        }).slice(0, 4000),
+        username: String(user.email || 'unknown').slice(0, 254),
+        ip_address: String(request.headers.get('cf-connecting-ip') || 'unknown').slice(0, 64)
+      });
     } catch {}
     return json({ success: true, message: 'Logs cleared successfully' });
   } catch (err) {

@@ -97,6 +97,8 @@ async function probeHttp(url, init) {
   }
 }
 
+import { corsJson } from '../_lib/cors.js';
+
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -147,23 +149,19 @@ export async function onRequest(context) {
 
   const operationalCount = services.filter((s) => s.status === 'operational').length;
 
-  return new Response(
-    JSON.stringify({
+  // Public, non-sensitive status payload ⇒ wildcard CORS is intentional.
+  // Anything carrying user data must use the strict allowlist in _lib/cors.js.
+  return corsJson(
+    request,
+    env,
+    {
       timestamp: now,
       overallStatus,
       operationalCount,
       serviceCount: services.length,
       services
-    }),
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
-    }
+    },
+    200,
+    { public: true, methods: 'GET', maxAge: 30 }
   );
 }

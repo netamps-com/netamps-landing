@@ -5,6 +5,8 @@
  * Runs on Cloudflare Pages Functions (Workers runtime) for fresh data on every request.
  */
 
+import { corsJson } from '../../_lib/cors.js';
+
 export async function onRequestGet({ env, request }) {
   try {
     // 1. Check DB
@@ -68,26 +70,21 @@ export async function onRequestGet({ env, request }) {
       ...metrics,
       overallStatus
     };
-    
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
+
+    // Public, non-sensitive metrics ⇒ wildcard CORS is intentional.
+    // User-data endpoints must use the strict allowlist in _lib/cors.js.
+    return corsJson(request, env, response, 200, {
+      public: true,
+      methods: 'GET',
+      maxAge: 30
     });
   } catch (err) {
-    return new Response(JSON.stringify({
+    // Never leak internal error text to the client.
+    console.error('[health/live] probe failed:', err);
+    return corsJson(request, env, {
       success: false,
       error: 'Health check failed',
-      message: err.message,
       timestamp: new Date().toISOString()
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    }, 500, { public: true, methods: 'GET', maxAge: 30 });
   }
 }
