@@ -925,7 +925,7 @@ export default function ReturnsPage() {
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         {isUploading ? 'Uploading securely to R2...' : 'Verifying...'}
                       </div>
-                    ) : (intent === 'sell' ? 'Verify & Generate One-Click Liquidation' : 'Verify & Buy with Confidence')}
+                    ) : (intent === 'sell' ? 'Verify & Request' : 'Verify & Buy with Confidence')}
                   </button>
                   <button type="button" onClick={() => { setShowOtp(false); resetRetToken(); }} className="text-sm text-indigo-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded">
                     Cancel and return to form
@@ -1005,21 +1005,41 @@ export default function ReturnsPage() {
                   <div className="mb-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0">Consideration Basis</span>
-                      <div className="flex bg-slate-100 p-1 rounded-xl flex-1">
-                        <button
-                          type="button"
-                          onClick={() => setPricingBasis('per_product')}
-                          className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${pricingBasis === 'per_product' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                      <div className="flex-1 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Consideration basis">
+                        <label
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
+                            pricingBasis === 'per_product'
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-900 shadow-sm'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          }`}
                         >
+                          <input
+                            type="radio"
+                            name="pricingBasis"
+                            value="per_product"
+                            checked={pricingBasis === 'per_product'}
+                            onChange={() => setPricingBasis('per_product')}
+                            className="w-4 h-4 text-indigo-600 accent-indigo-600"
+                          />
                           Per Product
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPricingBasis('lot')}
-                          className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all ${pricingBasis === 'lot' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                        </label>
+                        <label
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
+                            pricingBasis === 'lot'
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-900 shadow-sm'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          }`}
                         >
+                          <input
+                            type="radio"
+                            name="pricingBasis"
+                            value="lot"
+                            checked={pricingBasis === 'lot'}
+                            onChange={() => setPricingBasis('lot')}
+                            className="w-4 h-4 text-indigo-600 accent-indigo-600"
+                          />
                           Whole Request (Lot)
-                        </button>
+                        </label>
                       </div>
                     </div>
                     {pricingBasis === 'lot' ? (
@@ -1384,7 +1404,7 @@ export default function ReturnsPage() {
                       {isSubmitting ? (
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       ) : (
-                        intent === 'sell' ? 'One-Click Liquidation' : 'Buy with Confidence'
+                        intent === 'sell' ? 'Click to Request' : 'Buy with Confidence'
                       )}
                     </button>
                     <button
