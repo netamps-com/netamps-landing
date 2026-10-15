@@ -640,22 +640,6 @@ export default function Home() {
             </div>
 
           </div>
-
-          {/* Security Compliance Bar */}
-          <div className="mt-8 pt-6 border-t border-slate-200/50">
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Security Standards</span>
-              {[
-                { label: 'Role-Gated Access', icon: '🛡️' },
-                { label: 'Quarantine-Scanned Uploads', icon: '🔍' },
-              ].map((badge) => (
-                <div key={badge.label} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-slate-100/60 backdrop-blur-sm border border-slate-200 px-2.5 py-1 rounded-full shadow-sm">
-                  <span>{badge.icon}</span>
-                  <span>{badge.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </footer>
     </div>
