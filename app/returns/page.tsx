@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle, Zap, BadgeCheck, Award } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
@@ -768,31 +768,6 @@ export default function ReturnsPage() {
                 </button>
               </div>
 
-              {intent === 'buy' && (
-                <motion.section
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.22 }}
-                  aria-label="Buy with confidence"
-                  className="mb-4 rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-white to-teal-50 px-5 py-4"
-                >
-                  <ul className="flex flex-wrap gap-2">
-                    {['Fast Quotes', 'Zero Risk', 'Fully Tested Hardware', 'Enterprise-Grade Quality', 'Custom sourcing'].map((t) => (
-                      <li
-                        key={t}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white/90 px-3 py-1.5 text-[13px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700 hover:shadow-md cursor-default"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        {t}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-[13px] text-slate-600">
-                    <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
-                  </p>
-                </motion.section>
-              )}
-
               {intent === 'track' ? (
                 <div className="space-y-6">
                   <div>
@@ -932,6 +907,51 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
+                <div className={intent === 'buy' ? 'grid gap-6 items-start lg:grid-cols-[300px_1fr]' : 'space-y-6'}>
+                {intent === 'buy' && (
+                  <aside
+                    aria-label="Why buy with confidence"
+                    className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-5 shadow-sm lg:sticky lg:top-6"
+                  >
+                    {/* Decorative graphic — abstract server/stack illustration */}
+                    <div className="relative mb-4 h-28 rounded-xl bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-emerald-500/5 border border-emerald-100 overflow-hidden flex items-center justify-center" aria-hidden="true">
+                      <svg viewBox="0 0 120 60" className="w-32 h-auto opacity-80" fill="none">
+                        <rect x="10" y="8" width="46" height="12" rx="3" fill="#a7f3d0" stroke="#10b981" strokeWidth="1.5" />
+                        <rect x="10" y="24" width="46" height="12" rx="3" fill="#d1fae5" stroke="#10b981" strokeWidth="1.5" />
+                        <rect x="10" y="40" width="46" height="12" rx="3" fill="#a7f3d0" stroke="#10b981" strokeWidth="1.5" />
+                        <circle cx="48" cy="14" r="2.5" fill="#10b981" />
+                        <circle cx="48" cy="30" r="2.5" fill="#10b981" />
+                        <circle cx="48" cy="46" r="2.5" fill="#10b981" />
+                        <rect x="66" y="8" width="44" height="44" rx="6" fill="#ecfdf5" stroke="#6ee7b7" strokeWidth="1.5" />
+                        <path d="M76 40 L86 24 L94 34 L102 20" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx="102" cy="20" r="2.5" fill="#10b981" />
+                      </svg>
+                    </div>
+
+                    <ul className="space-y-2">
+                      {[
+                        { icon: Zap, label: 'Fast Quotes' },
+                        { icon: ShieldCheck, label: 'Zero Risk' },
+                        { icon: BadgeCheck, label: 'Fully Tested Hardware' },
+                        { icon: Award, label: 'Enterprise-Grade Quality' },
+                        { icon: Search, label: 'Custom sourcing' }
+                      ].map(({ icon: Icon, label }) => (
+                        <li
+                          key={label}
+                          className="flex items-center gap-2.5 rounded-xl border border-emerald-200/80 bg-white/80 px-3 py-2.5 text-[13px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700 hover:shadow-md"
+                        >
+                          <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 shrink-0">
+                            <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+                          </span>
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-4 text-[13px] text-slate-600 leading-relaxed">
+                      <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
+                    </p>
+                  </aside>
+                )}
                 <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setPendingDelete(null); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
@@ -1103,31 +1123,46 @@ export default function ReturnsPage() {
                         )}
                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Product #{index + 1}</h5>
                         
-                        {intent === 'sell' && (
-                          <div className="space-y-4 mb-2">
-                            <div>
-                              <label className="block text-xs font-medium text-slate-700 mb-2">Strategic Recovery Target *</label>
-                              <div role="radiogroup" aria-label="Strategic recovery target" className="flex bg-slate-100 p-1 rounded-xl">
-                                <button
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={product.strategicTarget === 'resale'}
-                                  onClick={() => updateProduct(product.id, 'strategicTarget', 'resale')}
-                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${product.strategicTarget === 'resale' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
-                                >
-                                  Resale Value Optimization
-                                </button>
-                                <button
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={product.strategicTarget === 'compliance'}
-                                  onClick={() => updateProduct(product.id, 'strategicTarget', 'compliance')}
-                                  className={`flex-1 text-sm font-medium py-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${product.strategicTarget === 'compliance' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
-                                >
-                                  Compliance Recycling
-                                </button>
-                              </div>
+                        <div className="space-y-4 mb-2">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-2">Strategic Recovery Target *</label>
+                            <div role="radiogroup" aria-label="Strategic recovery target" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <label
+                                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
+                                  product.strategicTarget === 'resale'
+                                    ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`strategic-${product.id}`}
+                                  value="resale"
+                                  checked={product.strategicTarget === 'resale'}
+                                  onChange={() => updateProduct(product.id, 'strategicTarget', 'resale')}
+                                  className="w-4 h-4 text-blue-600 accent-blue-600"
+                                />
+                                Resale Value Optimization
+                              </label>
+                              <label
+                                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-all text-sm font-medium ${
+                                  product.strategicTarget === 'compliance'
+                                    ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`strategic-${product.id}`}
+                                  value="compliance"
+                                  checked={product.strategicTarget === 'compliance'}
+                                  onChange={() => updateProduct(product.id, 'strategicTarget', 'compliance')}
+                                  className="w-4 h-4 text-blue-600 accent-blue-600"
+                                />
+                                Compliance Recycling
+                              </label>
                             </div>
+                          </div>
                             
                             <div>
                               <label className="block text-xs font-medium text-slate-700 mb-1">Hardware Lifecycle Batch Age *</label>
@@ -1154,7 +1189,6 @@ export default function ReturnsPage() {
                               </div>
                             </div>
                           </div>
-                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                           <div className="sm:col-span-2">
@@ -1417,7 +1451,8 @@ export default function ReturnsPage() {
                   </div>
                 </div>
               </form>
-              )}
+              </div>
+          )}
             </div>
           )}
         </motion.div>
