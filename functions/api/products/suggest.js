@@ -37,6 +37,10 @@ import {
   CATALOG_MIN_QUERY,
   CATALOG_MAX_QUERY,
   normalizeFold,
+  normalizeCategory,
+  rowConfidence,
+  shouldEscalateToLlm,
+  filterByCategory,
   ensureCatalog,
   searchCatalog
 } from './catalog.js';
@@ -119,6 +123,10 @@ const TIER2_TTL_MS = 60_000;
 const tier2Cache = new Map(); // foldedQuery -> { at, body }
 const LLM_TIMEOUT_MS = 4000;
 const LLM_MAX_TOKENS = 160;
+// Tier-1 rows scoring below this (or disagreeing with the chosen category) mean
+// the model is consulted. Tunable per-environment via match_meta
+// 'llm_confidence_floor' once shadow data justifies moving it.
+const LLM_CONFIDENCE_FLOOR = 0.75;
 // The prompt carries the catalog inline so ids can be COPIED, not guessed.
 // 600 rows ≈ well inside context; validation below still uses the FULL set.
 const LLM_PROMPT_CATALOG_CAP = 600;
@@ -311,18 +319,30 @@ export async function onRequestGet({ request, env, context }) {
       }
     }
 
-    if (tier1.length > 0) {
+    // ── Phase B: category discipline + confidence floor ──────────────────
+    // Rank by confidence first (so `prefix` real hits outrank near-collision
+    // fuzzy noise), then drop rows contradicting the buyer's chosen category.
+    const scored = tier1
+      .map((r) => ({ ...r, _conf: rowConfidence(r, category) }))
+      .sort((a, b) => (b._conf - a._conf) || String(a.id).localeCompare(String(b.id)));
+    const tier1Ranked = filterByCategory(scored, category);
+
+    // The LLM is consulted when Tier 1 is empty, weak, or disagrees with the
+    // chosen category — not merely when Tier 1 returned nothing.
+    const escalate = shouldEscalateToLlm(tier1Ranked, category, LLM_CONFIDENCE_FLOOR);
+
+    if (tier1Ranked.length > 0 && !escalate) {
       return json({
         success: true,
         query: q,
         source: 'catalog',
-        suggestions: tier1.map(toSuggestion),
-        hasMore: tier1.length >= limit
+        suggestions: tier1Ranked.map(toSuggestion),
+        hasMore: tier1Ranked.length >= limit
       });
     }
 
-    // ── Tier 2 — LLM, only when Tier 1 found nothing ───────────────────
-    const cacheKey = foldText(q);
+    // ── Tier 2 — LLM: no results, low confidence, or category conflict ──
+    const cacheKey = foldText(q) + '|' + category;
     const hit = tier2Cache.get(cacheKey);
     if (hit && Date.now() - hit.at < TIER2_TTL_MS) {
       return json(hit.body, 200, { 'Cache-Control': 'public, max-age=30' });
@@ -332,7 +352,13 @@ export async function onRequestGet({ request, env, context }) {
     let matches = [];
     try {
       const universe = await loadCatalog(env);
-      const ids = await llmFallback(env, q, universe);
+      // When the buyer picked a category, only that category's rows are
+      // eligible. Otherwise the model can reintroduce exactly the cross-category
+      // noise Phase B just removed.
+      const scoped = category
+        ? universe.filter((e) => normalizeCategory(e.category) === category)
+        : universe;
+      const ids = await llmFallback(env, q, scoped.length > 0 ? scoped : universe);
       if (ids && ids.length > 0) {
         const byId = new Map(universe.map((e) => [e.id, e]));
         matches = ids
@@ -349,12 +375,28 @@ export async function onRequestGet({ request, env, context }) {
       // soft failure — Custom (unverified) is always an acceptable outcome
     }
 
+    // Union: confident Tier-1 hits first (they are exact), then LLM picks.
+    // Tier-1 rows are kept only when they actually cleared the floor, so a
+    // weak fuzzy list is never served just because the model failed.
+    const keptTier1 = tier1Ranked.filter((r) => r._conf >= LLM_CONFIDENCE_FLOOR);
+    const seenIds = new Set(keptTier1.map((r) => r.id));
+    const merged = [...keptTier1];
+    for (const m of matches) {
+      if (seenIds.has(m.id)) continue;
+      seenIds.add(m.id);
+      merged.push(m);
+    }
+    const finalMatches = merged.length > 0 ? merged : tier1Ranked;
+    if (finalMatches.length > 0 && source === 'none') {
+      source = keptTier1.length > 0 ? 'catalog' : 'catalog-low-confidence';
+    }
+
     const body = {
       success: true,
       query: q,
-      source, // 'catalog' (Tier 1) | 'llm' (Tier 2, catalog-validated) | 'none' (Custom path)
-      suggestions: matches.map(toSuggestion),
-      hasMore: matches.length >= limit
+      source, // 'catalog' | 'catalog-low-confidence' | 'llm' | 'none' (Custom path)
+      suggestions: finalMatches.slice(0, limit).map(toSuggestion),
+      hasMore: finalMatches.length >= limit
     };
     tier2Cache.set(cacheKey, { at: Date.now(), body });
     if (tier2Cache.size > 500) {

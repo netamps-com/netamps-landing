@@ -66,7 +66,7 @@ export default function DetailsSuggest({
   const sessionRef = useRef<ReturnType<typeof createSuggestSession> | null>(null);
 
   const [items, setItems] = useState<CatalogSuggestion[]>([]);
-  const [source, setSource] = useState<'catalog' | 'llm' | 'none' | ''>('');
+  const [source, setSource] = useState<'catalog' | 'catalog-low-confidence' | 'llm' | 'none' | ''>('');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(-1);
@@ -100,7 +100,8 @@ export default function DetailsSuggest({
         setLoading(false);
         const sugg: CatalogSuggestion[] = Array.isArray(body?.suggestions) ? body.suggestions : [];
         setItems(sugg);
-        setSource(body?.source === 'catalog' ? 'catalog' : body?.source === 'llm' ? 'llm' : 'none');
+        const s = body?.source;
+          setSource(s === 'catalog' ? 'catalog' : s === 'catalog-low-confidence' ? 'catalog-low-confidence' : s === 'llm' ? 'llm' : 'none');
         setActive(sugg.length > 0 ? 0 : -1);
       },
       onError: () => {
@@ -192,6 +193,8 @@ export default function DetailsSuggest({
               <><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> Searching catalog…</>
             ) : source === 'catalog' ? (
               <><Sparkles className="h-3 w-3 text-emerald-600" aria-hidden="true" /> Catalog match — click a row to capture, or keep typing your own specs.</>
+            ) : source === 'catalog-low-confidence' ? (
+              <><FileQuestion className="h-3 w-3 text-amber-600" aria-hidden="true" /> Closest catalog guesses — confirm the model before capturing.</>
             ) : source === 'llm' ? (
               <><Sparkles className="h-3 w-3 text-indigo-600" aria-hidden="true" /> Best catalog candidates for your typing — verify before capturing.</>
             ) : (

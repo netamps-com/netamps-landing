@@ -26,6 +26,93 @@ export function normalizeFold(s) {
     .replace(/\s+/g, ' ');
 }
 
+// ── Phase B: category discipline + confidence floor ─────────────────────────
+//
+// Live probe (2026-10-15) showed two defects in the BUY typeahead:
+//   1. A networking query ("cisco catalyst 9300") returned UCS *servers* and
+//      QSFP *transceivers* — cross-category noise a buyer reads as "search is
+//      broken".
+//   2. Every fuzzy hit came back with an identical `score: 75`, so ordering
+//      carried no information and the Tier-2 LLM fallback was unreachable
+//      (it only fired when Tier 1 returned ZERO rows, which fuzzy almost never
+//      does once a single token matches).
+//
+// Both fixes live here so the typeahead endpoint and the normalizer share one
+// definition — same rule as the rest of this module.
+
+/**
+ * Canonical category slug. Both the catalog's `category` column and the UI's
+ * `<select>` values route through here, so "networking", "Networking",
+ * "networking_gear" and "network" are ONE category at comparison time.
+ */
+export function normalizeCategory(s) {
+  const v = normalizeFold(s).replace(/[\s_]+/g, ' ');
+  if (!v) return '';
+  if (/^(network|networking|networking gear|network gear|switch|switches|router|routers|firewall)/.test(v)) return 'networking';
+  if (/^(server|servers|compute|storage|datacenter|data center)/.test(v)) return 'servers';
+  if (/^(workstation|workstations|laptop|laptops|desktop|desktops|pc|pcs|client)/.test(v)) return 'workstations';
+  if (/^(telecom|telecom equipment|telco)/.test(v)) return 'telecom';
+  if (/^(peripheral|peripherals|component|components)/.test(v)) return 'peripherals';
+  if (/^(mixed|mixed pallet|varied|multi)/.test(v)) return 'mixed';
+  return v;
+}
+
+/**
+ * Confidence in a Tier-1 row, 0..1.
+ *
+ * - `prefix` hits are strong evidence (buyer typed a real model prefix).
+ * - `fuzzy` hits are weak: whole-string similarity says the *strings* are close,
+ *   not that the buyer meant this product. JW 0.92 on "r750" vs "r740" is a
+ *   near-collision, not a match.
+ * - Category agreement is a strong multiplier; disagreement is a strong penalty.
+ *
+ * Deliberately conservative: a LOW score is what unlocks the LLM, so over-
+ * scoring would re-hide the very failure mode this fixes.
+ */
+export function rowConfidence(row, selectedCategory) {
+  if (!row) return 0;
+  let base;
+  if (row.matchType === 'prefix') {
+    // Longer typed prefixes are stronger evidence than 2-char ones.
+    base = 0.80 + Math.min(0.15, (normalizeFold(row.model || '').length ? 0.05 : 0));
+  } else {
+    const jw = Number.isFinite(row.score) ? row.score : 0.92;
+    base = 0.45 + Math.max(0, Math.min(1, (jw - CATALOG_FUZZY_MIN) / (1 - CATALOG_FUZZY_MIN))) * 0.25;
+  }
+  if (selectedCategory) {
+    const same = normalizeCategory(row.category) === selectedCategory;
+    base = same ? Math.min(1, base + 0.15) : base * 0.35;
+  }
+  return Math.max(0, Math.min(1, base));
+}
+
+/**
+ * Should the LLM be consulted for this Tier-1 result set?
+ *
+ * True when: nothing was found, OR the best hit is below the confidence floor,
+ * OR the buyer picked a category and the top hit disagrees with it. Any one of
+ * those means Tier 1 alone would show the buyer something misleading.
+ */
+export function shouldEscalateToLlm(rows, selectedCategory, floor) {
+  const threshold = Number.isFinite(floor) ? floor : 0.75;
+  if (!rows || rows.length === 0) return true;
+  if (selectedCategory) {
+    const topCat = normalizeCategory(rows[0]?.category);
+    if (topCat && topCat !== selectedCategory) return true;
+  }
+  return rowConfidence(rows[0], selectedCategory) < threshold;
+}
+
+/**
+ * Drop rows that contradict a buyer-chosen category, unless that would leave
+ * the buyer with nothing at all (better a noisy list than an empty one).
+ */
+export function filterByCategory(rows, selectedCategory) {
+  if (!selectedCategory || !rows || rows.length === 0) return rows;
+  const same = rows.filter((r) => normalizeCategory(r.category) === selectedCategory);
+  return same.length > 0 ? same : rows;
+}
+
 export function jaroWinkler(a, b) {
   if (a === b) return 1;
   const m = a.length, n = b.length;
