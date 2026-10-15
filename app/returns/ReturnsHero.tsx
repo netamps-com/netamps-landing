@@ -150,49 +150,45 @@ export default function ReturnsHero({ intent }: { intent: Intent }) {
       <div
         key={`wash-${intent}`}
         aria-hidden="true"
-        className={`pointer-events-none absolute -inset-x-6 -top-6 -bottom-4 rounded-[2.5rem] ${v.accentSoft} opacity-40 blur-3xl hero-swap-in`}
+        className={`pointer-events-none absolute -inset-x-4 -top-4 -bottom-4 rounded-[2rem] ${v.accentSoft} opacity-35 blur-3xl hero-swap-in`}
       />
 
       {/* Same single-gap column as the logo block that wraps it, so the two
           share one rhythm instead of the hero having its own internal scale. */}
-      <div key={intent} className="relative flex flex-col items-center justify-center gap-2.5 hero-swap-in">
+      {/* Same single-gap column as the logo block that wraps it: logo → motif →
+          badge → headline → subheadline with one uniform gap. */}
+      <div key={intent} className="relative flex flex-col items-center justify-center gap-1.5 hero-swap-in">
         {/* ── Motif ──
-            Sized by width, but the tall inner padding of the viewBox is what
-            gives the graphic its vertical footprint — capping the width is
-            what actually shrinks it. Rendered only when the variant has one. */}
+            Sized by width; the inner padding of the viewBox is what gives the
+            graphic its height, so width is the single lever. Rendered only
+            when the variant has one. */}
         {v.motif && (
-          <div aria-hidden="true" className="pointer-events-none w-full max-w-[12.5rem] sm:max-w-[14rem] -mb-0.5">
+          <div aria-hidden="true" className="pointer-events-none w-full max-w-[9rem] sm:max-w-[11rem] -mb-0">
             {v.motif}
           </div>
         )}
 
         {/* ── Eyebrow ── */}
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm ${v.accentRing} ${v.accentSoft} ${v.accent}`}
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] shadow-sm ${v.accentRing} ${v.accentSoft} ${v.accent}`}
         >
           {v.eyebrow}
         </span>
 
         {/* ── Headline ──
-            aria-live so the new headline is announced when the tab changes;
-            it is the only part of the banner that changes the page's subject.
-            The top clamp is nudged down from 1.4rem: the row above now sits at
-            a fixed 10px gap, so the previous leading margin was adding to it. */}
+            aria-live so the new headline is announced when the tab changes. */}
         <h2
           id="returnsHeroTitle"
           aria-live="polite"
-          className="text-center text-[clamp(1.25rem,3.4vw,1.875rem)] font-black leading-[1.15] tracking-tight text-slate-900"
+          className="text-center text-[clamp(1.15rem,3vw,1.625rem)] font-black leading-tight tracking-tight text-slate-900"
         >
           {v.headline}
         </h2>
 
-        {/* ── Subheadline ──
-            Keyed separately from the block so it replays its entrance on its
-            own short delay. `text-balance` keeps the two lines of the longest
-            variant from breaking awkwardly without a fixed height. */}
+        {/* ── Subheadline ── */}
         <p
           key={`sub-${intent}`}
-          className="max-w-xl text-center text-balance text-[clamp(0.85rem,1.5vw,0.975rem)] leading-snug text-slate-500 hero-sub-in"
+          className="max-w-xl text-center text-balance text-[clamp(0.8rem,1.4vw,0.9rem)] leading-tight text-slate-500 hero-sub-in"
         >
           {v.sub}
         </p>
