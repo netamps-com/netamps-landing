@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "node build.js",
-    "deploy": "npx wrangler pages deploy .open-next",
+    "deploy": "npm run build && npx wrangler pages deploy out --project-name=netamps-landing",
+    "deploy:fast": "npx wrangler pages deploy out --project-name=netamps-landing",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
