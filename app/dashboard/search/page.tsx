@@ -22,8 +22,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Search, RefreshCw, Sparkles, Filter, Inbox, ExternalLink } from 'lucide-react';
-import NetampsLogo from '../../NetampsLogo';
+import { Search, RefreshCw, Sparkles, Filter, Inbox, ExternalLink } from 'lucide-react';
+import { DashboardShell } from '../DashboardNav';
+import { buildNavSections } from '../nav';
+import { useDashboardSession } from '../useDashboardSession';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -101,6 +103,11 @@ export default function OrderSearchPage() {
   const [applied, setApplied] = useState<null | Record<string, string>>(null);
   const lastController = useRef<AbortController | null>(null);
 
+  // Declared above the unauthorized early return: React requires the same hook
+  // order on every render, and the rail's footer shows this session.
+  const session = useDashboardSession();
+  const navSections = buildNavSections();
+
   const run = useCallback(async (params: Record<string, string>) => {
     lastController.current?.abort();
     const controller = new AbortController();
@@ -169,24 +176,11 @@ export default function OrderSearchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <NetampsLogo />
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/price-tracker" className="text-sm font-semibold text-slate-500 hover:text-slate-900">
-              Price Tracker
-            </Link>
-            <Link href="/dashboard/negotiations" className="text-sm font-semibold text-slate-500 hover:text-slate-900">
-              Negotiations
-            </Link>
-            <Link href="/dashboard" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-slate-900">
-              <ArrowLeft className="w-4 h-4" /> Dashboard
-            </Link>
-          </div>
-        </div>
-      </header>
-
+    <DashboardShell
+      variant="light"
+      sections={navSections}
+      footer={{ email: session.email, role: session.role, onTerminate: session.terminate }}
+    >
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
@@ -384,6 +378,6 @@ export default function OrderSearchPage() {
           ))}
         </div>
       </main>
-    </div>
+    </DashboardShell>
   );
 }

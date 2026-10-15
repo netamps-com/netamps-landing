@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Package, Search, Filter, ArchiveX, Key, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Download, Handshake, Sparkles, History } from 'lucide-react';
-import NetampsLogo from '../NetampsLogo';
+import { Package, Search, Filter, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Database, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake } from 'lucide-react';
+import { DashboardShell } from './DashboardNav';
+import { buildNavSections } from './nav';
 import UserManagementModal from './UserManagementModal';
 import LogViewerModal from './LogViewerModal';
 import MatchCandidates from './MatchCandidates';
@@ -826,114 +827,28 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) return null; // Prevent flash of content
 
+  const isAdmin = userRole === 'admin@netamps.com';
+
+  // The rail's contents are declared in ./nav and shared with the sub-pages;
+  // this page only supplies the handlers for the controls it actually mounts.
+  const navSections = buildNavSections({
+    isAdmin,
+    onOpenLogs: () => setShowLogsModal(true),
+    onOpenUsers: () => setShowPasswordModal(true),
+    bestMatch: candidatesEnabled,
+    onToggleBestMatch: () => setCandidatesFlag(!(candidatesEnabled === true)),
+    onExport: exportRequests,
+  });
+
   return (
-    <div className="min-h-screen bg-[#020817] text-white font-sans">
-      {/* Top Navbar */}
-      <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-4">
-              <NetampsLogo />
-              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                Enterprise DB
-              </span>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Webmail Access Button */}
-              <a
-                href="https://webmail.netamps.in"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/20"
-                title="Access Webmail"
-              >
-                <Mail className="w-4 h-4" />
-                <span className="hidden sm:inline">Webmail</span>
-              </a>
-
-              {/* Price negotiations monitor — buyer ↔ seller threads (separate tab) */}
-              <Link
-                href="/dashboard/negotiations"
-                className="flex items-center gap-2 text-sm text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20"
-                title="Price negotiations"
-              >
-                <Handshake className="w-4 h-4" />
-                <span className="hidden sm:inline">Negotiations</span>
-              </Link>
-
-              {/* Order search — deterministic filters, model-assisted free text */}
-              <Link
-                href="/dashboard/search"
-                className="flex items-center gap-2 text-sm text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 px-3 py-1.5 rounded-lg transition-colors border border-sky-500/20"
-                title="Search orders by email, order id, date range or free text"
-              >
-                <Search className="w-4 h-4" />
-                <span className="hidden sm:inline">Search</span>
-              </Link>
-
-              {/* Price Tracker — the permanent final-price audit trail, kept
-                  out of the order list entirely (own module, read-only). */}
-              <Link
-                href="/dashboard/price-tracker"
-                className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
-                title="Price Tracker"
-              >
-                <History className="w-4 h-4" />
-                <span className="hidden sm:inline">Price Tracker</span>
-              </Link>
-              
-              <div className="text-sm font-medium text-slate-300">
-                Logged in as <span className="text-white capitalize">{userRole}</span>
-              </div>
-              
-              {userRole === 'admin@netamps.com' && (
-                <>
-                  <button 
-                    onClick={() => setShowLogsModal(true)}
-                    className="flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/20"
-                  >
-                    <Database className="w-4 h-4" /> Website Event Logs
-                  </button>
-                  <button 
-                    onClick={() => setShowPasswordModal(true)}
-                    className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
-                  >
-                    <Key className="w-4 h-4" /> Manage Users
-                  </button>
-                  <button 
-                    onClick={() => setCandidatesFlag(!(candidatesEnabled === true))}
-                    disabled={candidatesFlagBusy}
-                    className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors border disabled:opacity-50 ${candidatesEnabled === true ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20' : 'text-slate-300 bg-slate-800 border-slate-700 hover:bg-slate-700'}`}
-                    title="Best-match suggestions for BUY orders (advisory: the model suggests, staff decide)"
-                  >
-                    <Sparkles className="w-4 h-4" /> Best-match: {candidatesEnabled === null ? '…' : candidatesEnabled ? 'ON' : 'OFF'}
-                  </button>
-                  <button 
-                    onClick={() => exportRequests('json')}
-                    className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
-                  >
-                    <Download className="w-4 h-4" /> Export JSON
-                  </button>
-                  <button 
-                    onClick={() => exportRequests('csv')}
-                    className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
-                  >
-                    <Download className="w-4 h-4" /> Export CSV
-                  </button>
-                </>
-              )}
-
-              <button 
-                onClick={handleLogout}
-                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
-              >
-                <LogOut className="w-4 h-4" /> Terminate Session
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <DashboardShell
+      sections={navSections}
+      footer={{
+        email: userRole,
+        role: isAdmin ? 'Administrator' : 'Staff',
+        onTerminate: handleLogout
+      }}
+    >
 
       {showPasswordModal && (
         <UserManagementModal 
@@ -1348,6 +1263,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
-    </div>
+    </DashboardShell>
   );
 }

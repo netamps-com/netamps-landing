@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Handshake, AlertTriangle, RefreshCw, ArrowLeft, CheckCircle2, XCircle, Clock, Send, BadgeCheck, Mail } from 'lucide-react';
-import NetampsLogo from '../../NetampsLogo';
+import { Handshake, AlertTriangle, RefreshCw, CheckCircle2, XCircle, Clock, Send, BadgeCheck, Mail } from 'lucide-react';
+import { DashboardShell } from '../DashboardNav';
+import { buildNavSections } from '../nav';
+import { useDashboardSession } from '../useDashboardSession';
 import { formatPaise, sanitizeMoneyInput, moneyStringToPaise } from '../../lib/money';
 import { ORDER_STATUS, normalizeStatus, isClosedStatus, statusChip, kindLabel } from '../../lib/status';
 
@@ -60,6 +62,11 @@ export default function NegotiationsPage() {
   const [notice, setNotice] = useState('');
   const [drafts, setDrafts] = useState<Record<string, { amount: string; note: string }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Declared above the unauthorized early return: React requires the same hook
+  // order on every render, and the rail's footer shows this session.
+  const session = useDashboardSession();
+  const navSections = buildNavSections();
 
   const load = useCallback(async (f: FilterKey) => {
     setLoading(true); setError('');
@@ -140,16 +147,11 @@ export default function NegotiationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <NetampsLogo />
-          <Link href="/dashboard" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-slate-900">
-            <ArrowLeft className="w-4 h-4" /> Dashboard
-          </Link>
-        </div>
-      </header>
-
+    <DashboardShell
+      variant="light"
+      sections={navSections}
+      footer={{ email: session.email, role: session.role, onTerminate: session.terminate }}
+    >
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -337,6 +339,6 @@ export default function NegotiationsPage() {
           })}
         </div>
       </main>
-    </div>
+    </DashboardShell>
   );
 }
