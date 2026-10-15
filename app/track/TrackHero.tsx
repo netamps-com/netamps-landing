@@ -213,7 +213,7 @@ export default function TrackHero({
             disabled={busy}
             className="mt-4 w-full py-3.5 bg-amber-400 text-slate-950 rounded-xl font-bold hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {busy ? 'Sending…' : 'Send verification code'}
+            {busy ? 'Selling…' : 'Click to Sell'}
           </button>
         </div>
 

@@ -1626,7 +1626,7 @@ export default function ReturnsPage() {
                       {isSubmitting ? (
                         <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       ) : (
-                        intent === 'sell' ? 'Click to Request' : 'Buy with Confidence'
+                        intent === 'sell' ? 'Click to Sell' : 'Click to Buy'
                       )}
                     </button>
                     <button
