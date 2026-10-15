@@ -394,6 +394,10 @@ export default function TrackOrderPage() {
         {/* ── Step 1: email ── */}
         {step === 'identify' && (
           <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5 contain-[layout_paint]">
+            {/* Hero FIRST: the visitor reads what this page is for, then the
+                form below is self-evidently how to get at it. */}
+            <NegotiationHero />
+
             <div>
               <label htmlFor="track-email" className="block text-sm font-medium text-slate-700">Email address on your requests</label>
               <div className="mt-2 relative">
@@ -407,11 +411,6 @@ export default function TrackOrderPage() {
                 No order number needed. We send a code to this mailbox; it proves the requests are yours.
               </p>
             </div>
-
-            {/* Hero sits directly above the action it explains: the visitor
-                reads what negotiating looks like, then sends the code that gets
-                them into it. */}
-            <NegotiationHero />
 
             {trackSiteKey && (
               <div className="flex justify-center">

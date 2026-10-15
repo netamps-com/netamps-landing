@@ -46,7 +46,13 @@ type Variant = {
   accent: string;
   accentSoft: string;
   accentRing: string;
-  motif: ReactNode;
+  /**
+   * Optional. Track deliberately has none: the three-step offer/counter/accept
+   * diagram describes a negotiation, and a status-tracking hero wearing one is
+   * telling the visitor the wrong thing about what this tab does. Text-only
+   * also keeps that step of the form short.
+   */
+  motif: ReactNode | null;
 };
 
 const SellMotif = () => (
@@ -104,34 +110,6 @@ const BuyMotif = () => (
   </svg>
 );
 
-const TrackMotif = () => (
-  /* cropped to the rail plus its milestone ticks, y 32..100. */
-  <svg viewBox="0 32 240 68" className="h-auto w-full" role="presentation">
-    {/* milestone rail */}
-    <path d="M26 72 H214" stroke="#e2e8f0" strokeWidth="4" strokeLinecap="round" />
-    <path d="M26 72 H138" stroke="#f59e0b" strokeWidth="4" strokeLinecap="round" className="track-progress" />
-    {[
-      { x: 26, done: true }, { x: 86, done: true }, { x: 138, done: false }, { x: 214, done: false }
-    ].map((m, i) => (
-      <g key={m.x}>
-        <circle
-          cx={m.x} cy="72" r={m.done ? 9 : 7}
-          fill={m.done ? '#f59e0b' : '#ffffff'}
-          stroke={m.done ? '#f59e0b' : '#cbd5e1'}
-          strokeWidth="2.5"
-        />
-        {!m.done && i === 2 && <circle cx={m.x} cy="72" r="9" fill="#f59e0b" className="pulse-ring" />}
-        <rect x={m.x - 15} y="90" width="30" height="5" rx="2.5" fill={m.done ? '#fde68a' : '#f1f5f9'} />
-      </g>
-    ))}
-    {/* parcel in transit */}
-    <g>
-      <rect x="120" y="38" width="42" height="26" rx="7" fill="#ffffff" stroke="#f59e0b" strokeWidth="2" />
-      <path d="M132 38 v26 M150 38 v26 M120 51 h42" stroke="#fbbf24" strokeWidth="1.8" />
-    </g>
-  </svg>
-);
-
 export const HERO_VARIANTS: Record<Intent, Variant> = {
   sell: {
     eyebrow: 'Asset recovery',
@@ -152,13 +130,13 @@ export const HERO_VARIANTS: Record<Intent, Variant> = {
     motif: <BuyMotif />
   },
   track: {
-    eyebrow: 'Live visibility',
-    headline: 'Real-Time IT Request Tracking, Simplified',
-    sub: 'Track your procurement and liquidation milestones with live status updates and end-to-end logistics visibility.',
+    eyebrow: 'Live negotiation',
+    headline: 'Order Status & Price Tracking',
+    sub: 'Negotiate hardware quotes and monitor real-time milestone updates within a single dashboard.',
     accent: 'text-amber-600',
     accentSoft: 'bg-amber-50',
     accentRing: 'border-amber-200/80',
-    motif: <TrackMotif />
+    motif: null
   }
 };
 
@@ -179,12 +157,14 @@ export default function ReturnsHero({ intent }: { intent: Intent }) {
           share one rhythm instead of the hero having its own internal scale. */}
       <div key={intent} className="relative flex flex-col items-center justify-center gap-2.5 hero-swap-in">
         {/* ── Motif ──
-            Sized by width, but the tall inner padding of the 240x120 viewBox
-            is what gives the graphic its vertical footprint — capping the
-            width is what actually shrinks it. */}
-        <div aria-hidden="true" className="pointer-events-none w-full max-w-[12.5rem] sm:max-w-[14rem] -mb-0.5">
-          {v.motif}
-        </div>
+            Sized by width, but the tall inner padding of the viewBox is what
+            gives the graphic its vertical footprint — capping the width is
+            what actually shrinks it. Rendered only when the variant has one. */}
+        {v.motif && (
+          <div aria-hidden="true" className="pointer-events-none w-full max-w-[12.5rem] sm:max-w-[14rem] -mb-0.5">
+            {v.motif}
+          </div>
+        )}
 
         {/* ── Eyebrow ── */}
         <span
