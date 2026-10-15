@@ -179,6 +179,27 @@ test('rowConfidence ranks prefix above fuzzy', () => {
   assert.ok(rowConfidence(prefix, 'networking') > rowConfidence(fuzzy, 'networking'));
 });
 
+test('category scopes RETRIEVAL, not just the output', async () => {
+  invalidateCatalogSnapshot();
+  // The regression this pins: with a global top-N, 'cisco' ranks Cisco UCS
+  // (servers) and Cisco ISR (telecom) above the Catalyst, so a networking buyer
+  // got an EMPTY list — the gate deleted the good rows instead of preventing
+  // the wrong ones from being retrieved. Scoping the pool before ranking is
+  // what fixes it.
+  const unscoped = await searchCatalog(env, 'cisco', 5);
+  const scoped = await searchCatalog(env, 'cisco', 5, 'networking');
+
+  assert.ok(unscoped.length > 0 && scoped.length > 0, 'both should return rows');
+  assert.ok(
+    scoped.every((r) => normalizeCategory(r.category) === 'networking'),
+    'every scoped row must be in the requested category'
+  );
+  assert.ok(scoped.some((r) => /catalyst/i.test(r.model)), 'scoped search must reach the Catalyst');
+
+  // A category with no rows in it is an honest empty, not a cross-category leak.
+  assert.deepEqual(await searchCatalog(env, 'cisco', 5, 'nonsense-category'), []);
+});
+
 test('filterByCategory is strict — a wrong-category row is never suggested', () => {
   const mixed = [
     { id: 'a', category: 'networking' },

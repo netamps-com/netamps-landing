@@ -338,7 +338,7 @@ export async function onRequestGet({ request, env, context }) {
     // ── Tier 1 — deterministic ──────────────────────────────────────────
     const d1 = await hasD1Catalog(env);
     const tier1 = d1
-      ? await searchCatalog(env, q, limit)
+      ? await searchCatalog(env, q, limit, category)
       : matchCatalog(SEED_UNIQUE, q, limit);
 
     // Step 3 shadow comparison (docs/catalog-retrieval-etl.md §10).

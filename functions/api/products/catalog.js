@@ -448,13 +448,27 @@ export async function ensureFtsIndex(env) {
  * substring token matching (a superset of FTS5's prefix match) instead of
  * bm25() ordering.
  *
+ * `category` scopes RETRIEVAL, not just the output. Filtering after the top-N
+ * has already been chosen deletes good rows instead of preventing wrong ones
+ * from being retrieved: with a global top-5, 'cisco' surfaces Cisco UCS
+ * (servers) and Cisco ISR (telecom) first, so a networking buyer got an EMPTY
+ * list even though the Catalyst 9300 was sitting right there. Scoping the pool
+ * BEFORE ranking means the limit is spent on rows the buyer can actually use.
+ *
  * @param {Array} rows from getCatalogSnapshot()
- * @returns {Promise<Array>} rows shaped like searchCatalog's return value.
+ * @param {string} [selectedCategory] when set, only this category is searched
+ * @returns {Array} rows shaped like searchCatalog's return value.
  */
-function searchSnapshot(rows, q, limit) {
+function searchSnapshot(rows, q, limit, selectedCategory) {
   const qcmp = normalizeFold(q).slice(0, MAX_FOLD_QUERY);
   if (!rows || rows.length === 0) return [];
   if (!qcmp || qcmp.length < CATALOG_MIN_QUERY) return [];
+
+  const wantCat = selectedCategory ? normalizeCategory(selectedCategory) : '';
+  const pool = wantCat
+    ? rows.filter((r) => (r._foldCat || normalizeCategory(r.category)) === wantCat)
+    : rows;
+  if (pool.length === 0) return [];
 
   // `verificationStatus` is intentionally absent — see loadCatalogRows. Trust
   // is read separately, uncached, via readVerificationStatus().
@@ -477,7 +491,7 @@ function searchSnapshot(rows, q, limit) {
   }
   if (tokens.length > 0) {
     const hits = [];
-    for (const r of rows) {
+    for (const r of pool) {
       let matched = 0;
       for (const t of tokens) {
         if (r._foldModel.includes(t)) { matched += 2; continue; }
@@ -502,7 +516,7 @@ function searchSnapshot(rows, q, limit) {
 
   // ── Tier B — exact prefix on model or category (the LIKE fast path) ───────
   const results = [];
-  for (const r of rows) {
+  for (const r of pool) {
     if (r._foldModel.startsWith(qcmp) || r._foldCat.startsWith(qcmp)) results.push(toRow(r, 'prefix'));
   }
   if (results.length >= limit) return results.slice(0, limit);
@@ -510,7 +524,7 @@ function searchSnapshot(rows, q, limit) {
   // ── Tier C — alias-prefix, then Jaro-Winkler fuzzy over the remainder ──────
   const taken = new Set(results.map((r) => r.id));
   const extras = [];
-  for (const r of rows) {
+  for (const r of pool) {
     if (taken.has(r.id)) continue;
     const base = {
       id: r.id,
@@ -584,9 +598,12 @@ export function shortlistCandidates(rows, q, limit = 25) {
 }
 
 /**
+ * @param {string} [selectedCategory] when set, RETRIEVAL is scoped to it — see
+ *   searchSnapshot. Callers that omit it (the normalizer, enrich) search the
+ *   whole catalog exactly as before.
  * @returns {Promise<Array<{id,category,model,specTemplate,matchType}>>}
  */
-export async function searchCatalog(env, q, limit) {
+export async function searchCatalog(env, q, limit, selectedCategory) {
   if (!env.DB || typeof env.DB.prepare !== 'function') return [];
   const folded = normalizeFold(q);
   if (!folded || folded.length < CATALOG_MIN_QUERY) return [];
@@ -595,7 +612,7 @@ export async function searchCatalog(env, q, limit) {
   // ~1.3s keystroke into a sub-millisecond one. Anything the snapshot cannot
   // serve falls through to the D1 cascade unchanged.
   const snap = await getCatalogSnapshot(env);
-  if (snap) return searchSnapshot(snap, q, limit);
+  if (snap) return searchSnapshot(snap, q, limit, selectedCategory);
   // Two views of the same query: `qcmp` for in-JS string similarity (no SQL
   // metacharacters), `qsql` escaped for the LIKE bind parameter.
   const qcmp = folded.slice(0, MAX_FOLD_QUERY);
