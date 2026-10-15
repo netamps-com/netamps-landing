@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { motion } from "motion/react";
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle, Zap, BadgeCheck, Award, Truck, Package, Clock, FileText, Timer, Boxes, Container, Warehouse, Route, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Search, ShieldCheck, Lock, FileCheck, Link2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
@@ -907,90 +907,7 @@ export default function ReturnsPage() {
                   </button>
                 </div>
               ) : (
-                <div className={intent === 'buy' ? 'grid gap-6 items-start lg:grid-cols-[300px_1fr]' : 'space-y-6'}>
-                {intent === 'buy' && (
-                  <aside
-                    aria-label="Why buy with confidence"
-                    className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-5 shadow-sm lg:sticky lg:top-6"
-                  >
-                    {/* Decorative graphic — abstract server/stack illustration */}
-                    <div className="relative mb-4 h-28 rounded-xl bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-emerald-500/5 border border-emerald-100 overflow-hidden flex items-center justify-center" aria-hidden="true">
-                      <svg viewBox="0 0 120 60" className="w-32 h-auto opacity-80" fill="none">
-                        <rect x="10" y="8" width="46" height="12" rx="3" fill="#a7f3d0" stroke="#10b981" strokeWidth="1.5" />
-                        <rect x="10" y="24" width="46" height="12" rx="3" fill="#d1fae5" stroke="#10b981" strokeWidth="1.5" />
-                        <rect x="10" y="40" width="46" height="12" rx="3" fill="#a7f3d0" stroke="#10b981" strokeWidth="1.5" />
-                        <circle cx="48" cy="14" r="2.5" fill="#10b981" />
-                        <circle cx="48" cy="30" r="2.5" fill="#10b981" />
-                        <circle cx="48" cy="46" r="2.5" fill="#10b981" />
-                        <rect x="66" y="8" width="44" height="44" rx="6" fill="#ecfdf5" stroke="#6ee7b7" strokeWidth="1.5" />
-                        <path d="M76 40 L86 24 L94 34 L102 20" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <circle cx="102" cy="20" r="2.5" fill="#10b981" />
-                      </svg>
-                    </div>
-
-                    <ul className="space-y-2">
-                      {[
-                        { icon: Zap, label: 'Fast Quotes' },
-                        { icon: ShieldCheck, label: 'Zero Risk' },
-                        { icon: BadgeCheck, label: 'Fully Tested Hardware' },
-                        { icon: Award, label: 'Enterprise-Grade Quality' },
-                        { icon: Search, label: 'Custom sourcing' }
-                      ].map(({ icon: Icon, label }) => (
-                        <li
-                          key={label}
-                          className="flex items-center gap-2.5 rounded-xl border border-emerald-200/80 bg-white/80 px-3 py-2.5 text-[13px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-400 hover:text-emerald-700 hover:shadow-md"
-                        >
-                          <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 shrink-0">
-                            <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                          </span>
-                          {label}
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* Logistics — hover each bullet for industry-standard terminology */}
-                    <div className="mt-5 border-t border-emerald-100 pt-4">
-                      <div className="flex items-center gap-2 mb-2.5">
-                        <Truck className="w-4 h-4 text-emerald-600" aria-hidden="true" />
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Logistics</h4>
-                      </div>
-                      <ul className="space-y-1.5">
-                        {[
-                          { icon: Package, label: '3PL', tip: 'Third-Party Logistics — outsourced transportation, warehousing & fulfillment (e.g. DHL, XPO). You pay per pallet/order; no fleet overhead.' },
-                          { icon: Link2, label: '4PL', tip: 'Fourth-Party Logistics — a supply-chain orchestrator managing multiple 3PLs, carriers & customs brokers end-to-end. Your outsourced logistics COO.' },
-                          { icon: Clock, label: 'OTIF', tip: 'On Time In Full — the gold-standard delivery KPI: % of orders arriving by the promised date with complete quantities. >95% is best-in-class.' },
-                          { icon: FileText, label: 'ASN', tip: 'Advanced Shipping Notice — electronic notification sent before a shipment arrives, listing contents, quantities & carrier details so receivers can plan labor and space.' },
-                          { icon: Timer, label: 'ETA', tip: 'Estimated Time of Arrival — the predicted moment a shipment will reach its destination, calculated from carrier data, traffic & weather.' },
-                          { icon: Boxes, label: 'LTL', tip: 'Less Than Truckload — shipping a freight that doesn\'t fill a full trailer. You pay only for the space you use; ideal for 1–6 pallets.' },
-                          { icon: Container, label: 'FTL', tip: 'Full Truckload — dedicating an entire trailer to one shipment. Faster & safer for large volumes; no intermediate handling.' },
-                          { icon: Warehouse, label: 'WMS', tip: 'Warehouse Management System — software that controls inventory put-away, picking, packing & shipping inside a warehouse (e.g. SAP EWM, Manhattan).' },
-                          { icon: Route, label: 'TMS', tip: 'Transportation Management System — software for planning, executing & optimizing the physical movement of goods (route selection, carrier tendering, freight audit).' },
-                          { icon: ArrowLeftRight, label: 'Cross-docking', tip: 'Unloading incoming freight and directly reloading it onto outbound vehicles with little or no storage in between — cuts handling time & warehouse cost.' }
-                        ].map(({ icon: Icon, label, tip }) => (
-                          <li key={label} className="group relative">
-                            <div className="flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50/60 hover:text-emerald-700 cursor-help">
-                              <span className="flex items-center justify-center w-5 h-5 rounded-md bg-emerald-100/80 text-emerald-600 shrink-0">
-                                <Icon className="w-3 h-3" aria-hidden="true" />
-                              </span>
-                              {label}
-                            </div>
-                            {/* Tooltip — appears on hover / focus */}
-                            <div
-                              role="tooltip"
-                              className="pointer-events-none absolute left-full top-0 z-50 ml-2 w-64 rounded-xl border border-emerald-200 bg-white/95 p-3 text-[11px] leading-relaxed text-slate-600 shadow-lg shadow-emerald-900/10 opacity-0 translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-focus-within:opacity-100 group-focus-within:translate-x-0"
-                            >
-                              <span className="block font-bold text-emerald-800 mb-0.5">{label}</span>
-                              {tip}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <p className="mt-4 text-[13px] text-slate-600 leading-relaxed">
-                      <span className="font-black text-slate-900">No limits:</span> Request any enterprise hardware, and we&apos;ll get it.
-                    </p>
-                  </aside>
-                )}
+                <div className="space-y-6">
                 <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setPendingDelete(null); }}>
                 <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                   <div>
@@ -1510,6 +1427,16 @@ export default function ReturnsPage() {
             <span>Full Audit Trail</span>
           </div>
         </div>
+
+        {/* Service summary — plain informational text, no projection or hover */}
+        <footer className="relative z-10 pb-8 pt-2 border-t border-slate-200/70">
+          <p className="text-center text-[11px] leading-relaxed text-slate-400">
+            Fast quotes · Zero risk · Fully tested hardware · Enterprise-grade quality · Custom sourcing
+          </p>
+          <p className="mt-1 text-center text-[11px] leading-relaxed text-slate-400">
+            No limits: request any enterprise hardware, and we&apos;ll get it.
+          </p>
+        </footer>
       </div>
     </div>
   );
