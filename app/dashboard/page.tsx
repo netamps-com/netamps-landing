@@ -868,7 +868,15 @@ export default function DashboardPage() {
         <LogViewerModal onClose={() => setShowLogsModal(false)} />
       )}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Flush LEFT, not centred. `mx-auto` pushed this block ~188px in from the
+          left edge of the content column on a wide screen, which left the
+          metrics strip floating in the middle of the room rather than reading
+          as the top of the work area. max-w-7xl is kept deliberately: dropping
+          it too would stretch the orders table to full width on an ultrawide,
+          where its columns are already hard to track across.
+          Left-aligning the block rather than just <StatsBar/> is what keeps the
+          metrics strip flush with the table beneath it. */}
+      <main className="max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {headerNotice && (
           <div className="mb-6 flex items-start justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-sm text-amber-800">{headerNotice}</p>
