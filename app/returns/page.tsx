@@ -894,7 +894,7 @@ export default function ReturnsPage() {
     <div className="min-h-screen bg-slate-50/20 text-slate-900 flex flex-col justify-center py-5 sm:px-6 lg:px-8 relative overflow-x-clip">
       {/* BUY Module Sidebar — visible only on buy intent */}
       {intent === 'buy' && (
-        <BuyModuleScroll className="fixed left-0 top-0 bottom-0 w-64 h-full bg-white border-r border-slate-200/50 sticky top-0 bottom-0 z-20 transition-transform sm:translate-x-0 md:translate-x-4 lg:translate-x-8" />
+        <BuyModuleScroll className="fixed left-0 top-0 bottom-0 w-64 h-full bg-white border-r border-slate-200/50 overflow-y-auto z-20" />
       )}
 
       {/* Ambient Glassmorphism Background */}
