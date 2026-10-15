@@ -24,7 +24,7 @@
  * better key, never remove one.
  */
 
-import { searchCatalog, normalizeFold, ensureCatalog } from '../products/catalog.js';
+import { searchCatalog, normalizeFold, ensureCatalog, readVerificationStatus } from '../products/catalog.js';
 import { runJson } from '../llm/client.mjs';
 
 export const NORMALIZER_VERSION = 'llm-norm-v1';
@@ -272,7 +272,14 @@ export async function normalizeLine(env, { category, details, model: modelHint }
     // empty one"). Capping confidence below PROMOTE_MIN_CONFIDENCE keeps these
     // rows usable for DISPLAY while making them ineligible to become a match
     // key until staff confirm them.
-    if (strong.verificationStatus !== 'verified') {
+    //
+    // Read UNCACHED. The search path resolves from a per-isolate catalog
+    // snapshot (60s TTL) so typeahead stays fast, but this is an authorisation
+    // input, not search data: serving a stale 'verified' here would let a
+    // downgraded SKU anchor a line at full confidence for up to a minute.
+    // One point lookup by primary key, and it fails closed to 'unverified'.
+    const trust = await readVerificationStatus(env, strong.id);
+    if (trust !== 'verified') {
       d.confidence = Math.min(d.confidence, UNVERIFIED_CATALOG_MAX_CONFIDENCE);
       flags.push('CATALOG_UNVERIFIED');
     }

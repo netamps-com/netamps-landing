@@ -100,6 +100,11 @@ interface ProductItem {
   // Last catalog composition written into `details` by the typeahead. Lets a
   // second selection replace it while preserving hand-typed specs.
   selectedModel?: string;
+  // Has this line EVER had a catalog suggestion captured? Distinct from
+  // `catalogId`, which a manual edit clears. `captured` is sticky because
+  // applySuggestion needs to tell "this text is a search query" (replace it)
+  // from "this text is specs the visitor added after a capture" (keep it).
+  captured?: boolean;
 }
 
 // ── Money contract lives in app/lib/money.ts (paise integers end-to-end,
@@ -242,7 +247,20 @@ export default function ReturnsPage() {
   // Seed-catalog specs already lead with the model ("Dell PowerEdge R740, …")
   // while D1 rows can carry a bare template ("2U rack, 2x Xeon …") — compose so
   // the model is never dropped. selectedModel mirrors the composed text so a
-  // later pick sees this line as "fresh" instead of appending duplicate specs.
+  // later pick knows whether the current text is still ours or the visitor's.
+  //
+  // REPLACE vs APPEND — the rule that was missing:
+  //   What the visitor typed to SEARCH is not content. Typing "dell r740 xeon
+  //   128gb" and then picking a suggestion must yield the canonical spec, NOT
+  //   "dell r740 xeon 128gb\nDell PowerEdge R740, …". The previous code appended
+  //   whenever `current` was non-empty, which leaked every typo into the field.
+  //   `captured` (never cleared) distinguishes the two cases:
+  //     - nothing captured yet  -> the text is a query      -> REPLACE
+  //     - captured, untouched    -> still our canonical text -> REPLACE
+  //     - captured, then edited  -> the visitor's own specs  -> APPEND
+  //   `captured` is deliberately NOT `catalogId`: a manual edit clears
+  //   `catalogId` (the line drops to Custom) but must not make the next pick
+  //   discard the specs the visitor just typed.
   const applySuggestion = (id: string, item: CatalogSuggestion) => {
     setProducts(products.map(p => {
       if (p.id !== id) return p;
@@ -252,10 +270,18 @@ export default function ReturnsPage() {
       const composed = spec
         ? (specHasModel ? spec : modelLabel ? `${modelLabel} — ${spec}` : spec)
         : (modelLabel || spec);
+
       const current = (p.details || '').trim();
-      const isFresh = current === '' || current === p.selectedModel;
-      const details = isFresh ? composed : `${current}\n${composed}`;
-      return { ...p, category: categoryLabelForSlug(item.category), details, selectedModel: composed, catalogId: item.id };
+      const editedAfterCapture = !!p.captured && current !== (p.selectedModel || '').trim();
+      const details = editedAfterCapture ? `${current}\n${composed}` : composed;
+      return {
+        ...p,
+        category: categoryLabelForSlug(item.category),
+        details,
+        selectedModel: composed,
+        catalogId: item.id,
+        captured: true
+      };
     }));
   };
 

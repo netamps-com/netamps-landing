@@ -9,6 +9,16 @@
  *  - monotonic sequence drops stale responses that ignore the abort
  *
  * Pure ESM, no framework imports, injectable fetch for tests.
+ *
+ * ── Two-phase search ──────────────────────────────────────────────────────
+ * `mode=fast` answers from the server's in-memory catalog snapshot and is
+ * cheap enough to run on every keystroke. `mode=llm` is the refine pass: it is
+ * only worth paying inference latency for once the visitor has stopped typing,
+ * so the caller fires it on a settle timer rather than on every key.
+ *
+ * Both passes share ONE abort/sequence pair on purpose: a new keystroke must
+ * cancel a refine pass that is no longer relevant, and a stale refine response
+ * must never overwrite fresher fast results.
  */
 export function createSuggestSession(options = {}) {
   const debounceMs = options.debounceMs ?? 250;
@@ -34,16 +44,23 @@ export function createSuggestSession(options = {}) {
   let controller = null;
   let seq = 0;
 
-  async function fire(query, handlers) {
+  async function fire(query, handlers, perCallParams) {
     const mySeq = ++seq;
     if (controller) {
       try { controller.abort(); } catch { /* already aborted */ }
     }
     const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
     controller = ctrl;
+    const callQuery = perCallParams
+      ? Object.entries(perCallParams)
+        .filter(([, v]) => v !== undefined && v !== null && String(v) !== '')
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join('&')
+      : '';
     try {
       const url = `${apiUrl}/api/products/suggest?q=${encodeURIComponent(query)}`
-        + (extraQuery ? `&${extraQuery}` : '');
+        + (extraQuery ? `&${extraQuery}` : '')
+        + (callQuery ? `&${callQuery}` : '');
       const res = await fetchImpl(
         url,
         ctrl ? { signal: ctrl.signal } : undefined
@@ -64,8 +81,13 @@ export function createSuggestSession(options = {}) {
     /**
      * Queue a lookup. `handlers`: onResponse(body, query), onError(err),
      * onTooShort(query). Fire-and-forget; responses arrive via handlers.
+     *
+     * `opts.extraParams` is merged on top of the session-level params (used to
+     * add `mode=llm` on the refine pass). `opts.debounceMs` overrides the
+     * session default — the settle timer has already waited, so the refine
+     * pass should fire immediately rather than debounce again.
      */
-    request(rawQuery, handlers = {}) {
+    request(rawQuery, handlers = {}, opts = {}) {
       const q = String(rawQuery == null ? '' : rawQuery).trim();
       if (timer) { clearTimeout(timer); timer = null; }
       if (q.length < minLength) {
@@ -74,7 +96,10 @@ export function createSuggestSession(options = {}) {
         if (handlers.onTooShort) handlers.onTooShort(q);
         return;
       }
-      timer = setTimeout(() => { timer = null; void fire(q, handlers); }, debounceMs);
+      const wait = Number.isFinite(opts.debounceMs) ? opts.debounceMs : debounceMs;
+      const run = () => { timer = null; void fire(q, handlers, opts.extraParams); };
+      if (wait <= 0) run();
+      else timer = setTimeout(run, wait);
     },
 
     /** Cancel any pending debounce + in-flight request (unmount / close). */

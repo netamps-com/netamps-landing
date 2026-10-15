@@ -109,6 +109,14 @@ console.log('\n=== 8. D3: catalog hit means NO model call + verification cap ===
       const self = { _sql: sql, _binds: [],
         bind(...a) { self._binds = a; return self; },
         async run() { return { success: true }; },
+        async first() {
+          // readVerificationStatus(): the trust decision is deliberately read
+          // UNCACHED, one row by primary key — never from the search snapshot.
+          if (/SELECT verification_status FROM products WHERE id/.test(self._sql)) {
+            return { verification_status: verificationStatus };
+          }
+          return null;
+        },
         async all() {
           if (/CREATE TABLE|CREATE INDEX/.test(self._sql)) return { results: [] };
           // ensureFtsIndex probes "SELECT COUNT(*) ... FROM products_fts". The

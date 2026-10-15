@@ -19,7 +19,7 @@
  *    vector infra in this step.
  */
 
-import { normalizeFold, searchCatalog, ensureCatalog } from './catalog.js';
+import { normalizeFold, searchCatalog, ensureCatalog, rowConfidence } from './catalog.js';
 import {
   validateRow, findDuplicate, fold, tokenize, ensureEtlTables,
 } from './etl.js';
@@ -28,6 +28,10 @@ import { runJson } from '../llm/client.mjs';
 
 export const ENRICH_VERSION = 'ext-enrich-v1';
 const DDG_TIMEOUT_MS = 8000;
+// A catalog hit must clear this confidence to count as "already catalogued".
+// Same 0.75 floor the typeahead uses to decide whether Tier 1 is good enough
+// on its own — one number, one meaning, across both call sites.
+const ENRICH_MATCH_FLOOR = 0.75;
 const DDG_MAX_TEXT = 1500;
 
 // Model identities live in the shared gateway (functions/api/llm/client.mjs).
@@ -178,10 +182,18 @@ export async function enrichLine(env, { category, details, fetchFn = fetch }) {
 
   // Deterministic first: if the catalog now has it (race with another insert),
   // do nothing. This keeps enrichment strictly for true no-matches.
+  //
+  // Only a CONFIDENT hit counts as "already catalogued". A token-overlap fuzzy
+  // hit means "vaguely similar", not "this is the same product": treating it as
+  // a duplicate would refuse to enrich 'Dell PowerEdge R999' purely because the
+  // catalog holds an R750 and they share the tokens 'dell poweredge'. Uses the
+  // same rowConfidence() the typeahead ranks with, so there is one definition
+  // of "a good enough match".
   try {
     await ensureCatalog(env);
     const hits = await searchCatalog(env, details || category || '', 3);
-    if (hits?.length) return { status: 'ALREADY_IN_CATALOG', flags, productId: hits[0].id };
+    const confident = (hits || []).find((h) => rowConfidence(h, null) >= ENRICH_MATCH_FLOOR);
+    if (confident) return { status: 'ALREADY_IN_CATALOG', flags, productId: confident.id };
   } catch {}
 
   const userFold = normalizeFold(userSource);

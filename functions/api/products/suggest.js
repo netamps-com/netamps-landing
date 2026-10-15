@@ -41,8 +41,9 @@ import {
   rowConfidence,
   shouldEscalateToLlm,
   filterByCategory,
-  ensureCatalog,
-  searchCatalog
+  getCatalogSnapshot,
+  searchCatalog,
+  shortlistCandidates
 } from './catalog.js';
 import { compareAndRecord, shadowFusion } from './shadow.js';
 import { fusedRank } from './fusion.js';
@@ -116,20 +117,41 @@ function suggestRateLimited(ip) {
   return rec.count > SUGGEST_RL_PER_IP;
 }
 
+/**
+ * Write-through into a bounded TTL map. Bounded because this is per-isolate
+ * module state: without a cap a long-lived isolate would retain every query a
+ * visitor ever typed.
+ */
+function cacheResolve(map, foldedQuery, category, body) {
+  map.set(`${foldedQuery}|${category}`, { at: Date.now(), body });
+  if (map.size > 500) map.delete(map.keys().next().value);
+}
+
 // Tier-2 short-TTL cache — the same no-match query does not re-pay the model
 // (and an 'none' verdict expires quickly if the catalog grows). Tier-1 hits
 // are NOT memory-cached so the shadow harness keeps sampling every request.
 const TIER2_TTL_MS = 60_000;
-const tier2Cache = new Map(); // foldedQuery -> { at, body }
-const LLM_TIMEOUT_MS = 4000;
-const LLM_MAX_TOKENS = 160;
+const tier2Cache = new Map(); // foldText(q)|category|mode -> { at, body }
+// Catalog-only verdicts are cached too. Same rationale as the model cache but
+// much shorter: this one is a hot-path optimisation for the typing burst, and
+// the catalog itself is already snapshotted per isolate for 60s.
+const RESOLVE_TTL_MS = 20_000;
+const resolveCache = new Map(); // foldText(q)|category -> { at, body }
+
+// Per-model budget. `tier: 'small'` below means this is the ONLY budget a
+// typeahead request can spend on inference — there is no second attempt.
+const LLM_TIMEOUT_MS = 3500;
+// 4 ids × ~8 tokens of JSON is comfortably under this; the previous 160 was
+// sized for the old 600-row prompt era.
+const LLM_MAX_TOKENS = 96;
+// Retrieve-then-rerank. The model re-ranks a shortlist instead of being handed
+// the whole catalog: 25 rows is roughly 4KB of prompt against the previous
+// ~40KB, and input tokens dominate typeahead latency.
+const LLM_SHORTLIST = 25;
 // Tier-1 rows scoring below this (or disagreeing with the chosen category) mean
 // the model is consulted. Tunable per-environment via match_meta
 // 'llm_confidence_floor' once shadow data justifies moving it.
 const LLM_CONFIDENCE_FLOOR = 0.75;
-// The prompt carries the catalog inline so ids can be COPIED, not guessed.
-// 600 rows ≈ well inside context; validation below still uses the FULL set.
-const LLM_PROMPT_CATALOG_CAP = 600;
 
 /**
  * The catalog universe this endpoint serves: D1 `products` rows when any
@@ -141,69 +163,82 @@ const LLM_PROMPT_CATALOG_CAP = 600;
  * demotes any id absent from here to Custom (unverified).
  */
 export async function loadCatalog(env) {
-  if (!env.DB || typeof env.DB.prepare !== 'function') return SEED_UNIQUE;
-  try {
-    await ensureCatalog(env);
-    const res = await env.DB.prepare(
-      'SELECT id, category, model, spec_template FROM products'
-    ).all();
-    const rows = (res?.results || [])
-      .map((r) => ({
-        id: String(r.id),
-        category: r.category || 'mixed',
-        // D1 model strings lead with the brand ("Dell PowerEdge R740"), so no
-        // separate brand column is needed; the seed entries carry one.
-        brand: '',
-        model: String(r.model || ''),
-        spec: typeof r.spec_template === 'string' ? r.spec_template : ''
-      }))
-      .filter((r) => r.id && r.model);
-    return rows.length > 0 ? rows : SEED_UNIQUE;
-  } catch {
-    return SEED_UNIQUE;
+  const snap = await getCatalogSnapshot(env);
+  if (snap && snap.length > 0) {
+    return snap.map((r) => ({
+      id: r.id,
+      category: r.category,
+      brand: r.brand || '',
+      model: r.model,
+      spec: r.specTemplate || ''
+    }));
   }
+  return SEED_UNIQUE;
 }
 
-/** Does the D1 catalog have rows? False without a DB, on an empty table, or
- *  on any D1 error (the seed floor then degrades gracefully). */
+/** Does D1 serve a catalog? False without a DB, on an empty table, or on any
+ *  D1 error (the seed floor then degrades gracefully).
+ *
+ *  Reads the isolate snapshot rather than issuing `ensureCatalog` + a probe
+ *  query per request — the probe was pure overhead once the catalog is cached. */
 async function hasD1Catalog(env) {
-  if (!env.DB || typeof env.DB.prepare !== 'function') return false;
-  try {
-    await ensureCatalog(env);
-    const row = await env.DB.prepare('SELECT id FROM products LIMIT 1').first();
-    return !!row;
-  } catch {
-    return false;
-  }
+  return !!(await getCatalogSnapshot(env));
 }
 
 /**
- * Tier 2 — Workers AI fallback through the shared gateway, strictly bounded.
- * Returns candidate ids that pass validateLLMResponse (full-catalog
- * membership enforced) or null when the model is unavailable, rejected by the
- * llm_enabled brake, unparseable, or simply unsure. Never throws.
+ * Tier 2 — Workers AI reranker over a retrieved shortlist, strictly bounded.
+ *
+ * RETRIEVE, THEN RERANK. The previous version inlined up to 600 catalog rows
+ * into the prompt on every call; measured cold latency was 10.5s. Retrieval is
+ * already implemented and costs microseconds in memory, so the model's job is
+ * narrowed to ranking ~25 retrieved candidates. Same capability, ~1/10th of the
+ * input tokens.
+ *
+ * The shortlist is a HARD BOUND on what the model may choose: ids outside it
+ * are not in the prompt, so it cannot copy them, and anything it does return
+ * is still re-validated against the full universe by validateLLMResponse.
+ *
+ * `tier: 'small'` is deliberate. The gateway's 'auto' escalates to the 70B
+ * model when the 8B model is slow or malformed, which on a typeahead means
+ * waiting for two inferences. A typeahead must answer fast or not at all —
+ * the Custom (unverified) path is always a valid outcome — so there is exactly
+ * one attempt against the fast model.
+ *
+ * Returns candidate ids that pass validateLLMResponse (full-catalog membership
+ * enforced) or null when the model is unavailable, rejected by the llm_enabled
+ * brake, unparseable, or simply unsure. Never throws.
  */
-async function llmFallback(env, rawQuery, universe) {
-  const compactCatalog = universe
-    .slice(0, LLM_PROMPT_CATALOG_CAP)
+async function llmFallback(env, rawQuery, scope, universe) {
+  // Retrieve-then-rerank. scope is pre-folded for matching; universe is the
+  // full id-validating set in the loadCatalog shape.
+  const retrieved = shortlistCandidates(scope, rawQuery, LLM_SHORTLIST);
+  if (retrieved.length === 0) {
+    // No lexical evidence anywhere in the catalog. Asking a model to pick from
+    // an arbitrary slice would only invite a guess, and the honest answer here
+    // is the Custom path — which is exactly what `none` renders.
+    return null;
+  }
+
+  const compactCatalog = retrieved
     .map((e) => `${e.id} | ${e.category} | ${e.brand ? `${e.brand} ` : ''}${e.model}`)
     .join('\n');
 
   const system = [
-    "You map a buyer's typed equipment query to entries from a FIXED catalog.",
+    "You map a buyer's typed equipment query to entries from a SHORTLIST of candidates.",
     'Reply with ONLY a JSON object: {"candidates":["id",...],"unmatched":boolean}.',
     'Rules:',
-    '- candidates may ONLY contain ids copied EXACTLY from the catalog list. Never invent ids, models, specs, or near-miss ids.',
-    '- If no catalog entry plausibly matches, return {"candidates":[],"unmatched":true}.',
+    '- candidates may ONLY contain ids copied EXACTLY from the shortlist. Never invent ids, models, specs, or near-miss ids.',
+    '- Ignore candidates that do not plausibly match the buyer\'s intent, even if they share a brand.',
+    '- If no candidate plausibly matches, return {"candidates":[],"unmatched":true}.',
     '- Max 4 candidates, best first. No prose, no markdown fences.'
   ].join('\n');
 
-  const user = `CATALOG (id | category | brand model):\n${compactCatalog}\n\nBUYER QUERY: ${JSON.stringify(String(rawQuery).slice(0, 120))}\n\nJSON:`;
+  const user = `CANDIDATES (id | category | brand model):\n${compactCatalog}\n\nBUYER QUERY: ${JSON.stringify(String(rawQuery).slice(0, 120))}\n\nJSON:`;
 
   const res = await runJson(env, {
     feature: 'buy_suggest',
-    promptVersion: 'suggest-t2-v1',
-    tier: 'auto',
+    promptVersion: 'suggest-t2-v2-shortlist',
+    tier: 'small',
     temperature: 0,
     maxTokens: LLM_MAX_TOKENS,
     timeoutMs: LLM_TIMEOUT_MS,
@@ -270,8 +305,34 @@ export async function onRequestGet({ request, env, context }) {
       Math.max(1, Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 10)
     );
 
+    // Response mode. This is the latency contract, and it exists because the
+    // typeahead cannot afford to block on inference while the user is typing:
+    //
+    //   (absent)  'auto' — historical behaviour: catalog first, model consulted
+    //             only when Tier 1 is empty/weak. Kept for direct API callers
+    //             and scripts/test-buy-suggest.mjs.
+    //   'fast'    Catalog only. Never calls the model. Answers from the
+    //             per-isolate snapshot in well under a millisecond, so the
+    //             dropdown paints while the visitor is still typing.
+    //   'llm'     Same escalation rules, but the model IS consulted for a
+    //             low-confidence query. The client fires this ~700ms after the
+    //             last keystroke and swaps the results in underneath the
+    //             already-visible fast list.
+    const modeRaw = (url.searchParams.get('mode') || '').trim().toLowerCase();
+    const mode = (modeRaw === 'fast' || modeRaw === 'llm') ? modeRaw : 'auto';
+
     if (normalizeFold(q).length < CATALOG_MIN_QUERY) {
       return json({ success: true, query: q, source: 'none', suggestions: [], hasMore: false });
+    }
+
+    // `mode=fast` short-circuits the whole keystroke path on a warm verdict
+    // from this isolate. During a typing burst the same prefixes repeat
+    // constantly, so most keystrokes cost zero D1 and zero inference.
+    if (mode === 'fast') {
+      const rHit = resolveCache.get(foldText(q) + '|' + category);
+      if (rHit && Date.now() - rHit.at < RESOLVE_TTL_MS) {
+        return json(rHit.body, 200, { 'Cache-Control': 'public, max-age=30' });
+      }
     }
 
     // ── Tier 1 — deterministic ──────────────────────────────────────────
@@ -329,20 +390,26 @@ export async function onRequestGet({ request, env, context }) {
 
     // The LLM is consulted when Tier 1 is empty, weak, or disagrees with the
     // chosen category — not merely when Tier 1 returned nothing.
-    const escalate = shouldEscalateToLlm(tier1Ranked, category, LLM_CONFIDENCE_FLOOR);
+    // `mode=fast` short-circuits here: that request is on the keystroke path
+    // and must never pay inference latency.
+    const escalate = mode !== 'fast' && shouldEscalateToLlm(tier1Ranked, category, LLM_CONFIDENCE_FLOOR);
 
     if (tier1Ranked.length > 0 && !escalate) {
-      return json({
+      const body = {
         success: true,
         query: q,
         source: 'catalog',
         suggestions: tier1Ranked.map(toSuggestion),
         hasMore: tier1Ranked.length >= limit
-      });
+      };
+      if (mode === 'fast') cacheResolve(resolveCache, foldText(q), category, body);
+      return json(body, 200, mode === 'fast'
+        ? { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' }
+        : {});
     }
 
     // ── Tier 2 — LLM: no results, low confidence, or category conflict ──
-    const cacheKey = foldText(q) + '|' + category;
+    const cacheKey = foldText(q) + '|' + category + '|' + mode;
     const hit = tier2Cache.get(cacheKey);
     if (hit && Date.now() - hit.at < TIER2_TTL_MS) {
       return json(hit.body, 200, { 'Cache-Control': 'public, max-age=30' });
@@ -350,29 +417,39 @@ export async function onRequestGet({ request, env, context }) {
 
     let source = 'none';
     let matches = [];
-    try {
-      const universe = await loadCatalog(env);
-      // When the buyer picked a category, only that category's rows are
-      // eligible. Otherwise the model can reintroduce exactly the cross-category
-      // noise Phase B just removed.
-      const scoped = category
-        ? universe.filter((e) => normalizeCategory(e.category) === category)
-        : universe;
-      const ids = await llmFallback(env, q, scoped.length > 0 ? scoped : universe);
-      if (ids && ids.length > 0) {
-        const byId = new Map(universe.map((e) => [e.id, e]));
-        matches = ids
-          .map((id, i) => {
-            const entry = byId.get(id);
-            // id already proven in the universe by validateLLMResponse
-            return entry ? { ...entry, matchType: 'fuzzy', score: 90 - i } : null;
-          })
-          .filter(Boolean);
-        source = matches.length > 0 ? 'llm' : 'none';
+    // `mode=fast` reaches here only when Tier 1 found nothing (a weak result set
+    // returns above, because escalate is forced false). Answer 'none' — the
+    // Custom (unverified) path — instead of blocking this keystroke on the
+    // model. The paired `mode=llm` request, fired once typing settles, is what
+    // actually consults Workers AI.
+    if (mode !== 'fast') {
+      try {
+        const universe = await loadCatalog(env);
+        // When the buyer picked a category, only that category's rows are
+        // eligible. Otherwise the model can reintroduce exactly the cross-category
+        // noise Phase B just removed.
+        const snap = (await getCatalogSnapshot(env)) || null;
+        const scope = snap
+          ? (category ? snap.filter((e) => normalizeCategory(e.category) === category) : snap)
+          : SEED_UNIQUE;
+        // An over-narrow scope (category with no rows) would leave the model
+        // nothing to choose; fall back to the full universe in that case.
+        const ids = await llmFallback(env, q, scope.length > 0 ? scope : universe, universe);
+        if (ids && ids.length > 0) {
+          const byId = new Map(universe.map((e) => [e.id, e]));
+          matches = ids
+            .map((id, i) => {
+              const entry = byId.get(id);
+              // id already proven in the universe by validateLLMResponse
+              return entry ? { ...entry, matchType: 'fuzzy', score: 90 - i } : null;
+            })
+            .filter(Boolean);
+          source = matches.length > 0 ? 'llm' : 'none';
+        }
+      } catch (err) {
+        console.error('[products/suggest] tier2 failed', err?.message);
+        // soft failure — Custom (unverified) is always an acceptable outcome
       }
-    } catch (err) {
-      console.error('[products/suggest] tier2 failed', err?.message);
-      // soft failure — Custom (unverified) is always an acceptable outcome
     }
 
     // Union: confident Tier-1 hits first (they are exact), then LLM picks.
@@ -387,21 +464,33 @@ export async function onRequestGet({ request, env, context }) {
       merged.push(m);
     }
     const finalMatches = merged.length > 0 ? merged : tier1Ranked;
-    if (finalMatches.length > 0 && source === 'none') {
-      source = keptTier1.length > 0 ? 'catalog' : 'catalog-low-confidence';
+    // Re-apply the category gate to the MERGED list. The model only ever sees
+    // category-scoped rows, but validateLLMResponse checks membership against
+    // the FULL universe — so a poisoned-but-real out-of-scope id would otherwise
+    // slip past the gate that Phase B exists to enforce. filterByCategory is
+    // strict, so an emptied result here is the correct answer, not a failure.
+    const gated = filterByCategory(finalMatches, category);
+    let finalSource = source;
+    if (gated.length === 0) {
+      // Nothing survived the gate: report the honest Custom outcome rather than
+      // claiming a source that produced no rows.
+      finalSource = 'none';
+    } else if (source === 'none') {
+      finalSource = keptTier1.length > 0 ? 'catalog' : 'catalog-low-confidence';
     }
 
     const body = {
       success: true,
       query: q,
-      source, // 'catalog' | 'catalog-low-confidence' | 'llm' | 'none' (Custom path)
-      suggestions: finalMatches.slice(0, limit).map(toSuggestion),
-      hasMore: finalMatches.length >= limit
+      source: finalSource, // 'catalog' | 'catalog-low-confidence' | 'llm' | 'none' (Custom path)
+      suggestions: gated.slice(0, limit).map(toSuggestion),
+      hasMore: gated.length >= limit
     };
     tier2Cache.set(cacheKey, { at: Date.now(), body });
     if (tier2Cache.size > 500) {
       tier2Cache.delete(tier2Cache.keys().next().value);
     }
+    if (mode === 'fast') cacheResolve(resolveCache, foldText(q), category, body);
     return json(body, 200, { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' });
   } catch (err) {
     console.error('[products/suggest]', err);
