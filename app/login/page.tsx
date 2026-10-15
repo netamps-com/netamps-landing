@@ -439,6 +439,27 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-6 sm:p-8 border border-slate-200/60 flex flex-col gap-5"
         >
+          {/* Brand lockup. The logo and product name come BACK - they say which
+              system this form belongs to, so removing them cost meaning to buy
+              spacing. What changed is that they are no longer their own stacked
+              block with mb-8 above and mt-8 below: they are the first rows of
+              the one column, and the space around them is the card's `gap`.
+              Sized explicitly at 48px rather than the old `scale-125` wrapper,
+              which rendered a 48px mark as roughly 60px and pushed the rest of
+              the card toward the fold. */}
+          <div className="flex flex-col items-center gap-2.5">
+            <Link
+              href="/"
+              aria-label="Netamps Technologies – Home"
+              className="transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg"
+            >
+              <NetampsLogo className="h-12 w-12" />
+            </Link>
+            <h2 className="text-xl font-black tracking-tight text-slate-900">
+              Netamps Connect
+            </h2>
+          </div>
+
           {resetToken ? (
             <div className="space-y-6">
               <div className="text-center">
@@ -560,7 +581,7 @@ export default function LoginPage() {
               )}
             </div>
           ) : (
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             {expiredNotice && (
               <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-3 flex items-center gap-2 text-amber-600 text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -673,13 +694,14 @@ export default function LoginPage() {
           </form>
           )}
           
-          </motion.div>
-        
-          {/* Bottom trust badge */}
-          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-medium pt-2 border-t border-slate-200/50">
+          {/* Bottom trust badge. Inside the card, not after it — a top border
+              only reads as a divider when it is attached to something, and
+              dangling under the card it read as a stray rule. */}
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-medium pt-1 border-t border-slate-200/60">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>Verified Sessions · Role-Gated Access</span>
           </div>
+        </motion.div>
       </div>
     </div>
   );
