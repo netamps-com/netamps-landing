@@ -8,6 +8,7 @@ import { ArrowLeft, Box, Building2, User, Phone, CheckCircle2, Plus, Trash2, Sea
 import NetampsLogo from '../NetampsLogo';
 import SecureMediaUploader, { SecureMediaUploaderHandle, AttachmentSnapshot } from './SecureMediaUploader';
 import DetailsSuggest, { CatalogSuggestion } from './DetailsSuggest';
+import ReturnsHero from './ReturnsHero';
 import { sanitizeMoneyInput, moneyStringToPaise, formatPaise, evalUnitPaise } from '../lib/money';
 import { statusChip, normalizeStatus, showsEvaluation } from '../lib/status';
 
@@ -743,12 +744,7 @@ export default function ReturnsPage() {
             <NetampsLogo />
           </Link>
         </div>
-        <h2 className="mt-2 text-center text-[clamp(1.5rem,4vw,2.25rem)] font-black tracking-tight text-slate-900">
-          Enterprise IT Liquidation, Simplified
-        </h2>
-        <p className="mt-2 text-center text-base sm:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
-          The all-in-one portal to sell, source, and track your IT assets with total transparency.
-        </p>
+        <ReturnsHero intent={intent} />
       </div>
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-3xl relative z-10">

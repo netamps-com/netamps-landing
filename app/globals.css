@@ -133,6 +133,48 @@ h1, h2, h3, h4, h5, h6 {
   animation: thread-travel 3.2s ease-in-out infinite;
 }
 
+/* ── Returns hero ─────────────────────────────────────────────────────────
+   Replayed by remounting the content subtree (key={intent}) rather than by
+   transitioning between strings: the headline and subheadline change to
+   different lengths, so there is no intermediate value for the browser to
+   interpolate and a plain CSS transition would snap instead of animating.
+   Transform + opacity only, so the replay never triggers layout. */
+@keyframes hero-swap {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.hero-swap-in {
+  animation: hero-swap 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes hero-sub {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-sub-in {
+  animation: hero-sub 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
+/* Track motif — the rail fills, and the current milestone breathes. */
+@keyframes track-progress {
+  from { stroke-dasharray: 0 200; }
+  to   { stroke-dasharray: 112 200; }
+}
+.track-progress {
+  animation: track-progress 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pulse-ring {
+  0%   { opacity: 0.55; transform: scale(0.75); }
+  70%  { opacity: 0;    transform: scale(1.6); }
+  100% { opacity: 0;    transform: scale(1.6); }
+}
+.pulse-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse-ring 2.1s ease-out infinite;
+}
+
 /* Finer texture than .bg-grid-pattern, for surfaces small enough that a 32px
    grid reads as blotches rather than texture. */
 .bg-dot-fine {
