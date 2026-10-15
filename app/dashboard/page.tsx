@@ -1037,12 +1037,20 @@ export default function DashboardPage() {
                                         <div className="flex justify-between items-start gap-4 flex-wrap">
                                           <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
-                                              {product.strategicTarget && (
+                                              {/* Disposition is a SELL-side decision and the
+                                                  form only asks for it when selling. A
+                                                  BUY row still carries the client's
+                                                  default `strategicTarget: 'resale'`,
+                                                  so gating on the stored value alone
+                                                  would badge every BUY order with a
+                                                  disposition nobody chose. Gate on
+                                                  the intent instead. */}
+                                              {isSell && product.strategicTarget && (
                                                 <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${product.strategicTarget === 'resale' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
                                                   {product.strategicTarget === 'resale' ? 'Resale Value Opt.' : 'Compliance Recycling'}
                                                 </span>
                                               )}
-                                              {product.lifecycleAge && (
+                                              {isSell && product.lifecycleAge && (
                                                 <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                                                   {product.lifecycleAge}
                                                 </span>

@@ -1079,6 +1079,13 @@ export default function ReturnsPage() {
                         )}
                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Product #{index + 1}</h5>
                         
+                        {/* Disposition fields are SELL-only. A buyer is not
+                            choosing between resale optimisation and compliance
+                            recycling for someone else's hardware, and batch age
+                            describes an asset being handed over, not sourced.
+                            Both were briefly shown on BUY; they are not buyer
+                            inputs. */}
+                        {intent === 'sell' && (
                         <div className="space-y-4 mb-2">
                           <div>
                             <label className="block text-xs font-medium text-slate-700 mb-2">Strategic Recovery Target *</label>
@@ -1124,7 +1131,7 @@ export default function ReturnsPage() {
                               <label className="block text-xs font-medium text-slate-700 mb-1">Hardware Lifecycle Batch Age *</label>
                               <div className="relative">
                                 <select
-                                  required={intent === 'sell'}
+                                  required
                                   value={product.lifecycleAge}
                                   onChange={(e) => updateProduct(product.id, 'lifecycleAge', e.target.value)}
                                   className="block w-full px-3 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-900 focus:ring-2 focus:ring-indigo-500 sm:text-sm appearance-none shadow-sm"
@@ -1145,6 +1152,7 @@ export default function ReturnsPage() {
                               </div>
                             </div>
                           </div>
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                           <div className="sm:col-span-2">
