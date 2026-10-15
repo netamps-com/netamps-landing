@@ -121,8 +121,12 @@ export const CATALOG_INDEX_MODE = true;
 /**
  * FTS5 tier. Returns null when the index is unavailable or empty, which tells
  * the caller to fall through to legacy — never an empty-array "no results".
+ *
+ * Exported for the rank-fusion shadow (fusion.js), which needs this tier as an
+ * INDEPENDENT list rather than only as the head of the cascade. Behaviour here
+ * is unchanged — searchCatalog still calls it exactly as before.
  */
-async function searchFtsTier(env, qcmp, limit) {
+export async function searchFtsTier(env, qcmp, limit) {
   if (!CATALOG_INDEX_MODE) return null;
   if (!(await ensureFtsIndex(env))) return null;
   let tokens;

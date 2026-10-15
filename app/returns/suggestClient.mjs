@@ -15,6 +15,20 @@ export function createSuggestSession(options = {}) {
   const minLength = options.minLength ?? 2;
   const apiUrl = options.apiUrl ?? '';
   const fetchImpl = options.fetchImpl ?? ((...args) => globalThis.fetch(...args));
+  /**
+   * Extra query parameters, merged into every request this session makes.
+   * Used for the selected Equipment Category. Absent or empty means the URL is
+   * byte-for-byte what it was before this option existed — the server treats
+   * `cat` as optional, so an older deployment simply ignores it.
+   */
+  const extraParams = options.extraParams && typeof options.extraParams === 'object'
+    ? options.extraParams
+    : {};
+
+  const extraQuery = Object.entries(extraParams)
+    .filter(([, v]) => v !== undefined && v !== null && String(v) !== '')
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join('&');
 
   let timer = null;
   let controller = null;
@@ -28,8 +42,10 @@ export function createSuggestSession(options = {}) {
     const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
     controller = ctrl;
     try {
+      const url = `${apiUrl}/api/products/suggest?q=${encodeURIComponent(query)}`
+        + (extraQuery ? `&${extraQuery}` : '');
       const res = await fetchImpl(
-        `${apiUrl}/api/products/suggest?q=${encodeURIComponent(query)}`,
+        url,
         ctrl ? { signal: ctrl.signal } : undefined
       );
       const body = await res.json();

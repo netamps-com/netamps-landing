@@ -1,16 +1,25 @@
 /**
- * GET /api/products/shadow — review the legacy-vs-FTS5 disagreement log.
+ * GET /api/products/shadow — review the retrieval disagreement logs.
  *
- * Read-only, admin-gated. This is the evidence required before cutover
- * (docs/catalog-retrieval-etl.md §10 step 3): it shows whether FTS5's extra
- * recall is CORRECT or merely broader.
+ * Read-only, admin-gated. This is the evidence required before any cutover.
  *
- *   /api/products/shadow              -> aggregate verdict + recent queries
- *   /api/products/shadow?limit=200    -> wider sample
+ * Two experiments live here, deliberately reported SEPARATELY because they
+ * answer different questions and a blend of them would be unreadable:
+ *
+ *   ?experiment=fts (default)  legacy cascade vs FTS5. The question is
+ *                              RECALL — does FTS5 find rows the legacy path
+ *                              misses, and are they correct?
+ *   ?experiment=fusion         RRF + cross-encoder vs the live cascade. The
+ *                              question is ORDER — does the new ranking
+ *                              rearrange what is already being served?
+ *
+ *   /api/products/shadow                    -> FTS experiment
+ *   /api/products/shadow?experiment=fusion  -> fusion experiment
+ *   /api/products/shadow?limit=200          -> wider sample (either)
  */
 
 import { verifySession } from '../intake/auth.js';
-import { shadowSummary } from './shadow.js';
+import { shadowSummary, fusionSummary } from './shadow.js';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -29,9 +38,18 @@ export async function onRequestGet({ request, env }) {
     const url = new URL(request.url);
     const raw = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
     const limit = Math.min(500, Math.max(1, Number.isFinite(raw) && raw > 0 ? raw : 50));
+    const experiment = (url.searchParams.get('experiment') || 'fts').toLowerCase();
 
-    const summary = await shadowSummary(env, { limit });
-    return json({ success: true, ...summary });
+    if (experiment === 'fusion') {
+      return json({ success: true, experiment, ...(await fusionSummary(env, { limit })) });
+    }
+    if (experiment !== 'fts') {
+      return json({
+        success: false,
+        message: "experiment must be 'fts' or 'fusion'."
+      }, 400);
+    }
+    return json({ success: true, experiment, ...(await shadowSummary(env, { limit })) });
   } catch (err) {
     console.error('[products/shadow]', err);
     return json({ success: false, message: 'Shadow summary unavailable.' }, 500);

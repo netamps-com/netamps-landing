@@ -38,6 +38,15 @@ interface DetailsSuggestProps {
   onSelect: (item: CatalogSuggestion) => void;
   /** Current catalog id (shows the check on the captured row). */
   selectedId?: string | null;
+  /**
+   * The Equipment Category slug selected above this field.
+   *
+   * Sent as `cat` so the server can use it as a soft ranking prior. It does not
+   * change what is displayed: the server currently uses it only in its
+   * fusion shadow experiment. Pass undefined and the server behaves exactly as
+   * before — the parameter is additive and the request is valid without it.
+   */
+  category?: string;
   placeholder?: string;
   disabled?: boolean;
 }
@@ -49,6 +58,7 @@ export default function DetailsSuggest({
   onChange,
   onSelect,
   selectedId,
+  category,
   placeholder,
   disabled
 }: DetailsSuggestProps) {
@@ -63,10 +73,18 @@ export default function DetailsSuggest({
   const [searched, setSearched] = useState(false); // a real query reached the server
 
   // One session per mount — debounce + abort live here, not in JSX handlers.
+  // The category is folded into the session's query string at request time
+  // rather than rebuilt per keystroke, so switching category does not tear down
+  // the debounce or abort an in-flight request.
   useEffect(() => {
-    sessionRef.current = createSuggestSession({ apiUrl: API_URL, debounceMs: 250, minLength: 2 });
+    sessionRef.current = createSuggestSession({
+      apiUrl: API_URL,
+      debounceMs: 250,
+      minLength: 2,
+      extraParams: category ? { cat: category } : undefined
+    });
     return () => { sessionRef.current?.cancel(); sessionRef.current = null; };
-  }, []);
+  }, [category]);
 
   const runSearch = useCallback((q: string) => {
     const session = sessionRef.current;

@@ -40,7 +40,8 @@ import {
   ensureCatalog,
   searchCatalog
 } from './catalog.js';
-import { compareAndRecord } from './shadow.js';
+import { compareAndRecord, shadowFusion } from './shadow.js';
+import { fusedRank } from './fusion.js';
 import { runJson } from '../llm/client.mjs';
 import { SEED_UNIQUE, matchCatalog, validateLLMResponse, foldText } from './catalog.mjs';
 
@@ -53,6 +54,32 @@ async function shadowEnabled(env) {
   try {
     const row = await env.DB
       .prepare("SELECT value FROM match_meta WHERE key = 'shadow_enabled'")
+      .bind()
+      .first();
+    return !!row && row.value === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Rank-fusion + cross-encoder shadow. Default OFF.
+ *
+ * A SEPARATE gate from `shadow_enabled`, deliberately. That key currently
+ * authorises the legacy-vs-FTS5 comparison whose recorded evidence justified
+ * the FTS cutover; turning it on must not silently also start a second,
+ * unrelated experiment and a second AI call per keystroke. Two switches means
+ * each experiment can be run, reviewed and turned off independently.
+ *
+ * Requires BOTH this and `shadow_enabled`, so the existing gate still governs
+ * whether the endpoint writes diagnostic rows at all.
+ */
+async function fusionShadowEnabled(env) {
+  if (!(await shadowEnabled(env))) return false;
+  if (!env.DB || typeof env.DB.prepare !== 'function') return false;
+  try {
+    const row = await env.DB
+      .prepare("SELECT value FROM match_meta WHERE key = 'fusion_shadow'")
       .bind()
       .first();
     return !!row && row.value === '1';
@@ -222,6 +249,13 @@ export async function onRequestGet({ request, env, context }) {
       return json({ success: false, message: 'Query must be 2-64 characters.' }, 400);
     }
 
+    // The Equipment Category the visitor has selected, if any. Used ONLY by the
+    // fusion shadow today. It is deliberately NOT part of the returned
+    // ordering while the experiment runs — accepting the parameter changes the
+    // request, never the response, so turning the shadow on cannot silently
+    // change what a visitor sees.
+    const category = (url.searchParams.get('cat') || '').trim().slice(0, 64);
+
     const limitRaw = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
     const limit = Math.min(
       CATALOG_MAX_RESULTS,
@@ -246,6 +280,32 @@ export async function onRequestGet({ request, env, context }) {
     if (d1 && (await shadowEnabled(env))) {
       const work = compareAndRecord(env, q, tier1, { limit })
         .catch((err) => console.error('[shadow] compare failed', err?.message));
+      if (context && typeof context.waitUntil === 'function') {
+        context.waitUntil(work);
+      }
+    }
+
+    // Rank-fusion + cross-encoder shadow (Stage 1 + 2 of docs/catalog-retrieval).
+    // Same contract as the comparison above and just as strict: `tier1` is
+    // still what gets returned. This records the ORDER fusion would have
+    // produced so the change can be measured before anyone serves from it.
+    // Gated on match_meta 'fusion_shadow' (default OFF) and fire-and-forget via
+    // waitUntil, so it can neither delay nor alter this response.
+    if (d1 && (await fusionShadowEnabled(env))) {
+      const work = (async () => {
+        try {
+          const pool = new Map(
+            (await loadCatalog(env)).map((e) => [e.id, e])
+          );
+          const fused = await fusedRank(env, q, { category, pool, limit });
+          await shadowFusion(env, q, tier1.map((r) => r.id), fused.ids, {
+            category,
+            rerankApplied: fused.rerankApplied
+          });
+        } catch (err) {
+          console.error('[shadow-fusion] failed', err?.message);
+        }
+      })();
       if (context && typeof context.waitUntil === 'function') {
         context.waitUntil(work);
       }

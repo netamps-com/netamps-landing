@@ -1245,6 +1245,7 @@ export default function ReturnsPage() {
                             onChange={(value) => manualEdit(product.id, 'details', value)}
                             onSelect={(item) => applySuggestion(product.id, item)}
                             selectedId={product.catalogId || null}
+                            category={product.category}
                             disabled={isSubmitting}
                             placeholder={intent === 'sell'
                               ? 'Search catalog or type — e.g. "dell r740", "dl380 gen10"'
