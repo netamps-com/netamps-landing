@@ -121,7 +121,7 @@ function defaultItems() {
       href: 'https://netamps.com/returns',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-13T09:30:00Z'
+      ts: ''
     },
     {
       id: 'feed-2',
@@ -131,7 +131,7 @@ function defaultItems() {
       href: 'https://netamps.com/returns',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-14T11:15:00Z'
+      ts: ''
     },
     {
       id: 'feed-3',
@@ -141,7 +141,7 @@ function defaultItems() {
       href: 'https://netamps.com/returns',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-15T14:05:00Z'
+      ts: ''
     },
     {
       id: 'feed-4',
@@ -151,7 +151,7 @@ function defaultItems() {
       href: 'https://netamps.com/track',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-16T08:45:00Z'
+      ts: ''
     }
   ];
 }
