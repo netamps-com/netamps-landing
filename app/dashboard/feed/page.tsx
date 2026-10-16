@@ -264,6 +264,7 @@ export default function FeedDashboardPage() {
 
   // Hooks stay above the unauthorized early return to keep hook order stable.
   const session = useDashboardSession();
+  const router = useRouter();
   const navSections = buildNavSections();
 
   const appendEvent = useCallback((e: Omit<FeedEvent, 'id' | 'time'> & { payload: string }) => {
@@ -716,6 +717,9 @@ export default function FeedDashboardPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Back to dashboard">
+              <ArrowLeft className="w-4 h-4 text-slate-600" />
+            </button>
             <button
               onClick={() => load()}
               className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 transition-colors focus-visible:ring-2 focus-visible:ring-lime-500 focus-visible:outline-none"
