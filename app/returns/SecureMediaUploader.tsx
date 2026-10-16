@@ -343,7 +343,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
           setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', errorMessage: 'Already attached: an identical file (same content hash) is already staged.' } : f)));
           continue;
         }
-        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash, state: 'QUEUED' } : f)));
+        // Generate preview URL for supported image/video types (creates object URL for client-side preview)
+        const ext = (row.file.name.split('.').pop() || '').toLowerCase();
+        const isImg = /\.(png|jpe?g|webp|gif)$/i.test(row.file.name);
+        const isVid = /\.(mp4|webm|mov)$/i.test(row.file.name);
+        const newPreviewUrl = (isImg || isVid) ? URL.createObjectURL(row.file) : undefined;
+        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash, state: 'QUEUED', previewUrl: newPreviewUrl } : f)));
         pumpUploads();
       } catch {
         setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', errorMessage: 'Could not read file for integrity hashing.' } : f)));
