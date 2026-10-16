@@ -108,11 +108,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
   const productsRef = useRef(products);
   productsRef.current = products;
 
-  // Revoke object URLs on unmount to avoid leaking memory
+  // Revoke object URLs on unmount to avoid leaking memory. Reads the live
+  // queue via ref — a mount-time snapshot would pin the initial (empty) array
+  // and revoke nothing.
   useEffect(() => {
-    const snapshot = queuedFiles;
     return () => {
-      snapshot.forEach((f) => { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
+      queueRef.current.forEach((f) => { if (f.previewUrl) { try { URL.revokeObjectURL(f.previewUrl); } catch {} } });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -294,10 +295,20 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
 
     for (const file of incoming) {
       const ext = (file.name.split('.').pop() || '').toLowerCase();
+      // Preview URL is minted HERE, synchronously at stage time — the
+      // thumbnail must not wait behind SHA-256 hashing and the upload queue.
+      // Only the browser-decodable set gets one (same contract as
+      // isPreviewableImage/isPreviewableVideo below); everything else keeps
+      // the file icon. The blob is freed on <img> onLoad, or on the
+      // remove/retry/unmount paths if the row dies before rendering.
+      let previewUrl: string | undefined;
+      if (/\.(png|jpe?g|webp|gif|mp4|webm|mov)$/i.test(file.name)) {
+        try { previewUrl = URL.createObjectURL(file); } catch { previewUrl = undefined; }
+      }
       const base = {
         id: crypto.randomUUID(),
         file,
-        previewUrl: undefined as string | undefined,
+        previewUrl,
         state: 'QUEUED' as FileState,
         progress: 0,
         productId: target,
@@ -340,17 +351,15 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
           isDup = queueRef.current.some((f) => f.id !== row.id && f.hash === hash);
         }
         if (isDup) {
-          setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', errorMessage: 'Already attached: an identical file (same content hash) is already staged.' } : f)));
+          if (row.previewUrl) { try { URL.revokeObjectURL(row.previewUrl); } catch {} }
+          setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', previewUrl: undefined, errorMessage: 'Already attached: an identical file (same content hash) is already staged.' } : f)));
           continue;
         }
-        // Generate preview URL for supported image/video types (creates object URL for client-side preview)
-        const isImg = row.file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(row.file.name);
-        const isVid = row.file.type.startsWith('video/') || /\.(mp4|webm|mkv|avi|flv|mov)$/i.test(row.file.name);
-        const newPreviewUrl = (isImg || isVid) ? URL.createObjectURL(row.file) : undefined;
-        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash, state: 'QUEUED', previewUrl: newPreviewUrl } : f)));
+        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash, state: 'QUEUED' } : f)));
         pumpUploads();
       } catch {
-        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', errorMessage: 'Could not read file for integrity hashing.' } : f)));
+        if (row.previewUrl) { try { URL.revokeObjectURL(row.previewUrl); } catch {} }
+        setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, state: 'ERROR', previewUrl: undefined, errorMessage: 'Could not read file for integrity hashing.' } : f)));
       }
     }
   }, [uploadFile]);
@@ -450,9 +459,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
   // Inline-preview eligibility mirrors the gallery's renderability contract:
   // HEIC/TIFF have no browser decoder and MKV/AVI/FLV no browser player, so
   // staged files of those types keep the file icon instead of a dead preview
-  // element. Icons above still use isImage/isVideo (container class).
-  const isPreviewableImage = (f: File) => (f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(f.name));
-  const isPreviewableVideo = (f: File) => (f.type.startsWith('video/') || /\.(mp4|webm|mkv|avi|flv|mov)$/i.test(f.name));
+  // element. The gate is the decodable EXTENSION set — never the MIME prefix
+  // (image/heic and video/x-matroska both start with image//video/ and would
+  // otherwise slip through). Icons above still use isImage/isVideo (container
+  // class).
+  const isPreviewableImage = (f: File) => /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+  const isPreviewableVideo = (f: File) => /\.(mp4|webm|mov)$/i.test(f.name);
   const isData = (f: File) => /\.(csv|json|xlsx)$/i.test(f.name);
 
   const handleFiles = useCallback(
@@ -606,6 +618,10 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                       src={qFile.previewUrl}
                       className="absolute inset-0 w-full h-full object-cover"
                       autoPlay muted loop playsInline
+                      // Deliberately NOT revoked on load: the looping player
+                      // keeps streaming from the blob URL, and revoking after
+                      // the first frame can break later loops. Freed on
+                      // remove / retry / unmount / Clear instead.
                       onError={(e) => { e.currentTarget.remove(); }}
                     />
                   )}
@@ -615,6 +631,12 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
                       src={qFile.previewUrl}
                       alt={qFile.file.name}
                       className="absolute inset-0 w-full h-full object-cover"
+                      // The bitmap is decoded into the DOM on load — the blob
+                      // URL has served its purpose and is revoked immediately
+                      // so browser memory is freed. The rendered <img> keeps
+                      // its decoded pixels; React re-renders reuse the same
+                      // src string without touching the node.
+                      onLoad={() => { if (qFile.previewUrl) { try { URL.revokeObjectURL(qFile.previewUrl); } catch {} } }}
                       onError={(e) => { e.currentTarget.remove(); }}
                     />
                   )}
