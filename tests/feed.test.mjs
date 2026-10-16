@@ -56,6 +56,22 @@ function scrollDefault(scroll) {
   return scroll !== false;
 }
 
+const MEDIA_KINDS = new Set(['none', 'image', 'video', 'file']);
+
+function isValidMedia(kind, url) {
+  if (!MEDIA_KINDS.has(kind)) return false;
+  if (kind === 'none') return true;
+  return isHttpUrl(url) && url.length <= 2000;
+}
+
+function isValidTickerEntry(e) {
+  if (!e || typeof e !== 'object') return false;
+  if (typeof e.text !== 'string' || e.text.length === 0 || e.text.length > 140) return false;
+  if (typeof e.tag === 'string' && e.tag.length > 40) return false;
+  if (typeof e.url === 'string' && e.url.length > 500) return false;
+  return true;
+}
+
 let pass = 0, fail = 0;
 function t(name, fn) {
   try {
@@ -126,6 +142,21 @@ t('false valid', () => assert.equal(isValidScroll(false), true));
 t('absent defaults on', () => assert.equal(scrollDefault(undefined), true));
 t('explicit off stays off', () => assert.equal(scrollDefault(false), false));
 t('string invalid', () => assert.equal(isValidScroll('yes'), false));
+
+console.log('\nmedia attachments');
+t('none needs no url', () => assert.equal(isValidMedia('none', ''), true));
+t('image needs http url', () => assert.equal(isValidMedia('image', 'https://cdn.example.com/a.jpg'), true));
+t('video needs http url', () => assert.equal(isValidMedia('video', 'https://cdn.example.com/a.mp4'), true));
+t('file needs http url', () => assert.equal(isValidMedia('file', 'https://cdn.example.com/a.pdf'), true));
+t('image rejects empty url', () => assert.equal(isValidMedia('image', ''), false));
+t('video rejects javascript url', () => assert.equal(isValidMedia('video', 'javascript:alert(1)'), false));
+t('unknown kind rejected', () => assert.equal(isValidMedia('audio', 'https://cdn.example.com/a.mp3'), false));
+
+console.log('\nticker entries');
+t('valid entry', () => assert.equal(isValidTickerEntry({ tag: 'ITAD', text: 'Pickup done', url: 'https://netamps.com/returns' }), true));
+t('empty text invalid', () => assert.equal(isValidTickerEntry({ tag: 'ITAD', text: '', url: '' }), false));
+t('141-char text invalid', () => assert.equal(isValidTickerEntry({ tag: 'x', text: 'a'.repeat(141), url: '' }), false));
+t('non-object invalid', () => assert.equal(isValidTickerEntry(null), false));
 
 console.log(`\n${fail === 0 ? 'FEED_PASS' : 'FEED_FAIL'} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

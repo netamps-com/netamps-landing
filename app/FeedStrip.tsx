@@ -1,6 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FileText } from 'lucide-react';
+
+type MediaKind = 'none' | 'image' | 'video' | 'file';
 
 type FeedItem = {
   id: string;
@@ -9,12 +12,22 @@ type FeedItem = {
   detail: string;
   href: string;
   ts: string;
+  media_kind?: MediaKind;
+  media_url?: string;
+};
+
+type TickerEntry = {
+  id: string;
+  tag: string;
+  text: string;
+  url: string;
+  enabled?: boolean;
 };
 
 type FeedLoadState =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; enabled: boolean; scroll: boolean; items: FeedItem[] };
+  | { status: 'ready'; enabled: boolean; scroll: boolean; items: FeedItem[]; ticker: TickerEntry[] };
 
 // Production-grade refresh: static export has no sockets, so the strip
 // revalidates on an interval (skipped while the tab is hidden) plus on
@@ -32,10 +45,50 @@ function formatTime(ts: string): string {
   }
 }
 
+// Attachment rendering follows standard practice: lazy images, click-to-play
+// video (no preload), files as labelled links. Only http(s) sources render.
+function FeedMedia({ kind, url, title }: { kind?: MediaKind; url?: string; title: string }) {
+  const src = typeof url === 'string' ? url.trim() : '';
+  if (!src || !/^https?:\/\/.+/i.test(src)) return null;
+  if (kind === 'image') {
+    return (
+      <img
+        src={src}
+        alt={title}
+        loading="lazy"
+        className="mb-3 h-36 w-full rounded-xl border border-slate-200/70 object-cover"
+      />
+    );
+  }
+  if (kind === 'video') {
+    return (
+      <video
+        src={src}
+        controls
+        preload="none"
+        className="mb-3 h-36 w-full rounded-xl border border-slate-200/70 bg-slate-950 object-cover"
+      />
+    );
+  }
+  if (kind === 'file') {
+    return (
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-indigo-700 transition-colors hover:border-indigo-300 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+      >
+        <FileText className="h-3.5 w-3.5" /> Open attachment
+      </a>
+    );
+  }
+  return null;
+}
+
 // One flash in the ticker. Links only to http(s) websites entered for the
 // item — anything else renders as plain text, so no crafted href can run
 // script or route into the app.
-function TickerFlash({ item }: { item: FeedItem }) {
+function TickerFlash({ item }: { item: { id: string; tag: string; title: string; href: string } }) {
   const href = typeof item.href === 'string' ? item.href.trim() : '';
   const safe = /^https?:\/\/.+/i.test(href) ? href : null;
   const inner = (
@@ -79,9 +132,10 @@ export default function FeedStrip() {
       const base = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${base}/api/feed?public=1`, { cache: 'no-store', signal: ctrl.signal });
       if (!res.ok) throw new Error('Feed request failed');
-      const data = (await res.json()) as { enabled?: unknown; scroll?: unknown; items?: unknown; updatedAt?: unknown };
+      const data = (await res.json()) as { enabled?: unknown; scroll?: unknown; items?: unknown; ticker?: unknown; updatedAt?: unknown };
       const items = Array.isArray(data.items) ? (data.items as FeedItem[]) : [];
-      setState({ status: 'ready', enabled: data.enabled !== false, scroll: data.scroll !== false, items });
+      const rawTicker = Array.isArray(data.ticker) ? (data.ticker as TickerEntry[]) : [];
+      setState({ status: 'ready', enabled: data.enabled !== false, scroll: data.scroll !== false, items, ticker: rawTicker });
       if (typeof data.updatedAt === 'string') setUpdatedAt(data.updatedAt);
     } catch {
       // Keep the last good render; only a first-load failure hides the strip.
@@ -136,7 +190,12 @@ export default function FeedStrip() {
     );
   }
 
-  const tickerItems = state.items.filter((it) => it.title.trim() !== '');
+  // Dedicated ticker placeholder wins; items backfill only when the operator
+  // has not curated ticker entries yet.
+  const tickerItems = (state.ticker.length > 0
+    ? state.ticker.map((t) => ({ id: t.id, tag: t.tag, title: t.text, href: t.url }))
+    : state.items.map((it) => ({ id: it.id, tag: it.tag, title: it.title, href: it.href }))
+  ).filter((it) => it.title.trim() !== '');
 
   return (
     <section aria-label="Netamps signal feed" className="relative overflow-hidden border-y border-slate-200/70 bg-gradient-to-b from-white via-indigo-50/50 to-white">
@@ -180,6 +239,7 @@ export default function FeedStrip() {
               className="group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 p-5 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300/70 hover:shadow-[0_12px_32px_rgba(79,70,229,0.12)]"
             >
               <div aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-indigo-500 via-sky-400 to-emerald-400 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              <FeedMedia kind={item.media_kind} url={item.media_url} title={item.title} />
               <span className="inline-block rounded-full bg-gradient-to-r from-indigo-50 to-sky-50 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-indigo-700 ring-1 ring-inset ring-indigo-100">
                 {item.tag}
               </span>

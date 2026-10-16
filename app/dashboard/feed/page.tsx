@@ -20,7 +20,9 @@ type ChannelKind = 'webhook' | 'zapier' | 'slack' | 'custom';
 type SchemaSource = 'title' | 'link' | 'summary' | 'timestamp' | 'company';
 type PayloadFormat = 'json' | 'xml';
 
-type FeedItem = { id: string; tag: string; title: string; detail: string; href: string; ts: string };
+type MediaKind = 'none' | 'image' | 'video' | 'file';
+type FeedItem = { id: string; tag: string; title: string; detail: string; href: string; media_kind: MediaKind; media_url: string; ts: string };
+type TickerEntry = { id: string; tag: string; text: string; url: string; enabled: boolean };
 type Channel = { id: string; kind: ChannelKind; label: string; url: string; enabled: boolean };
 type SchemaField = { id: string; key: string; source: SchemaSource; required: boolean };
 type FeedSchema = { format: PayloadFormat; fields: SchemaField[] };
@@ -28,7 +30,6 @@ type FeedRate = { perMinute: number; burst: number; retryMax: number };
 type FeedConfig = {
   enabled: boolean;
   scroll: boolean;
-  items: FeedItem[];
   channels: Channel[];
   rate: FeedRate;
   schema: FeedSchema;
@@ -37,8 +38,13 @@ type FeedEvent = {
   id: string; time: string; channel: string; bytes: number;
   status: number; latency: number; payload: string;
 };
+type FeedHistoryEvent = {
+  id: string; ts: string; kind: string; channel: string;
+  status: number; latency_ms: number; bytes: number; payload?: unknown;
+};
 
 const CHANNEL_KINDS: ChannelKind[] = ['webhook', 'zapier', 'slack', 'custom'];
+const MEDIA_KINDS: MediaKind[] = ['none', 'image', 'video', 'file'];
 const SCHEMA_SOURCES: SchemaSource[] = ['title', 'link', 'summary', 'timestamp', 'company'];
 const MAX_ITEMS = 12;
 const MAX_EVENTS = 50;
@@ -51,7 +57,6 @@ const uid = () =>
 const DEFAULT_CONFIG: FeedConfig = {
   enabled: false,
   scroll: true,
-  items: [],
   channels: [],
   rate: { perMinute: 60, burst: 10, retryMax: 3 },
   schema: {
@@ -67,17 +72,59 @@ const DEFAULT_CONFIG: FeedConfig = {
 const FALLBACK_ITEM: FeedItem = {
   id: 'preview', tag: 'update', title: 'Sample post',
   detail: 'Preview only — add feed items below to curate landing content.',
-  href: 'https://netamps.com/', ts: '',
+  href: 'https://netamps.com/', media_kind: 'none', media_url: '', ts: '',
 };
 
-function isFeedConfig(v: unknown): v is FeedConfig {
+function isFeedConfig(v: unknown): v is FeedConfig & { items?: unknown } {
   if (!v || typeof v !== 'object') return false;
   const c = v as Record<string, unknown>;
+  // Accepts both shapes: new config-only and legacy config with items.
   return (
     typeof c.enabled === 'boolean' &&
-    Array.isArray(c.items) && Array.isArray(c.channels) &&
-    typeof c.rate === 'object' && typeof c.schema === 'object'
+    Array.isArray(c.channels) &&
+    typeof c.rate === 'object' && c.rate !== null &&
+    typeof c.schema === 'object' && c.schema !== null
   );
+}
+
+function normalizeItem(raw: unknown): FeedItem {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const mk = r.media_kind;
+  return {
+    id: typeof r.id === 'string' && r.id ? r.id : uid(),
+    tag: typeof r.tag === 'string' ? r.tag : '',
+    title: typeof r.title === 'string' ? r.title : '',
+    detail: typeof r.detail === 'string' ? r.detail : '',
+    href: typeof r.href === 'string' ? r.href : '',
+    media_kind: mk === 'image' || mk === 'video' || mk === 'file' ? mk : 'none',
+    media_url: typeof r.media_url === 'string' ? r.media_url : '',
+    ts: typeof r.ts === 'string' ? r.ts : '',
+  };
+}
+
+function normalizeTicker(raw: unknown): TickerEntry {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: typeof r.id === 'string' && r.id ? r.id : uid(),
+    tag: typeof r.tag === 'string' ? r.tag : '',
+    text: typeof r.text === 'string' ? r.text : '',
+    url: typeof r.url === 'string' ? r.url : '',
+    enabled: (r as { enabled?: unknown }).enabled !== false,
+  };
+}
+
+function normalizeHistory(raw: unknown): FeedHistoryEvent {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: typeof r.id === 'string' && r.id ? r.id : uid(),
+    ts: typeof r.ts === 'string' ? r.ts : '',
+    kind: typeof r.kind === 'string' ? r.kind : 'push',
+    channel: typeof r.channel === 'string' ? r.channel : '',
+    status: typeof r.status === 'number' ? r.status : 0,
+    latency_ms: typeof r.latency_ms === 'number' ? r.latency_ms : 0,
+    bytes: typeof r.bytes === 'number' ? r.bytes : 0,
+    payload: (r as { payload?: unknown }).payload,
+  };
 }
 
 function escapeXml(s: string): string {
@@ -159,11 +206,18 @@ const labelXs = 'block text-[11px] font-bold uppercase tracking-wider text-slate
 
 export default function FeedDashboardPage() {
   const [config, setConfig] = useState<FeedConfig>(DEFAULT_CONFIG);
+  const [items, setItems] = useState<FeedItem[]>([]);
+  const [ticker, setTicker] = useState<TickerEntry[]>([]);
+  const [history, setHistory] = useState<FeedHistoryEvent[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingItems, setSavingItems] = useState(false);
+  const [savingTicker, setSavingTicker] = useState(false);
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [defaultItems, setDefaultItems] = useState<FeedItem[] | null>(null);
   const [live, setLive] = useState(true);
@@ -178,7 +232,8 @@ export default function FeedDashboardPage() {
   const [channelError, setChannelError] = useState('');
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [channelDraft, setChannelDraft] = useState({ label: '', url: '' });
-  const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '', ts: '' });
+  const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '', media_kind: 'none' as MediaKind, media_url: '', ts: '' });
+  const [newTicker, setNewTicker] = useState({ tag: '', text: '', url: '' });
   const [newFieldKey, setNewFieldKey] = useState('');
   const secretRef = useRef<HTMLInputElement | null>(null);
 
@@ -205,18 +260,28 @@ export default function FeedDashboardPage() {
       try { data = await res.json(); } catch { throw new Error('bad response'); }
       const cfg = data?.config ?? data;
       if (Array.isArray((data?.defaults as { items?: unknown } | undefined)?.items)) {
-        setDefaultItems((data.defaults as { items: FeedItem[] }).items);
+        setDefaultItems((data.defaults as { items: unknown[] }).items.map(normalizeItem));
       }
       if (isFeedConfig(cfg)) {
         // Older saved rows predate the scroll switch — default it ON.
-        // Items saved before per-item dates carry no ts — keep them as-is;
-        // the editor shows an empty date the operator can set.
         const withScroll = cfg as FeedConfig & { scroll?: unknown };
         setConfig({
-          ...cfg,
+          enabled: cfg.enabled,
           scroll: withScroll.scroll !== false,
-          items: cfg.items.map((it) => ({ ...it, ts: typeof (it as { ts?: unknown }).ts === 'string' ? (it as { ts: string }).ts : '' })),
+          channels: cfg.channels,
+          rate: cfg.rate,
+          schema: cfg.schema,
         });
+        // New shape carries items/ticker top-level; legacy nests items in config.
+        const legacyItems = (cfg as { items?: unknown }).items;
+        const rawItems = Array.isArray(data?.items)
+          ? (data.items as unknown[])
+          : Array.isArray(legacyItems)
+            ? (legacyItems as unknown[])
+            : [];
+        // Items saved before per-item dates/media carry no ts/media — normalize fills defaults.
+        setItems(rawItems.map(normalizeItem));
+        setTicker(Array.isArray(data?.ticker) ? (data.ticker as unknown[]).map(normalizeTicker) : []);
       }
       else if (!res.ok) setError(data?.message || 'Feed API unavailable — editing local defaults.');
     } catch {
@@ -228,8 +293,40 @@ export default function FeedDashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const res = await fetch(`${API}/api/feed?history=1&limit=100`, { cache: 'no-store' });
+      if (res.status === 401) { setUnauthorized(true); return; }
+      let data: any = null;
+      try { data = await res.json(); } catch { throw new Error('bad response'); }
+      if (!res.ok || data?.success === false) {
+        setHistoryError(data?.message || 'Feed history unavailable.');
+        return;
+      }
+      const rows = Array.isArray(data?.events) ? (data.events as unknown[]).map(normalizeHistory) : [];
+      // Newest first by ts; rows without ts keep server order reversed.
+      rows.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+      setHistory(rows);
+    } catch {
+      setHistoryError('Failed to load feed history.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+    const t = setInterval(() => {
+      if (document.hidden) return;
+      loadHistory();
+    }, 30000);
+    return () => clearInterval(t);
+  }, [loadHistory]);
+
   // Heartbeat tick: appends a monitor sample only while the stream is live.
-  const previewItem = config.items[0] ?? FALLBACK_ITEM;
+  const previewItem = items[0] ?? FALLBACK_ITEM;
   const builtPayload = useMemo(() => buildPayload(config.schema, previewItem), [config.schema, previewItem]);
   const previewText = useMemo(
     () => (config.schema.format === 'xml' ? toXml(builtPayload) : JSON.stringify(builtPayload, null, 2)),
@@ -284,6 +381,78 @@ export default function FeedDashboardPage() {
       setSaving(false);
     }
   }, [appendEvent]);
+
+  const saveItems = useCallback(async (next: FeedItem[]) => {
+    setSavingItems(true);
+    setError('');
+    setNotice('');
+    const t0 = performance.now();
+    try {
+      const res = await fetch(`${API}/api/feed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save-items', items: next }),
+      });
+      const latency = Math.round(performance.now() - t0);
+      let data: any = null;
+      try { data = await res.json(); } catch { /* non-JSON body still counts as a push attempt */ }
+      appendEvent({
+        channel: 'config (items)',
+        bytes: payloadBytes(next),
+        status: res.status,
+        latency,
+        payload: JSON.stringify({ action: 'save-items' }),
+      });
+      if (!res.ok || data?.success === false) {
+        if (res.status === 401) { setUnauthorized(true); return; }
+        setError(data?.message || 'Could not save feed items.');
+        return;
+      }
+      setNotice('Feed items saved.');
+      loadHistory();
+    } catch {
+      appendEvent({ channel: 'config (items)', bytes: payloadBytes(next), status: 0, latency: 0, payload: JSON.stringify({ action: 'save-items', error: 'network' }) });
+      setError('Could not save feed items.');
+    } finally {
+      setSavingItems(false);
+    }
+  }, [appendEvent, loadHistory]);
+
+  const saveTicker = useCallback(async (next: TickerEntry[]) => {
+    setSavingTicker(true);
+    setError('');
+    setNotice('');
+    const t0 = performance.now();
+    try {
+      const res = await fetch(`${API}/api/feed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save-ticker', ticker: next }),
+      });
+      const latency = Math.round(performance.now() - t0);
+      let data: any = null;
+      try { data = await res.json(); } catch { /* non-JSON body still counts as a push attempt */ }
+      appendEvent({
+        channel: 'config (ticker)',
+        bytes: payloadBytes(next),
+        status: res.status,
+        latency,
+        payload: JSON.stringify({ action: 'save-ticker' }),
+      });
+      if (!res.ok || data?.success === false) {
+        if (res.status === 401) { setUnauthorized(true); return; }
+        setError(data?.message || 'Could not save ticker.');
+        return;
+      }
+      setNotice('Ticker saved.');
+      loadHistory();
+    } catch {
+      appendEvent({ channel: 'config (ticker)', bytes: payloadBytes(next), status: 0, latency: 0, payload: JSON.stringify({ action: 'save-ticker', error: 'network' }) });
+      setError('Could not save ticker.');
+    } finally {
+      setSavingTicker(false);
+    }
+  }, [appendEvent, loadHistory]);
 
   const toggleEnabled = useCallback(async () => {
     const next = { ...config, enabled: !config.enabled };
@@ -975,36 +1144,36 @@ export default function FeedDashboardPage() {
                   {defaultItems && defaultItems.length > 0 && (
                     <button
                       onClick={() => {
-                        if (!window.confirm('Replace all feed items with the current defaults? Your channels, rate and schema are untouched. Press Save to publish.')) return;
-                        patch((c) => ({
-                          ...c,
-                          items: defaultItems.map((d) => ({ ...d, id: uid() })),
-                        }));
-                        setNotice('Defaults loaded into the editor — press Save to publish.');
+                        if (!window.confirm('Replace all feed items with the current defaults? Your channels, rate and schema are untouched. Press Save items to publish.')) return;
+                        setItems(defaultItems.map((d) => ({ ...d, id: uid() })));
+                        setNotice('Defaults loaded into the editor — press Save items to publish.');
                       }}
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-bold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none"
                     >
                       <RefreshCw className="w-3 h-3" /> Restore defaults
                     </button>
                   )}
-                  <span className="text-[11px] font-mono text-slate-500">{config.items.length}/{MAX_ITEMS}</span>
+                  <span className="text-[11px] font-mono text-slate-500">{items.length}/{MAX_ITEMS}</span>
+                  <button onClick={() => saveItems(items)} disabled={savingItems} className={btnGhost}>
+                    {savingItems ? 'Saving…' : 'Save items'}
+                  </button>
                 </div>
               </div>
               <ul className="mt-3 space-y-2">
-                {config.items.length === 0 && (
+                {items.length === 0 && (
                   <li className="text-xs text-slate-500">No curated items — the landing shows the paused bar until items exist and the feed is ON.</li>
                 )}
-                {config.items.map((it) => (
+                {items.map((it) => (
                   <li key={it.id} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                       <input
                         value={it.tag}
-                        onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, tag: e.target.value } : x)) }))}
+                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, tag: e.target.value } : x)))}
                         placeholder="tag" className={inputDark} aria-label="Item tag"
                       />
                       <input
                         value={it.href}
-                        onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, href: e.target.value } : x)) }))}
+                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, href: e.target.value } : x)))}
                         placeholder="https://website… (ticker links here)"
                         className={`${inputDark} font-mono`}
                         aria-label="Item website URL — the ticker flash links here"
@@ -1012,20 +1181,40 @@ export default function FeedDashboardPage() {
                       />
                       <input
                         value={it.title}
-                        onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, title: e.target.value } : x)) }))}
+                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, title: e.target.value } : x)))}
                         placeholder="Title" className={`${inputDark} sm:col-span-2`} aria-label="Item title"
                       />
                       <input
                         value={it.detail}
-                        onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, detail: e.target.value } : x)) }))}
+                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, detail: e.target.value } : x)))}
                         placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="Item detail"
                       />
+                      <label className="sm:col-span-2">
+                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
+                        <select
+                          value={it.media_kind}
+                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, media_kind: e.target.value as MediaKind } : x)))}
+                          className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                          aria-label={`Media kind for ${it.title || 'item'}`}
+                        >
+                          {MEDIA_KINDS.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </label>
+                      {it.media_kind !== 'none' && (
+                        <input
+                          value={it.media_url}
+                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, media_url: e.target.value } : x)))}
+                          placeholder="https://… image / video / file URL"
+                          className={`${inputDark} font-mono sm:col-span-2`}
+                          aria-label={`Media URL for ${it.title || 'item'}`}
+                        />
+                      )}
                       <label className="sm:col-span-2">
                         <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Item date (individual)</span>
                         <input
                           type="datetime-local"
                           value={tsToLocalInput(it.ts)}
-                          onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)) }))}
+                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)))}
                           className={`${inputDark} font-mono`}
                           aria-label={`Date for ${it.title || 'item'}`}
                         />
@@ -1033,7 +1222,7 @@ export default function FeedDashboardPage() {
                     </div>
                     <div className="mt-1.5 flex justify-end">
                       <button
-                        onClick={() => patch((c) => ({ ...c, items: c.items.filter((x) => x.id !== it.id) }))}
+                        onClick={() => setItems((prev) => prev.filter((x) => x.id !== it.id))}
                         aria-label={`Delete item ${it.title}`}
                         className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-rose-300 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none rounded px-1"
                       >
@@ -1049,6 +1238,26 @@ export default function FeedDashboardPage() {
                 <input value={newItem.title} onChange={(e) => setNewItem((d) => ({ ...d, title: e.target.value }))} placeholder="Title" className={`${inputDark} sm:col-span-2`} aria-label="New item title" />
                 <input value={newItem.detail} onChange={(e) => setNewItem((d) => ({ ...d, detail: e.target.value }))} placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="New item detail" />
                 <label className="sm:col-span-2">
+                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
+                  <select
+                    value={newItem.media_kind}
+                    onChange={(e) => setNewItem((d) => ({ ...d, media_kind: e.target.value as MediaKind }))}
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                    aria-label="New item media kind"
+                  >
+                    {MEDIA_KINDS.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </label>
+                {newItem.media_kind !== 'none' && (
+                  <input
+                    value={newItem.media_url}
+                    onChange={(e) => setNewItem((d) => ({ ...d, media_url: e.target.value }))}
+                    placeholder="https://… image / video / file URL"
+                    className={`${inputDark} font-mono sm:col-span-2`}
+                    aria-label="New item media URL"
+                  />
+                )}
+                <label className="sm:col-span-2">
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Date (defaults to now)</span>
                   <input
                     type="datetime-local"
@@ -1061,28 +1270,145 @@ export default function FeedDashboardPage() {
                 <div className="sm:col-span-2">
                   <button
                     onClick={() => {
-                      if (!newItem.title.trim() || config.items.length >= MAX_ITEMS) return;
-                      patch((c) => ({
-                        ...c,
-                        items: [...c.items, {
-                          id: uid(),
-                          tag: newItem.tag.trim(),
-                          title: newItem.title.trim(),
-                          detail: newItem.detail.trim(),
-                          href: newItem.href.trim(),
-                          // Individual date per item: operator's pick, else now.
-                          ts: newItem.ts || new Date().toISOString(),
-                        }],
-                      }));
-                      setNewItem({ tag: '', title: '', detail: '', href: '', ts: '' });
+                      if (!newItem.title.trim() || items.length >= MAX_ITEMS) return;
+                      setItems((prev) => [...prev, {
+                        id: uid(),
+                        tag: newItem.tag.trim(),
+                        title: newItem.title.trim(),
+                        detail: newItem.detail.trim(),
+                        href: newItem.href.trim(),
+                        media_kind: newItem.media_kind,
+                        media_url: newItem.media_url.trim(),
+                        // Individual date per item: operator's pick, else now.
+                        ts: newItem.ts || new Date().toISOString(),
+                      }]);
+                      setNewItem({ tag: '', title: '', detail: '', href: '', media_kind: 'none', media_url: '', ts: '' });
                     }}
-                    disabled={!newItem.title.trim() || config.items.length >= MAX_ITEMS}
+                    disabled={!newItem.title.trim() || items.length >= MAX_ITEMS}
                     className={btnGhost}
                   >
                     <Plus className="w-3.5 h-3.5" /> Add item
                   </button>
                 </div>
               </div>
+            </section>
+
+            {/* Scroll ticker editor: flashes under the feed cards. */}
+            <section className={`${card} mt-4`} aria-label="Scroll Ticker Editor">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="font-bold text-white flex items-center gap-2">
+                  <Repeat className="w-4 h-4 text-teal-300" /> Scroll Ticker
+                </h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-slate-500">{ticker.length}</span>
+                  <button onClick={() => saveTicker(ticker)} disabled={savingTicker} className={btnGhost}>
+                    {savingTicker ? 'Saving…' : 'Save ticker'}
+                  </button>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                The Ticker Scroll switch at top controls motion; these entries are the flashes.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {ticker.length === 0 && (
+                  <li className="text-xs text-slate-500">No ticker entries — add flashes below, then Save ticker.</li>
+                )}
+                {ticker.map((t) => (
+                  <li key={t.id} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={t.tag}
+                        onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, tag: e.target.value } : x)))}
+                        placeholder="tag" className={inputDark} aria-label="Ticker tag"
+                      />
+                      <button
+                        role="switch"
+                        aria-checked={t.enabled}
+                        aria-label={`Enable ticker ${t.text || t.tag}`}
+                        onClick={() => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, enabled: !x.enabled } : x)))}
+                        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none ${t.enabled ? 'border-lime-400/60 bg-lime-400/20' : 'border-slate-700 bg-slate-800'}`}
+                      >
+                        <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-colors ${t.enabled ? 'right-0.5 bg-lime-400' : 'left-0.5 bg-slate-500'}`} />
+                      </button>
+                      <button
+                        onClick={() => setTicker((prev) => prev.filter((x) => x.id !== t.id))}
+                        aria-label={`Delete ticker ${t.text}`}
+                        className="p-1 rounded text-slate-500 hover:text-rose-300 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="mt-1.5 grid grid-cols-1 gap-1.5">
+                      <input
+                        value={t.text}
+                        onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, text: e.target.value } : x)))}
+                        placeholder="Flash text" className={inputDark} aria-label="Ticker text"
+                      />
+                      <input
+                        value={t.url}
+                        onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, url: e.target.value } : x)))}
+                        placeholder="https://…" className={`${inputDark} font-mono`} aria-label="Ticker URL"
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-3 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                <input value={newTicker.tag} onChange={(e) => setNewTicker((d) => ({ ...d, tag: e.target.value }))} placeholder="tag" className={inputDark} aria-label="New ticker tag" />
+                <input value={newTicker.text} onChange={(e) => setNewTicker((d) => ({ ...d, text: e.target.value }))} placeholder="Flash text" className={inputDark} aria-label="New ticker text" />
+                <input value={newTicker.url} onChange={(e) => setNewTicker((d) => ({ ...d, url: e.target.value }))} placeholder="https://…" className={`${inputDark} font-mono`} aria-label="New ticker URL" />
+                <div className="sm:col-span-3">
+                  <button
+                    onClick={() => {
+                      if (!newTicker.text.trim()) return;
+                      setTicker((prev) => [...prev, {
+                        id: uid(),
+                        tag: newTicker.tag.trim(),
+                        text: newTicker.text.trim(),
+                        url: newTicker.url.trim(),
+                        enabled: true,
+                      }]);
+                      setNewTicker({ tag: '', text: '', url: '' });
+                    }}
+                    disabled={!newTicker.text.trim()}
+                    className={btnGhost}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add flash
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Feed history: server-persisted archive of saves and test pushes. */}
+            <section className={`${card} mt-4`} aria-label="Feed History">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="font-bold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-teal-300" /> Feed History
+                </h2>
+                <button onClick={() => loadHistory()} disabled={historyLoading} className={btnGhost}>
+                  <RefreshCw className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+                  {historyLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Server-persisted archive — every save and test push is logged automatically. Refreshes every 30s.
+              </p>
+              {historyError && <p className="mt-2 text-xs text-amber-300">{historyError}</p>}
+              {history.length === 0 ? (
+                <p className="mt-3 text-xs text-slate-500">No push history yet — saves and test pushes are logged automatically.</p>
+              ) : (
+                <ul className="mt-3 max-h-96 space-y-1.5 overflow-auto">
+                  {history.map((h) => (
+                    <li key={h.id} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-xs">
+                      <span className="font-mono text-slate-400 shrink-0">{h.ts ? new Date(h.ts).toLocaleString() : '—'}</span>
+                      <span className="px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-300 text-[10px] font-bold uppercase shrink-0">{h.kind}</span>
+                      <span className="truncate text-slate-300 flex-1">{h.channel || '—'}</span>
+                      <span className={`px-1.5 py-0.5 rounded border font-mono font-bold shrink-0 ${statusChip(h.status)}`}>{h.status}</span>
+                      <span className="font-mono text-teal-300 shrink-0">{h.latency_ms}ms</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           </div>
         )}
