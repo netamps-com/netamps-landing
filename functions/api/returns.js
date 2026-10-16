@@ -950,10 +950,25 @@ export async function onRequestDelete({ request, env }) {
     if (!id) throw new Error('ID required');
 
     if (env.DB) {
+      let deletedIntent = '';
+      try {
+        const doomed = await env.DB.prepare('SELECT intent FROM returns WHERE id = ?').bind(id).first();
+        deletedIntent = String((doomed && doomed.intent) || '').toLowerCase();
+      } catch {}
       await env.DB.prepare('DELETE FROM returns WHERE id = ?').bind(id).run();
       // Phase-1 match index hygiene: purge lines so deleted orders can never
       // match (best-effort — never fails the deletion).
       await purgeMatchLines(env, id);
+      // Stock ledger hook (best-effort): deleting a SELL order voids its open
+      // lots so phantom availability can never match. Gated by `stock_enabled`.
+      try {
+        if (deletedIntent === 'sell') {
+          const stock = await import('./stock/ledger.mjs');
+          if (await stock.stockEnabled(env)) {
+            await stock.voidSellOrder(env, { sellOrderId: id, actor: 'system', reason: 'order_deleted' });
+          }
+        }
+      } catch {}
     } else if (env.DATABASE_URL) {
       const { Client } = await import('pg');
       const client = new Client({ connectionString: env.DATABASE_URL });

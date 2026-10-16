@@ -547,6 +547,27 @@ export async function acceptCandidate(env, { buyOrderId, buyLineIdx, sellOrderId
     'UPDATE match_lines SET norm_name = ?, norm_model = ? WHERE order_id = ? AND line_idx = ? AND side = ?'
   ).bind(sellLine.norm_name, sellLine.norm_model, buyOrderId, buyLineIdx, 'buy').run();
 
+  // Stock ledger hook (best-effort, additive): the human acceptance soft-holds
+  // the sell lot against this buy line. The accept itself NEVER depends on
+  // stock — a short book refuses the hold (reported below) while the key
+  // alignment above still stands, exactly as before.
+  let reserve = null;
+  try {
+    const stock = await import('../stock/ledger.mjs');
+    if (await stock.stockEnabled(env)) {
+      const buyLine = await env.DB.prepare(
+        "SELECT qty FROM match_lines WHERE order_id = ? AND line_idx = ? AND side = 'buy'"
+      ).bind(buyOrderId, buyLineIdx).first();
+      reserve = await stock.reserveStock(env, {
+        sellOrderId, sellLineIdx, buyOrderId, buyLineIdx,
+        qty: buyLine && Number.isInteger(buyLine.qty) && buyLine.qty > 0 ? buyLine.qty : 1,
+        actor
+      });
+    }
+  } catch {
+    reserve = { ok: false, reason: 'STOCK_ERROR' };
+  }
+
   try {
     await env.DB.prepare(
       'INSERT INTO match_candidate_feedback (id, buy_order_id, buy_line_idx, sell_order_id, sell_line_idx, decision, actor, at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)'
@@ -566,5 +587,5 @@ export async function acceptCandidate(env, { buyOrderId, buyLineIdx, sellOrderId
     ).run();
   } catch {}
 
-  return { ok: true };
+  return { ok: true, reserve };
 }

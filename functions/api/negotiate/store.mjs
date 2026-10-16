@@ -169,6 +169,17 @@ export async function setOrderStatus(env, requestId, status) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       await env.DB.prepare('UPDATE returns SET status = ?1 WHERE id = ?2').bind(status, requestId).run();
+      // Stock ledger hook (best-effort): a decline/withdraw frees every hold
+      // placed against this buy order. Safe no-op for sell ids — reservations
+      // are keyed by buy order, so nothing matches. Gated by `stock_enabled`.
+      try {
+        if (normalizeStatus(status) === STATUS.DECLINED) {
+          const stock = await import('../stock/ledger.mjs');
+          if (await stock.stockEnabled(env)) {
+            await stock.releaseOrderReservations(env, { buyOrderId: requestId, actor: 'system', reason: 'order_declined' });
+          }
+        }
+      } catch { /* stock must never fail a status write */ }
       return { ok: true };
     } catch (err) {
       if (attempt < 2) continue;
@@ -526,6 +537,23 @@ export async function finalizeDeal(env, { order, totalPaise, actor }) {
 
   await env.DB.prepare('UPDATE returns SET status = ?, finalPrice = ? WHERE id = ?')
     .bind(STATUS.DEAL, JSON.stringify(snapshot), order.id).run();
+
+  // Stock ledger hook (best-effort, never fails the approval): a SELL deal
+  // commits the seller's goods to Netamps → RECEIPT; a BUY deal fulfills the
+  // buyer's lines → ISSUE (consumes reservations first, FIFO direct-issue for
+  // any remainder, shortfall reported not silent). Gated by `stock_enabled`.
+  try {
+    const side = String((order && order.intent) || '').toLowerCase();
+    const stock = await import('../stock/ledger.mjs');
+    if (await stock.stockEnabled(env)) {
+      const products = Array.isArray(order.products) ? order.products : [];
+      if (side === 'sell') {
+        await stock.receiveSellOrder(env, { orderId: order.id, products, actor: snapshot.decidedBy });
+      } else if (side === 'buy') {
+        await stock.issueBuyOrder(env, { orderId: order.id, products, actor: snapshot.decidedBy });
+      }
+    }
+  } catch { /* stock must never fail a deal approval */ }
 
   try {
     await ensurePriceHistory(env);
