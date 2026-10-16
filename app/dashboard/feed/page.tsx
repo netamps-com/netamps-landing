@@ -23,7 +23,7 @@ type PayloadFormat = 'json' | 'xml';
 
 type MediaKind = 'none' | 'image' | 'video' | 'file';
 type FeedItem = { id: string; tag: string; title: string; detail: string; href: string; media_kind: MediaKind; media_url: string; ts: string };
-type TickerEntry = { id: string; tag: string; text: string; url: string; enabled: boolean };
+type TickerEntry = { id: string; tag: string; text: string; url: string; ts: string; enabled: boolean };
 type Channel = { id: string; kind: ChannelKind; label: string; url: string; enabled: boolean };
 type SchemaField = { id: string; key: string; source: SchemaSource; required: boolean };
 type FeedSchema = { format: PayloadFormat; fields: SchemaField[] };
@@ -113,6 +113,7 @@ function normalizeTicker(raw: unknown): TickerEntry {
     tag: typeof r.tag === 'string' ? r.tag : '',
     text: typeof r.text === 'string' ? r.text : '',
     url: typeof r.url === 'string' ? r.url : '',
+    ts: typeof r.ts === 'string' ? r.ts : '',
     enabled: (r as { enabled?: unknown }).enabled !== false,
   };
 }
@@ -187,6 +188,34 @@ function tsFromLocalInput(v: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }
 
+// Display-until mirror of the API rule (parseFeedDate/isExpired): day-first
+// numeric forms, Date.parse fallback, empty/garbage never expires.
+function parseDisplayUntil(value: string): number {
+  if (typeof value !== 'string') return NaN;
+  const v = value.trim();
+  if (!v) return NaN;
+  const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(v);
+  if (m) {
+    const dd = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const yyyy = parseInt(m[3], 10);
+    const hh = m[4] === undefined ? 0 : parseInt(m[4], 10);
+    const mi = m[5] === undefined ? 0 : parseInt(m[5], 10);
+    const ss = m[6] === undefined ? 0 : parseInt(m[6], 10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31 && hh <= 23 && mi <= 59 && ss <= 59) {
+      return new Date(yyyy, mm - 1, dd, hh, mi, ss).getTime();
+    }
+  }
+  const native = Date.parse(v);
+  return Number.isFinite(native) ? native : NaN;
+}
+
+function isExpiredTs(ts: string, nowMs?: number): boolean {
+  const ms = parseDisplayUntil(ts);
+  if (!Number.isFinite(ms)) return false;
+  return ms <= (nowMs === undefined ? Date.now() : nowMs);
+}
+
 // CDN asset URLs are API-relative; prefix API for dashboard previews.
 function previewSrc(url: string): string {
   const t = url.trim();
@@ -255,7 +284,7 @@ export default function FeedDashboardPage() {
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [channelDraft, setChannelDraft] = useState({ label: '', url: '' });
   const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '', media_kind: 'none' as MediaKind, media_url: '', ts: '' });
-  const [newTicker, setNewTicker] = useState({ tag: '', text: '', url: '' });
+  const [newTicker, setNewTicker] = useState({ tag: '', text: '', url: '', ts: '' });
   const [newFieldKey, setNewFieldKey] = useState('');
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
@@ -490,6 +519,50 @@ export default function FeedDashboardPage() {
     await saveConfig(next, next.scroll ? 'scroll-on' : 'scroll-off');
   }, [config, saveConfig]);
 
+  // Master Save: captures EVERYTHING on screen — switches, channels, items,
+  // ticker, rate, schema — in one validated all-or-nothing write. The server
+  // rejects the whole request when any section is invalid, so the database
+  // can never hold half of what the operator saw.
+  const saveAll = useCallback(async () => {
+    setSaving(true);
+    setError('');
+    setNotice('');
+    const t0 = performance.now();
+    const payload = { config, items, ticker };
+    try {
+      const res = await fetch(`${API}/api/feed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save-all', ...payload }),
+      });
+      const latency = Math.round(performance.now() - t0);
+      let data: any = null;
+      try { data = await res.json(); } catch { /* non-JSON body still counts as a push attempt */ }
+      appendEvent({
+        channel: 'config (all)',
+        bytes: payloadBytes(payload),
+        status: res.status,
+        latency,
+        payload: JSON.stringify({ action: 'save-all' }),
+      });
+      if (!res.ok || data?.success === false) {
+        if (res.status === 401) { setUnauthorized(true); return; }
+        setError(data?.message || 'Could not save feed (all sections).');
+        return;
+      }
+      setNotice(
+        `Everything saved — switches, ${items.length} item${items.length === 1 ? '' : 's'}, ` +
+        `${ticker.length} ticker ${ticker.length === 1 ? 'flash' : 'flashes'}, channels, rate and schema.`
+      );
+      loadHistory();
+    } catch {
+      appendEvent({ channel: 'config (all)', bytes: payloadBytes(payload), status: 0, latency: 0, payload: JSON.stringify({ action: 'save-all', error: 'network' }) });
+      setError('Could not save feed (all sections).');
+    } finally {
+      setSaving(false);
+    }
+  }, [appendEvent, config, items, ticker, loadHistory]);
+
   const testPush = useCallback(async (ch: Channel) => {
     setTestingId(ch.id);
     setAttempts((a) => ({ ...a, [ch.id]: (a[ch.id] ?? 0) + 1 }));
@@ -723,9 +796,10 @@ export default function FeedDashboardPage() {
               <RefreshCw className="w-4 h-4 text-slate-600" />
             </button>
             <button
-              onClick={() => saveConfig(config, 'manual')}
+              onClick={() => saveAll()}
               disabled={saving || loading}
               className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-lime-500 focus-visible:outline-none disabled:opacity-50"
+              title="Saves switches, items, ticker, channels, rate and schema in one write"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
@@ -1299,11 +1373,16 @@ export default function FeedDashboardPage() {
                 {items.map((it) => (
                   <li key={it.id} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                      <input
-                        value={it.tag}
-                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, tag: e.target.value } : x)))}
-                        placeholder="tag" className={inputDark} aria-label="Item tag"
-                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={it.tag}
+                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, tag: e.target.value } : x)))}
+                          placeholder="tag" className={inputDark} aria-label="Item tag"
+                        />
+                        {isExpiredTs(it.ts) && (
+                          <span className="shrink-0 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">Expired</span>
+                        )}
+                      </div>
                       <input
                         value={it.href}
                         onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, href: e.target.value } : x)))}
@@ -1392,7 +1471,7 @@ export default function FeedDashboardPage() {
                         {uploadError[it.id] && <p className="text-xs text-amber-300 w-full">{uploadError[it.id]}</p>}
                       </div>
                       <label className="sm:col-span-2">
-                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Item date (individual)</span>
+                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Item date (individual) — display until; empty = always shown</span>
                         <input
                           type="datetime-local"
                           value={tsToLocalInput(it.ts)}
@@ -1489,7 +1568,7 @@ export default function FeedDashboardPage() {
                   {uploadError.new && <p className="text-xs text-amber-300 w-full">{uploadError.new}</p>}
                 </div>
                 <label className="sm:col-span-2">
-                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Date (defaults to now)</span>
+                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Display until (empty = always shown)</span>
                   <input
                     type="datetime-local"
                     value={tsToLocalInput(newItem.ts)}
@@ -1511,7 +1590,7 @@ export default function FeedDashboardPage() {
                         media_kind: newItem.media_kind,
                         media_url: newItem.media_url.trim(),
                         // Individual date per item: operator's pick, else now.
-                        ts: newItem.ts || new Date().toISOString(),
+                        ts: newItem.ts,
                       }]);
                       setNewItem({ tag: '', title: '', detail: '', href: '', media_kind: 'none', media_url: '', ts: '' });
                     }}
@@ -1580,6 +1659,19 @@ export default function FeedDashboardPage() {
                         onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, url: e.target.value } : x)))}
                         placeholder="https://…" className={`${inputDark} font-mono`} aria-label="Ticker URL"
                       />
+                      <label>
+                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Display until (empty = always shown)
+                          {isExpiredTs(t.ts) && <span className="ml-2 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-300">Expired — hidden on site</span>}
+                        </span>
+                        <input
+                          type="datetime-local"
+                          value={tsToLocalInput(t.ts)}
+                          onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)))}
+                          className={`${inputDark} font-mono`}
+                          aria-label={`Display-until date for ${t.text || 'ticker flash'}`}
+                        />
+                      </label>
                     </div>
                   </li>
                 ))}
@@ -1588,6 +1680,14 @@ export default function FeedDashboardPage() {
                 <input value={newTicker.tag} onChange={(e) => setNewTicker((d) => ({ ...d, tag: e.target.value }))} placeholder="tag" className={inputDark} aria-label="New ticker tag" />
                 <input value={newTicker.text} onChange={(e) => setNewTicker((d) => ({ ...d, text: e.target.value }))} placeholder="Flash text" className={inputDark} aria-label="New ticker text" />
                 <input value={newTicker.url} onChange={(e) => setNewTicker((d) => ({ ...d, url: e.target.value }))} placeholder="https://…" className={`${inputDark} font-mono`} aria-label="New ticker URL" />
+                <input
+                  type="datetime-local"
+                  value={tsToLocalInput(newTicker.ts)}
+                  onChange={(e) => setNewTicker((d) => ({ ...d, ts: tsFromLocalInput(e.target.value) }))}
+                  className={`${inputDark} font-mono`}
+                  aria-label="New ticker display-until date"
+                  title="Display until (empty = always shown)"
+                />
                 <div className="sm:col-span-3">
                   <button
                     onClick={() => {
@@ -1597,9 +1697,10 @@ export default function FeedDashboardPage() {
                         tag: newTicker.tag.trim(),
                         text: newTicker.text.trim(),
                         url: newTicker.url.trim(),
+                        ts: newTicker.ts,
                         enabled: true,
                       }]);
-                      setNewTicker({ tag: '', text: '', url: '' });
+                      setNewTicker({ tag: '', text: '', url: '', ts: '' });
                     }}
                     disabled={!newTicker.text.trim()}
                     className={btnGhost}

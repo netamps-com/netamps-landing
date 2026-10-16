@@ -21,6 +21,7 @@ type TickerEntry = {
   tag: string;
   text: string;
   url: string;
+  ts?: string;
   enabled?: boolean;
 };
 
@@ -43,6 +44,30 @@ function formatTime(ts: string): string {
   } catch {
     return ts;
   }
+}
+
+// Display-until mirror of the API rule: day-first numeric forms, Date.parse
+// fallback, empty/garbage never expires. Applied client-side too so a cached
+// payload still hides crossed dates within the refresh window.
+function isLive(ts: unknown, now: number): boolean {
+  if (typeof ts !== 'string') return true;
+  const v = ts.trim();
+  if (!v) return true;
+  const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(v);
+  if (m) {
+    const dd = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const yyyy = parseInt(m[3], 10);
+    const hh = m[4] === undefined ? 0 : parseInt(m[4], 10);
+    const mi = m[5] === undefined ? 0 : parseInt(m[5], 10);
+    const ss = m[6] === undefined ? 0 : parseInt(m[6], 10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31 && hh <= 23 && mi <= 59 && ss <= 59) {
+      return new Date(yyyy, mm - 1, dd, hh, mi, ss).getTime() > now;
+    }
+  }
+  const native = Date.parse(v);
+  if (!Number.isFinite(native)) return true;
+  return native > now;
 }
 
 // Attachment rendering follows standard practice: lazy images, click-to-play
@@ -199,11 +224,15 @@ export default function FeedStrip() {
   }
 
   // Dedicated ticker placeholder wins; items backfill only when the operator
-  // has not curated ticker entries yet.
-  const tickerItems = (state.ticker.length > 0
-    ? state.ticker.map((t) => ({ id: t.id, tag: t.tag, title: t.text, href: t.url }))
-    : state.items.map((it) => ({ id: it.id, tag: it.tag, title: it.title, href: it.href }))
-  ).filter((it) => it.title.trim() !== '');
+  // has not curated ticker entries yet. Crossed display-until dates hide in
+  // both lists (the API filters too; this covers cached payloads mid-window).
+  const now = Date.now();
+  const liveItems = state.items.filter((it) => it.title.trim() !== '' && isLive(it.ts, now));
+  const liveTicker = state.ticker.filter((t) => t.text.trim() !== '' && isLive(t.ts, now));
+  const tickerItems = (liveTicker.length > 0
+    ? liveTicker.map((t) => ({ id: t.id, tag: t.tag, title: t.text, href: t.url }))
+    : liveItems.map((it) => ({ id: it.id, tag: it.tag, title: it.title, href: it.href }))
+  );
 
   return (
     <section aria-label="Netamps signal feed" className="relative overflow-hidden border-y border-slate-200/70 bg-gradient-to-b from-white via-indigo-50/50 to-white">
@@ -240,7 +269,7 @@ export default function FeedStrip() {
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {state.items.map((item, i) => (
+          {liveItems.map((item, i) => (
             <article
               key={item.id || i}
               style={{ animation: 'feed-rise 0.45s ease-out both', animationDelay: `${i * 70}ms` }}
