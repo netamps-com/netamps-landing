@@ -15,7 +15,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, RefreshCw, History, Inbox } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, RefreshCw, History, Inbox, ArrowLeft } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
 import { useDashboardSession } from '../useDashboardSession';

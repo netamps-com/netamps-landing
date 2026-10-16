@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Package, Search, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake } from 'lucide-react';
+import XLSX from 'xlsx';
+import { Package, Search, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake, Download } from 'lucide-react';
 import { DashboardShell } from './DashboardNav';
 import { buildNavSections } from './nav';
 import UserManagementModal from './UserManagementModal';
@@ -522,6 +523,49 @@ export default function DashboardPage() {
     } catch {}
   };
 
+  /** Export the current orders list as a real .xlsx workbook (orders only). */
+  const exportRequestsXLSX = useCallback(async () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const enriched = returns.map(req => {
+      const ask = askTotalOf(req);
+      const ev = evalTotalOf(req);
+      return {
+        RequestID: req.id,
+        Intent: req.intent,
+        Status: req.status,
+        Company: req.company,
+        Email: req.email,
+        Phone: req.phone,
+        DateSubmitted: req.date,
+        PricingBasis: req.pricingBasis === 'lot' ? 'lot' : 'per_product',
+        Products: (req.products || []).length,
+        LineAskTotalPaise: ask.total,
+        AskPartial: ask.partial,
+        EvaluatedTotalPaise: ev.total,
+        EvaluatedPartial: ev.partial,
+        FinalTotalPaise: req.finalPrice?.totalPaise ?? null,
+        FinalBasis: req.finalPrice?.basis ?? null,
+      };
+    });
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(enriched);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Requests');
+    const xlsxBytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `netamps-requests-${stamp}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try {
+      const { logEvent } = await import('../lib/logger');
+      logEvent('REQUESTS_EXPORTED_XLSX', 'Dashboard Page', `Exported ${enriched.length} requests as XLSX`, userRole);
+    } catch {}
+  }, [returns]);
+
   const handleLogout = async () => {
     // Full server revocation first (D1 row + HttpOnly cookie — cookies alone
     // leave the session usable until expiry), then local cleanup + redirect.
@@ -837,7 +881,6 @@ export default function DashboardPage() {
     isAdmin,
     onOpenLogs: () => setShowLogsModal(true),
     onOpenUsers: () => setShowPasswordModal(true),
-    onExport: exportRequests,
   });
 
   return (
@@ -913,6 +956,15 @@ export default function DashboardPage() {
               className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
             >
               <RefreshCw className={`w-4 h-4 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={exportRequestsXLSX}
+              disabled={isRefreshing || returns.length === 0}
+              title="Export to XLSX"
+              aria-label="Export to XLSX"
+              className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            >
+              <Download className="w-4 h-4 text-slate-500" />
             </button>
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />

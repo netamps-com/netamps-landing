@@ -31,8 +31,8 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Home, LogOut } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 
@@ -131,6 +131,7 @@ export function DashboardShell({
   children: ReactNode;
 }) {
   const pathname = usePathname() || '/dashboard';
+  const router = useRouter();
 
   return (
     <div
@@ -239,13 +240,22 @@ export function DashboardShell({
       <div className="lg:pl-[var(--rail-w)]">
         {/* Desktop-only context bar: the mobile header already carries the
             brand and identity, and every page prints its own h1, so a third
-            title line there would be padding, not information. */}
+            title line there would be padding, not information. */}        
         <div className={`sticky top-0 z-30 hidden h-14 items-center gap-3 border-b px-4 backdrop-blur-xl sm:px-6 lg:flex ${T.topbar}`}>
           {/* The bar is muted so actions read as chrome; the page name is not,
               because it is the only thing up here that carries information. */}
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">
             {titleFor(pathname)}
           </span>
+          {/* Home button: returns to the orders dashboard from any module. */}
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="shrink-0 rounded-lg p-2 ${T.chrome}"
+            title="Home"
+            aria-label="Home"
+          >
+            <Home className="w-4 h-4" />
+          </button>
           {topRight}
         </div>
 

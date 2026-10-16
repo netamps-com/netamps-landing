@@ -22,12 +22,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Search, RefreshCw, Sparkles, Filter, Inbox, ExternalLink } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, RefreshCw, Sparkles, Filter, Inbox, ExternalLink, ArrowLeft } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
 import { useDashboardSession } from '../useDashboardSession';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
+const router = useRouter();
 
 type Why = { term: string; fields: string[] };
 
@@ -191,6 +193,9 @@ export default function OrderSearchPage() {
               <em> choosing from rows the database already listed</em> — it cannot name an order that is not there.
             </p>
           </div>
+          <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Back to dashboard">
+            <ArrowLeft className="w-4 h-4 text-slate-600" />
+          </button>
           <button onClick={() => applied && run(applied)} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Refresh">
             <RefreshCw className="w-4 h-4 text-slate-600" />
           </button>

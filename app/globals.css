@@ -5,11 +5,104 @@
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
+
+  /* ── Netamps Unified Design Tokens (load-bearing) ── */
+  --net-navy: #4f46e5;
+  --net-navy-hover: #4338ca;
+  --net-navy-light: #eef2ff;
+  --net-navy-border: #c7d2fe;
+
+  --net-bg: #f8fafc;
+  --net-surface: #ffffff;
+  --net-surface-elevated: #f1f5f9;
+
+  --net-text-primary: #0f172a;
+  --net-text-secondary: #475569;
+  --net-text-muted: #94a3b8;
+  --net-text-inverse: #ffffff;
+
+  --net-border-light: #e2e8f0;
+  --net-border-medium: #cbd5e1;
+  --net-border-focus: #4f46e5;
+
+  --net-success: #10b981;
+  --net-success-bg: #ecfdf5;
+  --net-success-border: #a7f3d0;
+
+  --net-warning: #f59e0b;
+  --net-warning-bg: #fffbeb;
+  --net-warning-border: #fcd34d;
+
+  --net-error: #ef4444;
+  --net-error-bg: #fef2f2;
+  --net-error-border: #fecaca;
+
+  --net-info: #3b82f6;
+  --net-info-bg: #eff6ff;
+  --net-info-border: #bfdbfe;
+
+  /* ── Component presets ── */
+  --net-card: bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm;
+  --net-card-elevated: bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-lg;
+  --net-card-interactive: bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all duration-200;
+
+  --net-btn-primary: w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed;
+  --net-btn-secondary: flex justify-center items-center gap-2 py-2 px-4 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed;
+  --net-btn-ghost: flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors;
+  --net-btn-danger: w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-red-600 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed;
+
+  --net-input: appearance-none block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all;
+  --net-label: block text-sm font-medium text-slate-700 mb-1;
+  --net-error-text: mt-1 text-xs text-red-600 font-medium flex items-center gap-1;
+
+  --net-alert: border rounded-xl p-3 flex items-start gap-3 text-sm;
+  --net-alert-success: bg-emerald-50 border border-emerald-100 text-emerald-800;
+  --net-alert-warning: bg-amber-50 border border-amber-100 text-amber-800;
+  --net-alert-error: bg-red-50 border border-red-100 text-red-800;
+  --net-alert-info: bg-blue-50 border border-blue-100 text-blue-800;
+
+  --net-badge: inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium;
+  --net-badge-success: bg-emerald-50 text-emerald-700 border border-emerald-100;
+  --net-badge-warning: bg-amber-50 text-amber-700 border border-amber-100;
+  --net-badge-error: bg-red-50 text-red-700 border border-red-100;
+  --net-badge-info: bg-blue-50 text-blue-700 border border-blue-100;
+  --net-badge-neutral: bg-slate-100 text-slate-600 border border-slate-200;
+
+  --net-page: min-h-screen bg-slate-50/20 text-slate-900 flex flex-col;
+  --net-page-content: max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full;
+  --net-module-title: text-2xl font-black tracking-tight text-slate-900;
+  --net-module-subtitle: text-sm text-slate-500 mt-0.5;
 }
 
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 10rem;
+}
+
+/* ── Base element reset for consistent cross-module rendering ── */
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-inter), var(--font-outfit), sans-serif;
+}
+
+/* Ensure all buttons use the unified primary style unless explicitly opted out */
+button.net-btn {
+  @apply var(--net-btn-primary);
+}
+
+/* Ensure all inputs use the unified style unless explicitly opted out */
+input.net-input,
+select.net-input,
+textarea.net-input {
+  @apply var(--net-input);
+}
+
+/* ── Consistent focus ring across all modules ── */
+*:focus-visible {
+  outline: 2px solid var(--net-border-focus);
+  outline-offset: 2px;
 }
 
 @keyframes text-glitter {

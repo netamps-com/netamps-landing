@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Handshake, AlertTriangle, RefreshCw, CheckCircle2, XCircle, Clock, Send, BadgeCheck, Mail } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Handshake, AlertTriangle, RefreshCw, CheckCircle2, XCircle, Clock, Send, BadgeCheck, Mail, ArrowLeft } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
 import { useDashboardSession } from '../useDashboardSession';
@@ -66,6 +67,7 @@ export default function NegotiationsPage() {
   // Declared above the unauthorized early return: React requires the same hook
   // order on every render, and the rail's footer shows this session.
   const session = useDashboardSession();
+  const router = useRouter();
   const navSections = buildNavSections();
 
   const load = useCallback(async (f: FilterKey) => {
@@ -161,6 +163,9 @@ export default function NegotiationsPage() {
               Buyer ↔ seller price threads. Staff act for the seller; only “{ORDER_STATUS.DEAL}” closes one.
             </p>
           </div>
+          <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Back to dashboard">
+            <ArrowLeft className="w-4 h-4 text-slate-600" />
+          </button>
           <button onClick={() => load(filter)} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Refresh">
             <RefreshCw className="w-4 h-4 text-slate-600" />
           </button>

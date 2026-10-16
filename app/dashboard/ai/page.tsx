@@ -15,7 +15,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Sparkles, RefreshCw, ShieldCheck, ShieldAlert, Inbox, Send, Check, X, Rocket } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Sparkles, RefreshCw, ShieldCheck, ShieldAlert, Inbox, Send, Check, X, Rocket, ArrowLeft } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
 import { useDashboardSession } from '../useDashboardSession';
@@ -66,6 +67,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function NetampsAiPage() {
   const session = useDashboardSession();
+  const router = useRouter();
   const navSections = buildNavSections();
   const [modules, setModules] = useState<ModuleHealth[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -218,6 +220,9 @@ export default function NetampsAiPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100" aria-label="Back to dashboard">
+              <ArrowLeft className="w-4 h-4 text-slate-600" />
+            </button>
             {brakeOn !== null && (
               <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${brakeOn ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                 <ShieldCheck className="w-3.5 h-3.5" /> Models {brakeOn ? 'ON' : 'BRAKED'}

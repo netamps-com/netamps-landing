@@ -25,8 +25,6 @@
 
 import {
   Database,
-  FileJson,
-  FileSpreadsheet,
   Handshake,
   History,
   Mail,
@@ -44,7 +42,6 @@ export type NavActions = {
   isAdmin?: boolean;
   onOpenLogs?: () => void;
   onOpenUsers?: () => void;
-  onExport?: (format: 'json' | 'csv') => void;
 };
 
 export function buildNavSections(a: NavActions = {}): NavSection[] {
@@ -84,13 +81,6 @@ export function buildNavSections(a: NavActions = {}): NavSection[] {
       title: 'Open webmail in a new tab',
     },
   ];
-
-  if (a.onExport) {
-    tools.push(
-      { key: 'export-json', label: 'Export JSON', icon: FileJson, accent: 'slate', onClick: () => a.onExport!('json') },
-      { key: 'export-csv', label: 'Export CSV', icon: FileSpreadsheet, accent: 'slate', onClick: () => a.onExport!('csv') },
-    );
-  }
 
   const admin: NavSection['items'] = [];
 
