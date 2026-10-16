@@ -393,9 +393,9 @@ export default function LoginPage() {
         // document.cookie (coordinated cutover — see deploy notes).
         const age = rememberMe ? '; max-age=2592000' : '';
         if (data.sessionId) {
-          document.cookie = `session_id=${data.sessionId}; path=/${age}; SameSite=Strict; Secure`;
+          document.cookie = `session_id=${data.sessionId}; path=/; SameSite=Lax; Secure`;
         }
-        document.cookie = `user_role=${email}; path=/${age}; SameSite=Strict; Secure`;
+        document.cookie = `user_role=${email}; path=/; SameSite=Lax; Secure`;
         
         try {
           const { logEvent } = await import('../lib/logger');

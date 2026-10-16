@@ -1112,14 +1112,9 @@ export default function ReturnsPage() {
               ) : (
                 <div className="space-y-6">
                 <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setPendingDelete(null); }}>
-                {/* Contact row. One line of four on desktop rather than a 2x2 block: the
-                    four fields are the same kind of thing at the same depth in
-                    the form, so they read as one band of identity details.
-                    Two columns on small tablets, one on phones, where 170px
-                    columns would not hold an email address. Floating labels
-                    throughout: the label sits inside the empty box and shrinks
-                    to a caption on focus or value. */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Contact band: two rows × two columns on desktop so Email
+                    and Phone sit below Full Name + Company. */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
                   <FloatField
                     id="name"
                     label="Full Name"
