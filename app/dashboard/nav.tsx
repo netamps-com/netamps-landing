@@ -34,6 +34,7 @@ import {
   Radio,
   ScrollText,
   Search,
+  Sparkles,
   Users,
 } from 'lucide-react';
 import type { NavSection } from './DashboardNav';
@@ -65,6 +66,14 @@ export function buildNavSections(a: NavActions = {}): NavSection[] {
   ];
 
   const tools: NavSection['items'] = [
+    {
+      key: 'netamps-ai',
+      label: 'NETAMPS AI',
+      icon: Sparkles,
+      accent: 'indigo',
+      href: '/dashboard/ai',
+      title: 'Governed model modules, runs and review inbox (operators only)',
+    },
     {
       key: 'webmail',
       label: 'Webmail',
