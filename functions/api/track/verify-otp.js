@@ -36,6 +36,28 @@ function errorJson(message, status = 400) {
   return json({ success: false, message }, status);
 }
 
+/**
+ * Public projection of an order for negotiation display.
+ */
+export function publicOrder(order) {
+  if (!order) return null;
+  return {
+    id: order.id,
+    intent: order.intent,
+    name: order.name,
+    company: order.company,
+    email: order.email,
+    phone: order.phone,
+    date: order.date,
+    status: order.status,
+    products: order.products,
+    pricingBasis: order.pricingBasis,
+    lotConsiderationPaise: order.lotConsiderationPaise,
+    finalPrice: order.finalPrice,
+    manifest: order.manifest ? { hash: order.manifest.hash, generatedAt: order.manifest.generatedAt } : null
+  };
+}
+
 export async function onRequestPost({ request, env }) {
   try {
     if (!dbReady(env)) {

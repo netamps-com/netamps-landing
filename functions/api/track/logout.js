@@ -7,7 +7,7 @@
  * Response: { success: true }
  */
 
-import { dbReady } from './negotiate/store.mjs';
+import { dbReady } from '../negotiate/store.mjs';
 
 const COOKIE_NAME = 'netamps_session';
 

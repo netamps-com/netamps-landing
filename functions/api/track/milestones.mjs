@@ -32,6 +32,14 @@
  * while `selectCurrent` (latest timestamp wins) keeps the headline truthful.
  */
 
+/**
+ * Whether milestone tracking is enabled for a given context.
+ * Defaults to true; can be overridden per-environment.
+ */
+export function isMilestoneEnabled() {
+  return true;
+}
+
 export const MILESTONE_VERSION = 'track-milestone-v1';
 
 /** Frozen cross-system contract. Do not renumber, do not fill 7. */
