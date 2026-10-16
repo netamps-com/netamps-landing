@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Rss, Radio, Activity, Webhook, FileJson, ShieldCheck, Gauge,
   Power, Pause, Play, Plus, Trash2, Copy, RefreshCw, ChevronDown, Send, Repeat,
-  Upload, X, Loader2,
+  Upload, X, Loader2, ArrowLeft,
 } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
