@@ -344,8 +344,8 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
           continue;
         }
         // Generate preview URL for supported image/video types (creates object URL for client-side preview)
-        const isImg = f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(f.name);
-        const isVid = f.type.startsWith('video/') || /\.(mp4|webm|mkv|avi|flv|mov)$/i.test(f.name);
+        const isImg = row.file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(row.file.name);
+        const isVid = row.file.type.startsWith('video/') || /\.(mp4|webm|mkv|avi|flv|mov)$/i.test(row.file.name);
         const newPreviewUrl = (isImg || isVid) ? URL.createObjectURL(row.file) : undefined;
         setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash, state: 'QUEUED', previewUrl: newPreviewUrl } : f)));
         pumpUploads();
