@@ -321,6 +321,11 @@ export default function ReturnsPage() {
   const [dragOverCard, setDragOverCard] = useState<string | null>(null);
   const [requestScope, setRequestScope] = useState('');
   const [buyListExpanded, setBuyListExpanded] = useState(true);
+  // Bumped on every manual Clear so the form subtree remounts: uncontrolled
+  // leftovers, DetailsSuggest dropdown state and any child-local buffers are
+  // dropped along with the React state purge below. Intent + sid survive —
+  // they are mode/session identity, not form data.
+  const [formEpoch, setFormEpoch] = useState(0);
   const handleQueueChange = useCallback((snap: AttachmentSnapshot[]) => {
     setQueueSnapshot(snap);
   }, []);
@@ -391,6 +396,56 @@ export default function ReturnsPage() {
     uploaderRef.current?.purgeByProduct(pendingDelete.id);
     setProducts(products.filter(p => p.id !== pendingDelete.id));
     setPendingDelete(null);
+  };
+
+  const freshProduct = (): ProductItem => ({
+    id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '',
+    details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: ''
+  });
+
+  /**
+   * Volatile buffer purge — the manual Clear button's single write point.
+   *
+   * Native form reset (which still runs: this is called from onReset WITHOUT
+   * preventDefault) only clears UNCONTROLLED inputs (the contact FloatFields).
+   * Everything else lives in React state or the uploader child and would
+   * survive a plain reset — so this drops all of it:
+   *   - uploads: aborts in-flight XHRs, revokes preview object URLs, deletes
+   *     staged R2 bytes, empties the queue + page mirrors + legacy key list
+   *   - products: back to one blank line; delete confirm + drag state cleared
+   *   - pricing: basis + lot total cleared
+   *   - OTP / tracking / submit status: all cleared (a stale cached FormData
+   *     must never verify-and-submit after a purge)
+   *   - captcha error + Turnstile token: cleared and reminted
+   * Intent and requestScope survive: tab identity and session scope, not data.
+   * formEpoch remounts the form subtree so child-local buffers (typeahead
+   * dropdowns, uncontrolled leftovers) cannot outlive the purge either.
+   */
+  const purgeFormVolatile = () => {
+    try { uploaderRef.current?.clear(); } catch { /* unmounted (buy/track) — nothing staged there */ }
+    setUploadReset((n) => n + 1); // backstop: child's resetSignal effect re-fires clearAll
+    setUploadedSecureFiles([]);
+    setQueueSnapshot([]);
+    setIsUploading(false);
+    setProducts([freshProduct()]);
+    setPendingDelete(null);
+    setDragOverCard(null);
+    setPricingBasis('per_product');
+    setLotConsideration('');
+    setShowOtp(false);
+    setOtpCode('');
+    setOtpError('');
+    setFormDataCache(null);
+    setTrackingId('');
+    setTrackingResult(null);
+    setTrackingError('');
+    setIsSuccess(false);
+    setGeneratedId('');
+    setIsSubmitting(false);
+    setCaptchaError('');
+    resetRetToken();
+    setBuyListExpanded(true);
+    setFormEpoch((n) => n + 1);
   };
 
   const updateProduct = (id: string, field: keyof ProductItem, value: any) => {
@@ -1111,7 +1166,7 @@ export default function ReturnsPage() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                <form key={intent} className="space-y-6" onSubmit={handleSubmit} onReset={() => { setProducts([{ id: crypto.randomUUID(), strategicTarget: 'resale', lifecycleAge: '', category: '', details: '', quantity: 1, attachedFiles: [], lineConsideration: '', basePrice: '' }]); setPendingDelete(null); }}>
+                <form key={`${intent}-${formEpoch}`} className="space-y-6" onSubmit={handleSubmit} onReset={() => { purgeFormVolatile(); }}>
                 {/* Contact band: two rows × two columns on desktop so Email
                     and Phone sit below Full Name + Company. */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
@@ -1626,7 +1681,7 @@ export default function ReturnsPage() {
                     </button>
                     <button
                       type="reset"
-                      title="Reset form fields (staged files are kept)"
+                      title="Clear everything — all fields and staged uploads are purged, a fresh form is issued"
                       className="px-6 py-4 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     >
                       Clear
