@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   Rss, Radio, Activity, Webhook, FileJson, ShieldCheck, Gauge,
   Power, Pause, Play, Plus, Trash2, Copy, RefreshCw, ChevronDown, Send, Repeat,
+  Upload, X, Loader2,
 } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
@@ -48,6 +49,9 @@ const MEDIA_KINDS: MediaKind[] = ['none', 'image', 'video', 'file'];
 const SCHEMA_SOURCES: SchemaSource[] = ['title', 'link', 'summary', 'timestamp', 'company'];
 const MAX_ITEMS = 12;
 const MAX_EVENTS = 50;
+const CDN_PREFIX = '/api/cdn/feed/';
+const MEDIA_ACCEPT = 'image/*,video/*,.pdf,.csv,.json,.txt,.xlsx,.docx';
+const MAX_MEDIA_BYTES = 15 * 1024 * 1024;
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -183,6 +187,24 @@ function tsFromLocalInput(v: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }
 
+// CDN asset URLs are API-relative; prefix API for dashboard previews.
+function previewSrc(url: string): string {
+  const t = url.trim();
+  if (t.startsWith('/') && API) return `${API}${t}`;
+  return t;
+}
+
+// Last path segment for file chips; query/hash stripped.
+function mediaFileName(url: string): string {
+  const t = url.trim().split('?')[0].split('#')[0];
+  const seg = t.split('/').filter(Boolean).pop() ?? t;
+  try {
+    return decodeURIComponent(seg) || t;
+  } catch {
+    return seg || t;
+  }
+}
+
 function statusChip(status: number): string {
   if (status >= 200 && status < 300) return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
   if (status >= 400 && status < 500) return 'border-amber-500/40 bg-amber-500/10 text-amber-300';
@@ -235,6 +257,8 @@ export default function FeedDashboardPage() {
   const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '', media_kind: 'none' as MediaKind, media_url: '', ts: '' });
   const [newTicker, setNewTicker] = useState({ tag: '', text: '', url: '' });
   const [newFieldKey, setNewFieldKey] = useState('');
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<Record<string, string>>({});
   const secretRef = useRef<HTMLInputElement | null>(null);
 
   // Hooks stay above the unauthorized early return to keep hook order stable.
@@ -554,6 +578,115 @@ export default function FeedDashboardPage() {
     }));
     setNewChannel({ kind: 'webhook', label: '', url: '' });
   }, [newChannel, patch]);
+
+  // Local-file uploads only fill the editor fields; nothing auto-saves.
+  // Persistence still happens through the Save items button.
+  const uploadMediaFile = useCallback(async (
+    file: File,
+  ): Promise<{ kind: MediaKind; url: string } | null> => {
+    // Client-side pre-check: reject oversize files before any upload.
+    if (file.size > MAX_MEDIA_BYTES) return null;
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API}/api/feed-media`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form,
+    });
+    if (res.status === 401) { setUnauthorized(true); throw new Error('Session ended — sign in again.'); }
+    let data: any = null;
+    try { data = await res.json(); } catch { /* fall through to the error below */ }
+    if (!res.ok || data?.success === false) {
+      throw new Error(typeof data?.message === 'string' && data.message ? data.message : 'Upload failed.');
+    }
+    const kind: MediaKind = data?.kind === 'image' || data?.kind === 'video' || data?.kind === 'file' ? data.kind : 'file';
+    const url = typeof data?.assetUrl === 'string' ? data.assetUrl : '';
+    if (!url) throw new Error('Upload failed.');
+    return { kind, url };
+  }, []);
+
+  // Shared by item rows (target = item id) and the new-item draft (target = 'new').
+  const handleMediaUpload = useCallback(async (target: string, file: File | undefined | null) => {
+    if (!file || uploadingId !== null) return;
+    setUploadError((m) => {
+      if (!(target in m)) return m;
+      const next = { ...m };
+      delete next[target];
+      return next;
+    });
+    setUploadingId(`upload:${target}`);
+    try {
+      const uploaded = await uploadMediaFile(file);
+      if (!uploaded) {
+        setUploadError((m) => ({ ...m, [target]: 'File must be 15MB or smaller.' }));
+        return;
+      }
+      if (target === 'new') {
+        setNewItem((d) => ({ ...d, media_kind: uploaded.kind, media_url: uploaded.url }));
+      } else {
+        setItems((prev) => prev.map((x) => (x.id === target ? { ...x, media_kind: uploaded.kind, media_url: uploaded.url } : x)));
+      }
+      setNotice('Media uploaded — press Save items to publish.');
+    } catch (e) {
+      setUploadError((m) => ({ ...m, [target]: e instanceof Error ? e.message : 'Upload failed.' }));
+    } finally {
+      setUploadingId((cur) => (cur === `upload:${target}` ? null : cur));
+    }
+  }, [uploadMediaFile, uploadingId]);
+
+  const handleMediaRemove = useCallback(async (target: string, url: string) => {
+    if (uploadingId !== null) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const clearFields = () => {
+      if (target === 'new') {
+        setNewItem((d) => ({ ...d, media_kind: 'none' as MediaKind, media_url: '' }));
+      } else {
+        setItems((prev) => prev.map((x) => (x.id === target ? { ...x, media_kind: 'none' as MediaKind, media_url: '' } : x)));
+      }
+    };
+    setUploadError((m) => {
+      if (!(target in m)) return m;
+      const next = { ...m };
+      delete next[target];
+      return next;
+    });
+    // Only API-hosted objects have a deletable key; external URLs just clear.
+    let path: string | null = null;
+    if (trimmed.startsWith(CDN_PREFIX)) {
+      path = trimmed;
+    } else {
+      try {
+        const u = new URL(trimmed);
+        if (u.pathname.startsWith(CDN_PREFIX)) path = u.pathname;
+      } catch { /* relative non-CDN URL — plain external, just clear */ }
+    }
+    if (!path) { clearFields(); return; }
+    const key = `feed/${path.slice(CDN_PREFIX.length)}`;
+    setUploadingId(`remove:${target}`);
+    try {
+      const res = await fetch(`${API}/api/feed-media?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (res.status === 401) { setUnauthorized(true); return; }
+      if (!res.ok) {
+        let msg = 'Could not remove media.';
+        try {
+          const data = await res.json();
+          if (typeof data?.message === 'string' && data.message) msg = data.message;
+        } catch { /* keep default */ }
+        setUploadError((m) => ({ ...m, [target]: msg }));
+        return;
+      }
+      clearFields();
+      setNotice('Attachment removed — press Save items to publish.');
+    } catch {
+      setUploadError((m) => ({ ...m, [target]: 'Could not remove media.' }));
+    } finally {
+      setUploadingId((cur) => (cur === `remove:${target}` ? null : cur));
+    }
+  }, [uploadingId]);
 
   if (unauthorized) {
     return (
@@ -1154,7 +1287,7 @@ export default function FeedDashboardPage() {
                     </button>
                   )}
                   <span className="text-[11px] font-mono text-slate-500">{items.length}/{MAX_ITEMS}</span>
-                  <button onClick={() => saveItems(items)} disabled={savingItems} className={btnGhost}>
+                  <button onClick={() => saveItems(items)} disabled={savingItems || uploadingId !== null} className={btnGhost}>
                     {savingItems ? 'Saving…' : 'Save items'}
                   </button>
                 </div>
@@ -1189,6 +1322,19 @@ export default function FeedDashboardPage() {
                         onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, detail: e.target.value } : x)))}
                         placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="Item detail"
                       />
+                      {it.media_url.trim() !== '' && (
+                        <div className="sm:col-span-2">
+                          {it.media_kind === 'image' ? (
+                            <img src={previewSrc(it.media_url)} alt="" className="h-16 rounded object-cover" />
+                          ) : it.media_kind === 'video' ? (
+                            <video src={previewSrc(it.media_url)} className="h-16 rounded" controls preload="none" />
+                          ) : (
+                            <span className="inline-block max-w-full truncate rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-200">
+                              {mediaFileName(it.media_url)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <label className="sm:col-span-2">
                         <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
                         <select
@@ -1209,6 +1355,42 @@ export default function FeedDashboardPage() {
                           aria-label={`Media URL for ${it.title || 'item'}`}
                         />
                       )}
+                      <div className="sm:col-span-2 flex items-center gap-2 flex-wrap">
+                        <label className={`${btnGhost} cursor-pointer ${uploadingId !== null ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {uploadingId === `upload:${it.id}` ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="w-3.5 h-3.5" />
+                          )}
+                          {uploadingId === `upload:${it.id}` ? 'Uploading…' : 'Upload file'}
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept={MEDIA_ACCEPT}
+                            disabled={uploadingId !== null}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = '';
+                              void handleMediaUpload(it.id, f);
+                            }}
+                          />
+                        </label>
+                        {it.media_url.trim() !== '' && (
+                          <button
+                            onClick={() => void handleMediaRemove(it.id, it.media_url)}
+                            disabled={uploadingId !== null}
+                            className={btnGhost}
+                          >
+                            {uploadingId === `remove:${it.id}` ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <X className="w-3.5 h-3.5" />
+                            )}
+                            {uploadingId === `remove:${it.id}` ? 'Removing…' : 'Remove attachment'}
+                          </button>
+                        )}
+                        {uploadError[it.id] && <p className="text-xs text-amber-300 w-full">{uploadError[it.id]}</p>}
+                      </div>
                       <label className="sm:col-span-2">
                         <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Item date (individual)</span>
                         <input
@@ -1237,6 +1419,19 @@ export default function FeedDashboardPage() {
                 <input value={newItem.href} onChange={(e) => setNewItem((d) => ({ ...d, href: e.target.value }))} placeholder="https://website… (ticker links here)" className={`${inputDark} font-mono`} aria-label="New item website URL" />
                 <input value={newItem.title} onChange={(e) => setNewItem((d) => ({ ...d, title: e.target.value }))} placeholder="Title" className={`${inputDark} sm:col-span-2`} aria-label="New item title" />
                 <input value={newItem.detail} onChange={(e) => setNewItem((d) => ({ ...d, detail: e.target.value }))} placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="New item detail" />
+                {newItem.media_url.trim() !== '' && (
+                  <div className="sm:col-span-2">
+                    {newItem.media_kind === 'image' ? (
+                      <img src={previewSrc(newItem.media_url)} alt="" className="h-16 rounded object-cover" />
+                    ) : newItem.media_kind === 'video' ? (
+                      <video src={previewSrc(newItem.media_url)} className="h-16 rounded" controls preload="none" />
+                    ) : (
+                      <span className="inline-block max-w-full truncate rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-200">
+                        {mediaFileName(newItem.media_url)}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <label className="sm:col-span-2">
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
                   <select
@@ -1257,6 +1452,42 @@ export default function FeedDashboardPage() {
                     aria-label="New item media URL"
                   />
                 )}
+                <div className="sm:col-span-2 flex items-center gap-2 flex-wrap">
+                  <label className={`${btnGhost} cursor-pointer ${uploadingId !== null ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {uploadingId === 'upload:new' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    {uploadingId === 'upload:new' ? 'Uploading…' : 'Upload file'}
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept={MEDIA_ACCEPT}
+                      disabled={uploadingId !== null}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = '';
+                        void handleMediaUpload('new', f);
+                      }}
+                    />
+                  </label>
+                  {newItem.media_url.trim() !== '' && (
+                    <button
+                      onClick={() => void handleMediaRemove('new', newItem.media_url)}
+                      disabled={uploadingId !== null}
+                      className={btnGhost}
+                    >
+                      {uploadingId === 'remove:new' ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <X className="w-3.5 h-3.5" />
+                      )}
+                      {uploadingId === 'remove:new' ? 'Removing…' : 'Remove attachment'}
+                    </button>
+                  )}
+                  {uploadError.new && <p className="text-xs text-amber-300 w-full">{uploadError.new}</p>}
+                </div>
                 <label className="sm:col-span-2">
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Date (defaults to now)</span>
                   <input
@@ -1284,7 +1515,7 @@ export default function FeedDashboardPage() {
                       }]);
                       setNewItem({ tag: '', title: '', detail: '', href: '', media_kind: 'none', media_url: '', ts: '' });
                     }}
-                    disabled={!newItem.title.trim() || items.length >= MAX_ITEMS}
+                    disabled={!newItem.title.trim() || items.length >= MAX_ITEMS || uploadingId !== null}
                     className={btnGhost}
                   >
                     <Plus className="w-3.5 h-3.5" /> Add item

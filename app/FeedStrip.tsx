@@ -46,10 +46,18 @@ function formatTime(ts: string): string {
 }
 
 // Attachment rendering follows standard practice: lazy images, click-to-play
-// video (no preload), files as labelled links. Only http(s) sources render.
+// video (no preload), files as labelled links. Accepts absolute http(s) and
+// same-origin `/api/cdn/…` URLs (local R2 uploads); everything else —
+// protocol-relative, javascript:, data:, bare relative — renders nothing.
+function isServableSrc(src: string): boolean {
+  if (/^https?:\/\/.+/i.test(src)) return true;
+  if (src.startsWith('/') && !src.startsWith('//')) return true;
+  return false;
+}
+
 function FeedMedia({ kind, url, title }: { kind?: MediaKind; url?: string; title: string }) {
   const src = typeof url === 'string' ? url.trim() : '';
-  if (!src || !/^https?:\/\/.+/i.test(src)) return null;
+  if (!src || !isServableSrc(src)) return null;
   if (kind === 'image') {
     return (
       <img
@@ -85,12 +93,12 @@ function FeedMedia({ kind, url, title }: { kind?: MediaKind; url?: string; title
   return null;
 }
 
-// One flash in the ticker. Links only to http(s) websites entered for the
-// item — anything else renders as plain text, so no crafted href can run
-// script or route into the app.
+// One flash in the ticker. Links only to servable targets (http(s) or
+// same-origin CDN paths) — anything else renders as plain text, so no
+// crafted href can run script or route into the app.
 function TickerFlash({ item }: { item: { id: string; tag: string; title: string; href: string } }) {
   const href = typeof item.href === 'string' ? item.href.trim() : '';
-  const safe = /^https?:\/\/.+/i.test(href) ? href : null;
+  const safe = isServableSrc(href) ? href : null;
   const inner = (
     <>
       <span aria-hidden="true" className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.9)]" />

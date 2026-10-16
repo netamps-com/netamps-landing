@@ -131,14 +131,22 @@ async function handle({ request, env, params, headOnly }) {
     });
   }
 
+  // Feed text is already public via /api/feed?public=1; media under feed/ is
+  // the same published content, so it skips the session and owner gates below.
+  const isPublicFeed = key === 'feed' || key.startsWith('feed/');
+
   // --- Start Security / Session Checks ---
   // Authenticated session required (open internet gets 401, never asset bytes).
-  const user = await verifySession(env, request);
-  if (!user) {
-    return new Response('Unauthorized', { status: 401, headers: { 'Cache-Control': NO_STORE } });
+  let ownerEmail = null;
+  let isAdmin = false;
+  if (!isPublicFeed) {
+    const user = await verifySession(env, request);
+    if (!user) {
+      return new Response('Unauthorized', { status: 401, headers: { 'Cache-Control': NO_STORE } });
+    }
+    ownerEmail = user.email;
+    isAdmin = user.role === 'admin' || ownerEmail === 'admin@netamps.com';
   }
-  const ownerEmail = user.email;
-  const isAdmin = user.role === 'admin' || ownerEmail === 'admin@netamps.com';
 
   // A3 Signed CDN URL validation — verified when present (strict shape, expiry,
   // HMAC). Absent signatures are still allowed: no signer endpoint exists yet, so
@@ -187,9 +195,10 @@ async function handle({ request, env, params, headOnly }) {
     // owner (or admin). Untagged / 'anonymous' objects (e.g. public-form uploads
     // from before login) are visible to any authenticated user — authentication
     // itself is the gate; the open internet still gets 401 above.
+    // Published feed assets skip this: they have no per-user owner semantics.
     const uploaderEmail = object.customMetadata?.['x-owner-email'];
     const ownerKnown = uploaderEmail && uploaderEmail !== 'anonymous';
-    if (!isAdmin && ownerKnown && uploaderEmail !== ownerEmail) {
+    if (!isPublicFeed && !isAdmin && ownerKnown && uploaderEmail !== ownerEmail) {
       return new Response('Forbidden', { status: 403, headers: { 'Cache-Control': NO_STORE } });
     }
 

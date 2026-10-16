@@ -72,6 +72,13 @@ function isValidTickerEntry(e) {
   return true;
 }
 
+function isServableSrc(src) {
+  if (typeof src !== 'string' || src.length === 0) return false;
+  if (/^https?:\/\/.+/i.test(src)) return true;
+  if (src.startsWith('/') && !src.startsWith('//')) return true;
+  return false;
+}
+
 let pass = 0, fail = 0;
 function t(name, fn) {
   try {
@@ -157,6 +164,15 @@ t('valid entry', () => assert.equal(isValidTickerEntry({ tag: 'ITAD', text: 'Pic
 t('empty text invalid', () => assert.equal(isValidTickerEntry({ tag: 'ITAD', text: '', url: '' }), false));
 t('141-char text invalid', () => assert.equal(isValidTickerEntry({ tag: 'x', text: 'a'.repeat(141), url: '' }), false));
 t('non-object invalid', () => assert.equal(isValidTickerEntry(null), false));
+
+console.log('\nservable sources (landing)');
+t('https allowed', () => assert.equal(isServableSrc('https://cdn.example.com/a.jpg'), true));
+t('same-origin cdn allowed', () => assert.equal(isServableSrc('/api/cdn/feed/abc123.jpg'), true));
+t('protocol-relative rejected', () => assert.equal(isServableSrc('//evil.example.com/a.jpg'), false));
+t('javascript rejected', () => assert.equal(isServableSrc('javascript:alert(1)'), false));
+t('data uri rejected', () => assert.equal(isServableSrc('data:image/png;base64,AAA'), false));
+t('bare relative rejected', () => assert.equal(isServableSrc('feed/a.jpg'), false));
+t('empty rejected', () => assert.equal(isServableSrc(''), false));
 
 console.log(`\n${fail === 0 ? 'FEED_PASS' : 'FEED_FAIL'} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
