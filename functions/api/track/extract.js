@@ -128,45 +128,6 @@ async function ensureSessionsTable(env) {
   process.env.SESS_TABLE_READY = '1'; // in-memory flag; next invocation re‑creates the worker
 }
 
-// ── Rate limits (per-isolate, same convention as products/suggest.js) ────────
-const RL_WINDOW_MS = 60 * 1000;
-const RL_PER_IP = 30;
-const RL_PER_SESSION = 10;
-const rlMap = new Map(); // key -> { windowStart, count }
-
-function rateLimited(key, cap) {
-  if (!key) return false;
-  const now = Date.now();
-  const rec = rlMap.get(key);
-  if (!rec || now - rec.windowStart > RL_WINDOW_MS) {
-    rlMap.set(key, { windowStart: now, count: 1 });
-    return false;
-  }
-  rec.count += 1;
-  if (rlMap.size > 5000) rlMap.clear();
-  return rec.count > cap;
-}
-
-function readSessionId(request) {
-  const cookie = request.headers.get('cookie') || '';
-  const m = /(^|;)\s*netamps_session=([^;]*)/.exec(cookie);
-  return m ? m[2] : '';
-}
-
-// ── Session rate limits ──
-function sessionRateLimited(key, cap) {
-  if (!key) return false;
-  const now = Date.now();
-  const rec = rlMap.get(key);
-  if (!rec || now - rec.windowStart > RL_WINDOW_MS) {
-    rlMap.set(key, { windowStart: now, count: 1 });
-    return false;
-  }
-  rec.count += 1;
-  if (rlMap.size > 5000) rlMap.clear();
-  return rec.count > cap;
-}
-
 // ── Full request handler ───────────────────────────────────────────────────
 async function sha256Hex(s) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(s)));
