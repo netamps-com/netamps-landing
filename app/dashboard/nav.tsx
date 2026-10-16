@@ -31,6 +31,7 @@ import {
   History,
   Mail,
   Package,
+  Radio,
   ScrollText,
   Search,
   Users,
@@ -111,6 +112,7 @@ export function buildNavSections(a: NavActions = {}): NavSection[] {
       items: [
         { key: 'negotiations', label: 'Negotiations', icon: Handshake, accent: 'amber', href: '/dashboard/negotiations' },
         { key: 'price-tracker', label: 'Price Tracker', icon: History, accent: 'emerald', href: '/dashboard/price-tracker' },
+        { key: 'feed', label: 'Feed Push', icon: Radio, accent: 'sky', href: '/dashboard/feed' },
       ],
     },
     { id: 'tools', label: 'Tools', items: tools },

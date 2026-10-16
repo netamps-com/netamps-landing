@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import SecureLoginButton from './SecureLoginButton';
 import FirmOverviewBanner from './FirmOverviewBanner';
+import FeedStrip from './FeedStrip';
 import ServerStatusWidget from './ServerStatusWidget';
 import NetampsLogo from './NetampsLogo';
 import { AnimatePresence, motion } from "motion/react";
@@ -348,6 +349,11 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {/* SECTION: LIVE FEED — operator-curated from the post-login Feed Push
+            dashboard (/dashboard/feed). ON = full feed cards; OFF = one slim
+            paused bar so the page stays compact and fast. */}
+        <FeedStrip />
 
         {/* SECTION: AUTHORIZED PARTNERS */}
 
