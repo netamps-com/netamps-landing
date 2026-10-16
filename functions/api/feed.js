@@ -9,7 +9,7 @@ import { corsJson, corsPreflight, applyCors } from '../_lib/cors.js';
  * hardcoded defaults below are served.
  *
  * Auth posture: GET ?public=1 is open and returns only
- * enabled+items+updatedAt (never channels, secrets, rate or schema).
+ * enabled+scroll+items+updatedAt (never channels, secrets, rate or schema).
  * Every other read or write requires a session.
  *
  * Honesty contract: latency is only ever a measured fetch duration.
@@ -30,6 +30,7 @@ const CHANNEL_KINDS = new Set(['webhook', 'zapier', 'slack', 'custom']);
 function defaultConfig() {
   return {
     enabled: true,
+    scroll: true,
     items: [
       {
         id: 'feed-1',
@@ -131,6 +132,7 @@ function mergeConfig(base, saved) {
   if (!saved || typeof saved !== 'object') return base;
   const out = { ...base };
   if (typeof saved.enabled === 'boolean') out.enabled = saved.enabled;
+  if (typeof saved.scroll === 'boolean') out.scroll = saved.scroll;
   if (Array.isArray(saved.items)) out.items = saved.items;
   if (Array.isArray(saved.channels)) out.channels = saved.channels;
   if (saved.rate && typeof saved.rate === 'object') out.rate = { ...base.rate, ...saved.rate };
@@ -179,6 +181,7 @@ function str(value, max) {
 function sanitizeConfig(input) {
   return {
     enabled: input.enabled === true,
+    scroll: input.scroll !== false,
     items: input.items.map((it) => ({
       id: str(it.id, 64),
       tag: str(it.tag, 40),
@@ -214,6 +217,7 @@ function sanitizeConfig(input) {
 function validateSave(input) {
   if (!input || typeof input !== 'object') return 'Config object is required.';
   if (typeof input.enabled !== 'boolean') return 'enabled must be a boolean.';
+  if (input.scroll !== undefined && typeof input.scroll !== 'boolean') return 'scroll must be a boolean.';
   if (!Array.isArray(input.items) || input.items.length > MAX_ITEMS) {
     return 'items must be an array of at most 12 entries.';
   }
@@ -268,7 +272,7 @@ export async function onRequest(context) {
     if (isPublicRead) {
       const { config, updatedAt } = await readConfig(env);
       return corsJson(request, env,
-        { success: true, enabled: config.enabled, items: config.items, updatedAt },
+        { success: true, enabled: config.enabled, scroll: config.scroll !== false, items: config.items, updatedAt },
         200, { public: true, methods: 'GET', maxAge: 60 });
     }
     const user = await verifySession(env, request);

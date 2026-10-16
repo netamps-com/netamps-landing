@@ -48,6 +48,14 @@ function isValidFormat(format) {
   return format === 'json' || format === 'xml';
 }
 
+function isValidScroll(scroll) {
+  return scroll === undefined || typeof scroll === 'boolean';
+}
+
+function scrollDefault(scroll) {
+  return scroll !== false;
+}
+
 let pass = 0, fail = 0;
 function t(name, fn) {
   try {
@@ -111,6 +119,13 @@ console.log('\nschema format');
 t('json valid', () => assert.equal(isValidFormat('json'), true));
 t('xml valid', () => assert.equal(isValidFormat('xml'), true));
 t('yaml invalid', () => assert.equal(isValidFormat('yaml'), false));
+
+console.log('\nscroll switch');
+t('true valid', () => assert.equal(isValidScroll(true), true));
+t('false valid', () => assert.equal(isValidScroll(false), true));
+t('absent defaults on', () => assert.equal(scrollDefault(undefined), true));
+t('explicit off stays off', () => assert.equal(scrollDefault(false), false));
+t('string invalid', () => assert.equal(isValidScroll('yes'), false));
 
 console.log(`\n${fail === 0 ? 'FEED_PASS' : 'FEED_FAIL'} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

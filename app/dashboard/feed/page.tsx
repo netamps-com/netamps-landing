@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Rss, Radio, Activity, Webhook, FileJson, ShieldCheck, Gauge,
-  Power, Pause, Play, Plus, Trash2, Copy, RefreshCw, ChevronDown, Send,
+  Power, Pause, Play, Plus, Trash2, Copy, RefreshCw, ChevronDown, Send, Repeat,
 } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
@@ -27,6 +27,7 @@ type FeedSchema = { format: PayloadFormat; fields: SchemaField[] };
 type FeedRate = { perMinute: number; burst: number; retryMax: number };
 type FeedConfig = {
   enabled: boolean;
+  scroll: boolean;
   items: FeedItem[];
   channels: Channel[];
   rate: FeedRate;
@@ -49,6 +50,7 @@ const uid = () =>
 
 const DEFAULT_CONFIG: FeedConfig = {
   enabled: false,
+  scroll: true,
   items: [],
   channels: [],
   rate: { perMinute: 60, burst: 10, retryMax: 3 },
@@ -160,7 +162,6 @@ export default function FeedDashboardPage() {
   const [channelDraft, setChannelDraft] = useState({ label: '', url: '' });
   const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '' });
   const [newFieldKey, setNewFieldKey] = useState('');
-  const logRef = useRef<HTMLDivElement | null>(null);
   const secretRef = useRef<HTMLInputElement | null>(null);
 
   // Hooks stay above the unauthorized early return to keep hook order stable.
@@ -185,7 +186,11 @@ export default function FeedDashboardPage() {
       let data: any = null;
       try { data = await res.json(); } catch { throw new Error('bad response'); }
       const cfg = data?.config ?? data;
-      if (isFeedConfig(cfg)) setConfig(cfg);
+      if (isFeedConfig(cfg)) {
+        // Older saved rows predate the scroll switch — default it ON.
+        const withScroll = cfg as FeedConfig & { scroll?: unknown };
+        setConfig({ ...cfg, scroll: withScroll.scroll !== false });
+      }
       else if (!res.ok) setError(data?.message || 'Feed API unavailable — editing local defaults.');
     } catch {
       setError('Failed to load feed config — editing local defaults.');
@@ -217,18 +222,6 @@ export default function FeedDashboardPage() {
     }, 5000);
     return () => clearInterval(t);
   }, [live, loading, builtPayload, appendEvent]);
-
-  useEffect(() => {
-    const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [events]);
-
-  const sparkPoints = useMemo(() => {
-    const lat = events.slice(-30).map((e) => e.latency);
-    if (lat.length === 0) return '';
-    const max = Math.max(...lat, 1);
-    return lat.map((l, i) => `${(i / Math.max(lat.length - 1, 1)) * 120},${30 - (l / max) * 26}`).join(' ');
-  }, [events]);
 
   const saveConfig = useCallback(async (next: FeedConfig, what: string) => {
     setSaving(true);
@@ -269,6 +262,12 @@ export default function FeedDashboardPage() {
     const next = { ...config, enabled: !config.enabled };
     setConfig(next);
     await saveConfig(next, next.enabled ? 'enabled' : 'paused');
+  }, [config, saveConfig]);
+
+  const toggleScroll = useCallback(async () => {
+    const next = { ...config, scroll: !config.scroll };
+    setConfig(next);
+    await saveConfig(next, next.scroll ? 'scroll-on' : 'scroll-off');
   }, [config, saveConfig]);
 
   const testPush = useCallback(async (ch: Channel) => {
@@ -444,6 +443,32 @@ export default function FeedDashboardPage() {
                 />
               </button>
             </div>
+            {/* Ticker scroll switch: motion control for the flash bar under the
+                feed cards. ON = scrolling marquee; OFF = static flash row. */}
+            <div className="mt-3 flex items-center justify-between gap-4 flex-wrap rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+              <div className="flex items-center gap-3">
+                <Repeat className="w-5 h-5 text-teal-300" />
+                <div>
+                  <p className="font-bold text-white">Ticker Scroll {config.scroll ? 'ON' : 'OFF'}</p>
+                  <p className="text-sm text-slate-400">
+                    ON = flashes scroll under the feed cards (clickable to each item&apos;s website);
+                    OFF = the same flashes sit as a static row.
+                  </p>
+                </div>
+              </div>
+              <button
+                role="switch"
+                aria-checked={config.scroll}
+                aria-label="Ticker Scroll"
+                onClick={toggleScroll}
+                disabled={saving}
+                className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none disabled:opacity-50 ${config.scroll ? 'border-teal-300/60 bg-teal-300/20' : 'border-slate-700 bg-slate-800'}`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full transition-colors ${config.scroll ? 'right-0.5 bg-teal-300' : 'left-0.5 bg-slate-500'}`}
+                />
+              </button>
+            </div>
 
             {/* Top row: Monitor / Channels / Schema */}
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -461,27 +486,87 @@ export default function FeedDashboardPage() {
                     {live ? 'Pause stream' : 'Resume'}
                   </button>
                 </div>
-                <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950 p-2">
-                  {sparkPoints ? (
-                    <svg viewBox="0 0 120 32" className="h-8 w-full" role="img" aria-label="Throughput sparkline">
-                      <polyline points={sparkPoints} fill="none" stroke="#a3e635" strokeWidth="1.5" />
-                    </svg>
-                  ) : (
-                    <p className="text-xs text-slate-500 px-1 py-2">No samples yet — saves and test pushes appear here.</p>
-                  )}
-                </div>
-                <div ref={logRef} className="mt-3 max-h-64 overflow-auto space-y-1.5 pr-1">
-                  {events.length === 0 && <p className="text-xs text-slate-500">Stream idle.</p>}
-                  {events.map((e) => (
-                    <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-xs">
-                      <span className="text-slate-400 font-mono">{e.time}</span>
-                      <span className="truncate text-slate-300 flex-1">{e.channel}</span>
-                      <span className="text-slate-400 font-mono">{e.bytes}B</span>
-                      <span className={`px-1.5 py-0.5 rounded border font-mono font-bold ${statusChip(e.status)}`}>{e.status}</span>
-                      <span className="text-teal-300 font-mono">{e.latency}ms</span>
-                    </div>
-                  ))}
-                </div>
+                {(() => {
+                  const samples = events.slice(-30);
+                  const ok = events.filter((e) => e.status >= 200 && e.status < 300).length;
+                  const fail = events.length - ok;
+                  const total = Math.max(events.length, 1);
+                  const okFrac = ok / total;
+                  const avg = events.length === 0 ? 0 : Math.round(events.reduce((a, e) => a + e.latency, 0) / events.length);
+                  const maxLat = Math.max(...samples.map((e) => e.latency), 1);
+                  const R = 26;
+                  const C = 2 * Math.PI * R;
+                  return (
+                    <>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-2">
+                          <p className="font-mono text-xl font-black text-emerald-300">{ok}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/80">Delivered</p>
+                        </div>
+                        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-2">
+                          <p className="font-mono text-xl font-black text-rose-300">{fail}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-rose-400/80">Failed</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-2">
+                          <p className="font-mono text-xl font-black text-teal-300">{avg}<span className="text-xs">ms</span></p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Avg latency</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
+                        <svg viewBox="0 0 64 64" className="h-16 w-16 shrink-0" role="img" aria-label={`${ok} delivered, ${fail} failed`}>
+                          <circle cx="32" cy="32" r={R} fill="none" stroke="#1e293b" strokeWidth="8" />
+                          <circle
+                            cx="32" cy="32" r={R} fill="none"
+                            stroke={fail === 0 ? '#a3e635' : '#fb7185'}
+                            strokeWidth="8" strokeLinecap="round"
+                            strokeDasharray={`${C * (fail === 0 ? 1 : fail / total)} ${C}`}
+                            transform="rotate(-90 32 32)"
+                            style={{ filter: `drop-shadow(0 0 5px ${fail === 0 ? 'rgba(163,230,53,0.8)' : 'rgba(251,113,133,0.8)'})`, transition: 'stroke-dasharray 0.5s ease, stroke 0.5s ease' }}
+                          />
+                          <text x="32" y="37" textAnchor="middle" fill="#f1f5f9" fontSize="13" fontWeight="900" fontFamily="monospace">
+                            {Math.round(okFrac * 100)}%
+                          </text>
+                        </svg>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-200">Delivery health</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">
+                            {events.length === 0
+                              ? 'No samples yet — saves and test pushes appear here.'
+                              : `${ok} of ${events.length} pushes healthy.`}
+                          </p>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-400 transition-all duration-500"
+                              style={{ width: `${okFrac * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Latency per push — green delivered, red failed</p>
+                        {samples.length === 0 ? (
+                          <p className="mt-2 text-xs text-slate-500">Stream idle.</p>
+                        ) : (
+                          <div className="mt-2 flex h-20 items-end gap-1" role="img" aria-label="Per-push latency bars">
+                            {samples.map((e) => {
+                              const good = e.status >= 200 && e.status < 300;
+                              return (
+                                <div
+                                  key={e.id}
+                                  title={`${e.status} · ${e.latency}ms`}
+                                  className={`flex-1 rounded-t transition-all duration-500 ${good
+                                    ? 'bg-gradient-to-t from-emerald-500/40 to-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.45)]'
+                                    : 'bg-gradient-to-t from-rose-600/50 to-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.55)]'}`}
+                                  style={{ height: `${Math.max(8, (e.latency / maxLat) * 100)}%` }}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </section>
 
               <section className={card} aria-label="Channel Management Hub">
@@ -862,7 +947,10 @@ export default function FeedDashboardPage() {
                       <input
                         value={it.href}
                         onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, href: e.target.value } : x)) }))}
-                        placeholder="https://…" className={`${inputDark} font-mono`} aria-label="Item link"
+                        placeholder="https://website… (ticker links here)"
+                        className={`${inputDark} font-mono`}
+                        aria-label="Item website URL — the ticker flash links here"
+                        title="Website URL — the landing ticker flash links here"
                       />
                       <input
                         value={it.title}
@@ -889,7 +977,7 @@ export default function FeedDashboardPage() {
               </ul>
               <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2 rounded-lg border border-slate-800 bg-slate-950 p-2">
                 <input value={newItem.tag} onChange={(e) => setNewItem((d) => ({ ...d, tag: e.target.value }))} placeholder="tag" className={inputDark} aria-label="New item tag" />
-                <input value={newItem.href} onChange={(e) => setNewItem((d) => ({ ...d, href: e.target.value }))} placeholder="https://…" className={`${inputDark} font-mono`} aria-label="New item link" />
+                <input value={newItem.href} onChange={(e) => setNewItem((d) => ({ ...d, href: e.target.value }))} placeholder="https://website… (ticker links here)" className={`${inputDark} font-mono`} aria-label="New item website URL" />
                 <input value={newItem.title} onChange={(e) => setNewItem((d) => ({ ...d, title: e.target.value }))} placeholder="Title" className={`${inputDark} sm:col-span-2`} aria-label="New item title" />
                 <input value={newItem.detail} onChange={(e) => setNewItem((d) => ({ ...d, detail: e.target.value }))} placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="New item detail" />
                 <div className="sm:col-span-2">

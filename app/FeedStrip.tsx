@@ -14,7 +14,7 @@ type FeedItem = {
 type FeedLoadState =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; enabled: boolean; items: FeedItem[] };
+  | { status: 'ready'; enabled: boolean; scroll: boolean; items: FeedItem[] };
 
 // Production-grade refresh: static export has no sockets, so the strip
 // revalidates on an interval (skipped while the tab is hidden) plus on
@@ -32,6 +32,38 @@ function formatTime(ts: string): string {
   }
 }
 
+// One flash in the ticker. Links only to http(s) websites entered for the
+// item — anything else renders as plain text, so no crafted href can run
+// script or route into the app.
+function TickerFlash({ item }: { item: FeedItem }) {
+  const href = typeof item.href === 'string' ? item.href.trim() : '';
+  const safe = /^https?:\/\/.+/i.test(href) ? href : null;
+  const inner = (
+    <>
+      <span aria-hidden="true" className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.9)]" />
+      <span className="uppercase text-teal-300">{item.tag}</span>
+      <span className="text-slate-100">{item.title}</span>
+    </>
+  );
+  if (!safe) {
+    return (
+      <span className="flex items-center gap-2 text-xs font-semibold tracking-wide text-slate-200">
+        {inner}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={safe}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 text-xs font-semibold tracking-wide text-slate-200 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400 rounded"
+    >
+      {inner}
+    </a>
+  );
+}
+
 export default function FeedStrip() {
   const [state, setState] = useState<FeedLoadState>({ status: 'loading' });
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -47,9 +79,9 @@ export default function FeedStrip() {
       const base = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${base}/api/feed?public=1`, { cache: 'no-store', signal: ctrl.signal });
       if (!res.ok) throw new Error('Feed request failed');
-      const data = (await res.json()) as { enabled?: unknown; items?: unknown; updatedAt?: unknown };
+      const data = (await res.json()) as { enabled?: unknown; scroll?: unknown; items?: unknown; updatedAt?: unknown };
       const items = Array.isArray(data.items) ? (data.items as FeedItem[]) : [];
-      setState({ status: 'ready', enabled: data.enabled !== false, items });
+      setState({ status: 'ready', enabled: data.enabled !== false, scroll: data.scroll !== false, items });
       if (typeof data.updatedAt === 'string') setUpdatedAt(data.updatedAt);
     } catch {
       // Keep the last good render; only a first-load failure hides the strip.
@@ -135,11 +167,8 @@ export default function FeedStrip() {
               Live Feed
             </span>
             <h2 className="mt-3 bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 bg-clip-text text-2xl font-black tracking-tight text-transparent sm:text-3xl">
-              Netamps Signal Feed
+              Real-time insights, expertly curated
             </h2>
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              Operator-curated updates, refreshed automatically.
-            </p>
           </div>
         </div>
 
@@ -168,24 +197,30 @@ export default function FeedStrip() {
 
       {/* Flash scroll ticker — pure CSS motion, duplicated list for a gapless
           loop. The duplicate is aria-hidden so readers hear each flash once.
-          No links: flashes are plain text. */}
+          Each flash links to the website entered for that item (http(s) only);
+          items without a website render as plain text. When the dashboard
+          scroll switch is OFF, the same flashes render as a static row. */}
       {tickerItems.length > 0 && (
         <div className="feed-ticker relative border-t border-slate-200/70 bg-slate-950/[0.92] py-2.5 backdrop-blur">
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-slate-950 to-transparent" aria-hidden="true" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-slate-950 to-transparent" aria-hidden="true" />
-          <div className="feed-ticker-track flex w-max items-center gap-8 whitespace-nowrap px-4">
-            {[0, 1].map((copy) => (
-              <div key={copy} aria-hidden={copy === 1} className="flex items-center gap-8">
-                {tickerItems.map((item) => (
-                  <span key={`${copy}-${item.id}`} className="flex items-center gap-2 text-xs font-semibold tracking-wide text-slate-200">
-                    <span aria-hidden="true" className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.9)]" />
-                    <span className="uppercase text-teal-300">{item.tag}</span>
-                    <span className="text-slate-100">{item.title}</span>
-                  </span>
-                ))}
-              </div>
-            ))}
-          </div>
+          {state.scroll ? (
+            <div className="feed-ticker-track flex w-max items-center gap-8 whitespace-nowrap px-4">
+              {[0, 1].map((copy) => (
+                <div key={copy} aria-hidden={copy === 1} className="flex items-center gap-8">
+                  {tickerItems.map((item) => (
+                    <TickerFlash key={`${copy}-${item.id}`} item={item} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-2 px-4">
+              {tickerItems.map((item) => (
+                <TickerFlash key={item.id} item={item} />
+              ))}
+            </div>
+          )}
         </div>
       )}
       {updatedAt && (
