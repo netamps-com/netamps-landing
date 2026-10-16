@@ -87,18 +87,6 @@ textarea {
   font-family: var(--font-inter), var(--font-outfit), sans-serif;
 }
 
-/* Ensure all buttons use the unified primary style unless explicitly opted out */
-button.net-btn {
-  @apply var(--net-btn-primary);
-}
-
-/* Ensure all inputs use the unified style unless explicitly opted out */
-input.net-input,
-select.net-input,
-textarea.net-input {
-  @apply var(--net-input);
-}
-
 /* ── Consistent focus ring across all modules ── */
 *:focus-visible {
   outline: 2px solid var(--net-border-focus);

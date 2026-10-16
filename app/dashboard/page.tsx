@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import XLSX from 'xlsx';
+import * as XLSX from 'xlsx';
 import { Package, Search, ArchiveX, X, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Tag, Video, Mail, Server, Wifi, HardDrive, Cpu, Zap, ExternalLink, RefreshCw, Handshake, Download } from 'lucide-react';
 import { DashboardShell } from './DashboardNav';
 import { buildNavSections } from './nav';
