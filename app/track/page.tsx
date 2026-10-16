@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ShieldCheck, Handshake, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, ChevronRight, ListOrdered } from 'lucide-react';
 import NetampsLogo from '../NetampsLogo';
 import TrackHero from './TrackHero';
 import { formatPaise, evalUnitPaise, sanitizeMoneyInput, moneyStringToPaise } from '../lib/money';
 import { ORDER_STATUS, CHRONOLOGY, normalizeStatus, statusRank, isNegotiable, isClosedStatus, statusChip, kindLabel } from '../lib/status';
+import { checkSession, logoutUser } from '../track/session';
 
 /**
  * Track Order — the buyer-facing module. EMAIL ONLY.
@@ -197,6 +198,8 @@ export default function TrackOrderPage() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [token, setToken] = useState('');
+  const [sessionValid, setSessionValid] = useState<boolean | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [order, setOrder] = useState<Order | null>(null);
   const [negotiable, setNegotiable] = useState(false);
@@ -226,7 +229,8 @@ export default function TrackOrderPage() {
     const res = await fetch(`${API}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      credentials: 'include'
     });
     let data: any = null;
     try { data = await res.json(); } catch { throw new Error('Server returned an invalid response.'); }
@@ -380,11 +384,13 @@ export default function TrackOrderPage() {
   const tablePrice = active ? (active.currentTotalPaise ?? null) : (order?.finalPrice?.totalPaise ?? null);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-100 to-slate-100">
+      <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-          <NetampsLogo />
-          <Link href="/returns" className="text-sm font-semibold text-slate-500 hover:text-slate-900">← Back</Link>
+          <NetampsLogo className="h-10 w-auto" />
+          <Link href="/returns" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
+            ← Back to Returns
+          </Link>
         </div>
       </header>
 

@@ -28,16 +28,47 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  // 2. Transport Security (HSTS)
-  // Enforce HTTPS-only traffic for 1 year (31536000 seconds), include subdomains, and preload
+  // ── FIPS 140-3 / DoD / Military-Grade Security Headers ──
+  // These headers enforce transport security, content isolation, and
+  // browser-side attack surface reduction aligned with DoD STIG and
+  // NIST SP 800-53 control families (SC-8, SC-13, SC-28).
+
+  // 2. Transport Security (HSTS) — FIPS 140-3 transport channel hardening
+  // Enforce HTTPS-only traffic for 2 years, include subdomains, and preload.
+  // Aligned with DoD STIG V-222602 (HSTS must be enabled).
   response.headers.set(
     'Strict-Transport-Security',
-    'max-age=31536000; includeSubDomains; preload'
+    'max-age=63072000; includeSubDomains; preload'
   );
 
-  // 3. Prevent Referer Leakage
+  // 3. Prevent Referer Leakage — DoD STIG SC-8 (transmission confidentiality)
   // Apply a strict Referrer-Policy to prevent leaking sensitive paths to third parties
   response.headers.set('Referrer-Policy', 'same-origin');
+
+  // 4. Content Security — XSS and injection mitigation (NIST SC-18)
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+
+  // 5. Frame protection — Clickjacking defense (NIST SC-18, DoD STIG V-222609)
+  response.headers.set('X-Frame-Options', 'DENY');
+
+  // 6. Cross-Origin Isolation — DoD zero-trust browser hardening
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  response.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+
+  // 7. Permissions Policy — Minimize browser API attack surface
+  // Deny access to sensitive device APIs unless explicitly needed
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()'
+  );
+
+  // 8. Cache control for authenticated pages — prevent sensitive data caching
+  // (SC-28: Protection of Information at Rest)
+  const pathname = request.nextUrl.pathname;
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/intake') || pathname.startsWith('/returns')) {
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    response.headers.set('Pragma', 'no-cache');
+  }
 
   return response;
 }

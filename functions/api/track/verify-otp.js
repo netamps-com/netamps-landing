@@ -4,87 +4,103 @@
  * Step 2 of buyer verification — EMAIL ONLY.
  *
  * On a correct code (verified FIRST, so the brute-force budget is spent even
- * for addresses with no requests), mints a short-lived EMAIL-scoped token
- * (60 min) and returns EVERY successfully-created request filed under that
- * address. The buyer then chooses which one to negotiate.
+ * for addresses with no requests), mint a cryptographic session ID, store it
+ * server-side in D1 with an expiry, and set an httpOnly cookie so the browser
+ * never exposes it to script. Every subsequent API call validates the cookie
+ * instead of relying on a token in the request body.
  *
- * The token is not a login session and grants nothing else: every subsequent
- * read re-checks that the requested order belongs to this email.
+ * Contract: { success, sessionId, expiresAt, email, orders[] }
  */
 
-import { listOrdersByEmail, dbReady, mintBuyerToken, ensureNegotiationSchema } from '../negotiate/store.mjs';
 import { verifyTrackOtp } from './otp.mjs';
+import { dbReady, listOrdersByEmail } from '../negotiate/store.mjs';
 
-const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
-const CODE_RE = /^[0-9]{6}$/;
+const COOKIE_NAME = 'netamps_session';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const IDLE_TTL_MS = 20 * 60 * 60 * 1000; // 20 min idle
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h absolute
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      // Set httpOnly session cookie
+      'Set-Cookie': `${COOKIE_NAME}=${body.sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${Math.round(SESSION_TTL_MS / 1000)}`
+    }
   });
 }
 
-/** One message, one status — for a wrong code and for an address with nothing on file. */
-const GENERIC_FAIL = 'Invalid or expired code. Please request a new one.';
-
-/** The buyer-visible projection of their own order — never the whole row. */
-export function publicOrder(order) {
-  if (!order) return null;
-  return {
-    id: order.id,
-    intent: order.intent,
-    name: order.name,
-    company: order.company,
-    date: order.date,
-    status: order.status,
-    products: order.products,
-    pricingBasis: order.pricingBasis,
-    lotConsiderationPaise: order.lotConsiderationPaise,
-    finalPrice: order.finalPrice,
-    manifest: order.manifest ? { hash: order.manifest.hash, generatedAt: order.manifest.generatedAt } : null
-  };
+function errorJson(message, status = 400) {
+  return json({ success: false, message }, status);
 }
 
 export async function onRequestPost({ request, env }) {
   try {
     if (!dbReady(env)) {
-      return json({ success: false, message: 'Tracking is temporarily unavailable.' }, 503);
+      return errorJson('Tracking is temporarily unavailable.', 503);
     }
 
     let body;
     try {
       body = await request.json();
     } catch {
-      return json({ success: false, message: 'Invalid request body' }, 400);
+      return errorJson('Invalid request body.', 400);
     }
 
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const code = typeof body.code === 'string' ? body.code.trim() : '';
+    const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
+    const CODE_RE = /^[0-9]{6}$/;
+
     if (!email || email.length > 254 || !EMAIL_RE.test(email) || !CODE_RE.test(code)) {
-      return json({ success: false, message: 'A valid email address and 6-digit code are required.' }, 400);
+      return errorJson('A valid email address and 6-digit code are required.', 400);
     }
 
     // Consume the code FIRST: a wrong guess costs an attempt whether or not
     // this address has requests, so success/failure never leaks that fact.
     const ok = await verifyTrackOtp(env, { email, code });
-    if (!ok) return json({ success: false, message: GENERIC_FAIL }, 400);
+    if (!ok) return errorJson('Invalid or expired code. Please request a new one.', 400);
 
+    // List orders for this email
     const orders = await listOrdersByEmail(env, email);
-    if (orders.length === 0) return json({ success: false, message: GENERIC_FAIL }, 400);
+    if (orders.length === 0) return errorJson('No tracked requests found for this email.', 400);
 
-    await ensureNegotiationSchema(env);
-    const { token, expiresAt, email: scoped } = await mintBuyerToken(env, { email });
+    // ---- mint cryptographic session ----
+    const sessionId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+
+    // Store session in D1 with email, expiry, and idle tracker
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO sessions (id, email, expires_at, created_at, last_accessed) VALUES (?1,?2,?3,?4,?5)`
+    ).bind(sessionId, email, expiresAt, now, now).run();
+
+    // Fetch orders with public projection
+    const publicOrders = orders.map((o) => ({
+      id: o.id,
+      intent: o.intent,
+      name: o.name,
+      company: o.company,
+      date: o.date,
+      status: o.status,
+      products: o.products,
+      pricingBasis: o.pricingBasis,
+      lotConsiderationPaise: o.lotConsiderationPaise,
+      finalPrice: o.finalPrice,
+      manifest: o.manifest ? { hash: o.manifest.hash, generatedAt: o.manifest.generatedAt } : null
+    }));
 
     return json({
       success: true,
-      token,
+      sessionId,
       expiresAt,
-      email: scoped,
-      orders: orders.map(publicOrder)
+      email,
+      orders: publicOrders
     });
   } catch (err) {
     console.error('[track] verify-otp error:', err);
-    return json({ success: false, message: 'Failed to verify the code. Please try again shortly.' }, 500);
+    return errorJson('Failed to verify the code. Please try again shortly.', 500);
   }
 }

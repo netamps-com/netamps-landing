@@ -11,6 +11,7 @@ import LogViewerModal from './LogViewerModal';
 import MatchCandidates from './MatchCandidates';
 import EvidenceGallery from './EvidenceGallery';
 import StatsBar from './StatsBar';
+import MilestonePanel from './MilestonePanel';
 import { useIdleTimeout, IdleTimeoutModal } from '../lib/idle-timeout';
 import { formatPaise as paiseToDisplay, evalUnitPaise, lineFinalOf } from '../lib/money';
 import {
@@ -891,6 +892,9 @@ export default function DashboardPage() {
         )}
 
         <StatsBar />
+
+        {/* Milestone panel — gated by match_meta.milestone_enabled */}
+        <MilestonePanel />
 
         <div className="flex justify-between items-end mb-8">
           <div>
