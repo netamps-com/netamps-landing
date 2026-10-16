@@ -547,8 +547,11 @@ export default function DashboardPage() {
         FinalBasis: req.finalPrice?.basis ?? null,
       };
     });
+    if (enriched.length === 0) return;
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(enriched);
+    const headers = Object.keys(enriched[0]);
+    const rows = [headers, ...enriched.map((r) => headers.map((h) => r[h as keyof typeof r] ?? ''))];
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Requests');
     const xlsxBytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
