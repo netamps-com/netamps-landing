@@ -278,7 +278,7 @@ export async function onRequest(context) {
     const user = await verifySession(env, request);
     if (!user) return corsJson(request, env, { success: false, message: 'Unauthorized' }, 401);
     const { config, updatedAt } = await readConfig(env);
-    return corsJson(request, env, { success: true, config: { ...config, updatedAt } });
+    return corsJson(request, env, { success: true, config: { ...config, updatedAt }, defaults: defaultConfig() });
   }
 
   if (request.method === 'POST') {

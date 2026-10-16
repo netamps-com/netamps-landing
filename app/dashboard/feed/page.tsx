@@ -165,6 +165,7 @@ export default function FeedDashboardPage() {
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [events, setEvents] = useState<FeedEvent[]>([]);
+  const [defaultItems, setDefaultItems] = useState<FeedItem[] | null>(null);
   const [live, setLive] = useState(true);
   const [lastResults, setLastResults] = useState<Record<string, { status: number; latency: number }>>({});
   const [attempts, setAttempts] = useState<Record<string, number>>({});
@@ -203,6 +204,9 @@ export default function FeedDashboardPage() {
       let data: any = null;
       try { data = await res.json(); } catch { throw new Error('bad response'); }
       const cfg = data?.config ?? data;
+      if (Array.isArray((data?.defaults as { items?: unknown } | undefined)?.items)) {
+        setDefaultItems((data.defaults as { items: FeedItem[] }).items);
+      }
       if (isFeedConfig(cfg)) {
         // Older saved rows predate the scroll switch — default it ON.
         // Items saved before per-item dates carry no ts — keep them as-is;
@@ -967,7 +971,24 @@ export default function FeedDashboardPage() {
                 <h2 className="font-bold text-white flex items-center gap-2">
                   <Rss className="w-4 h-4 text-lime-400" /> Feed Items
                 </h2>
-                <span className="text-[11px] font-mono text-slate-500">{config.items.length}/{MAX_ITEMS}</span>
+                <div className="flex items-center gap-2">
+                  {defaultItems && defaultItems.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (!window.confirm('Replace all feed items with the current defaults? Your channels, rate and schema are untouched. Press Save to publish.')) return;
+                        patch((c) => ({
+                          ...c,
+                          items: defaultItems.map((d) => ({ ...d, id: uid() })),
+                        }));
+                        setNotice('Defaults loaded into the editor — press Save to publish.');
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-bold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Restore defaults
+                    </button>
+                  )}
+                  <span className="text-[11px] font-mono text-slate-500">{config.items.length}/{MAX_ITEMS}</span>
+                </div>
               </div>
               <ul className="mt-3 space-y-2">
                 {config.items.length === 0 && (
