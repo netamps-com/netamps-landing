@@ -165,7 +165,21 @@ export async function onRequestPost({ request, env }) {
       }
 
       if (action === 'login') {
-        const ip = request.headers.get('cf-connecting-ip') ||
+        // Login threat guard, step 1 — network context + active IP blocks.
+        // D1-persisted (unlike the isolate-local map below): survives isolate
+        // recycling and sees distributed sources. Blocked IPs stop here with a
+        // neutral message; the owner already holds the context by mail.
+        let netCtx = null;
+        try {
+          const guard0 = await import('./authz/login-guard.mjs');
+          netCtx = await guard0.netContext(request);
+          const blocked = await guard0.activeBlock(env, netCtx.ip);
+          if (blocked) {
+            await guard0.recordAttempt(env, { email, ctx: netCtx, result: 'blocked', reason: 'ip_block' });
+            return new Response(JSON.stringify({ success: false, code: 'IP_BLOCKED', message: 'Access temporarily restricted. The account owner has been notified.' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+          }
+        } catch {}
+        const ip = (netCtx && netCtx.ip) || request.headers.get('cf-connecting-ip') ||
           (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown';
         const emailKey = typeof email === 'string' ? email.toLowerCase() : '';
         if (loginRateLimited('ip', ip) || loginRateLimited('email', emailKey)) {
@@ -194,6 +208,24 @@ export async function onRequestPost({ request, env }) {
               await env.DB.prepare('UPDATE users SET hash = ? WHERE email = ?').bind(await hashNewSecret(passwordHash), email).run();
             } catch {}
           }
+          // Login threat guard, step 2 — unknown-context hold. Valid
+          // credentials from a never-seen (mailbox, IP) pair do NOT mint a
+          // session: the owner gets a challenge (mailbox, IP, geo, device,
+          // OTP) and the IP/user/page stay blocked until the owner approves.
+          // Unknown mailboxes never create challenges (attacker-spamable);
+          // they only count toward IP blocks below.
+          try {
+            const guard1 = await import('./authz/login-guard.mjs');
+            const known = await guard1.isKnownDevice(env, email, (netCtx && netCtx.ip) || 'unknown');
+            if (!known) {
+              const ch = await guard1.createOwnerChallenge(env, { email, ctx: netCtx || {} });
+              await guard1.recordAttempt(env, { email, ctx: netCtx || {}, result: 'challenged', reason: ch.otpSent ? 'owner_verify' : 'owner_notify_failed' });
+              if (!ch.otpSent) {
+                return new Response(JSON.stringify({ success: false, code: 'OWNER_NOTIFY_FAILED', message: 'Additional verification is required, but owner notification is unavailable. Contact the account owner directly.' }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+              }
+              return new Response(JSON.stringify({ success: false, pending: true, challengeId: ch.challengeId, code: 'OWNER_VERIFY_PENDING', message: 'Additional verification required. The account owner has been notified — retry after approval.' }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+            }
+          } catch {}
           const sessionId = crypto.randomUUID() + crypto.randomUUID(); // Mock 256-bit token
           
           await env.DB.prepare(`
@@ -207,6 +239,21 @@ export async function onRequestPost({ request, env }) {
           
           const expiresAt = new Date(Date.now() + ttlMs).toISOString();
           await env.DB.prepare('INSERT INTO sessions (token, email, role, expires_at) VALUES (?, ?, ?, ?)').bind(sessionId, email, results[0].role, expiresAt).run();
+
+          // Login threat guard, step 3 — bind + journal. The session is bound
+          // to network prefix + device hash (pass-the-cookie control; enforced
+          // in verifySession on double mismatch only) and the device joins the
+          // known set, so the next login from here passes the hold above.
+          try {
+            const guard2 = await import('./authz/login-guard.mjs');
+            await guard2.ensureSessionBinding(env);
+            try {
+              await env.DB.prepare('UPDATE sessions SET ip_prefix = ?1, ua_hash = ?2 WHERE token = ?3')
+                .bind(guard2.ipPrefix((netCtx && netCtx.ip) || 'unknown'), (netCtx && netCtx.uaHash) || null, sessionId).run();
+            } catch {}
+            await guard2.rememberDevice(env, { email, ctx: netCtx || {} });
+            await guard2.recordAttempt(env, { email, ctx: netCtx || {}, result: 'success' });
+          } catch {}
 
           // Server-side login record: client AUTH_SUCCESS dies with the
           // browser — the trail must not depend on it.
@@ -246,6 +293,43 @@ export async function onRequestPost({ request, env }) {
           });
         }
         await auditAuth(env, request, 'AUTH_LOGIN_FAILED', email);
+        // Login threat guard, step 4 — harvesting/stuffing response. Failures
+        // feed D1 sliding windows: a burst from one IP auto-blocks it for an
+        // hour and mails the owner; a burst against one mailbox mails the
+        // owner as a targeted-account alert. The 401 wording never changes.
+        try {
+          const guard3 = await import('./authz/login-guard.mjs');
+          const c = netCtx || {};
+          await guard3.recordAttempt(env, { email, ctx: c, result: 'failed' });
+          const ipFails = await guard3.countFailures(env, { ip: c.ip });
+          if (ipFails >= guard3.GUARD_POLICY.FAILS_PER_IP_BLOCK) {
+            await guard3.blockIp(env, { ip: c.ip, reason: 'login_failure_burst', minutes: guard3.GUARD_POLICY.AUTO_BLOCK_MINUTES });
+            await guard3.ownerAlert(env, {
+              kind: 'ip_autoblock',
+              subject: `Security: IP ${c.ip || 'unknown'} auto-blocked after ${ipFails} failed logins`,
+              html: `<h3>IP auto-blocked</h3><p>IP: <strong>${c.ip || 'unknown'}</strong><br>` +
+                `Location: <strong>${c.city || 'unknown'}, ${c.country || 'unknown'}</strong><br>` +
+                `Failed attempts (15 min): <strong>${ipFails}</strong><br>` +
+                `Targeted mailbox: <strong>${String(email || 'unknown').slice(0, 120)}</strong><br>` +
+                `Time: <strong>${new Date().toISOString()}</strong></p>` +
+                `<p>Blocked for 60 minutes. Manage blocks in D1 table <code>ip_blocks</code>.</p>`,
+              ip: c.ip
+            });
+          } else {
+            const emFails = await guard3.countFailures(env, { email: emailKey });
+            if (emFails >= guard3.GUARD_POLICY.FAILS_PER_EMAIL_ALERT) {
+              await guard3.ownerAlert(env, {
+                kind: 'targeted_account',
+                subject: `Security: ${emFails} failed logins against one mailbox`,
+                html: `<h3>Targeted-account pattern</h3><p>Mailbox: <strong>${String(email || 'unknown').slice(0, 120)}</strong><br>` +
+                  `Failed attempts (15 min): <strong>${emFails}</strong><br>` +
+                  `Latest IP: <strong>${c.ip || 'unknown'}</strong> (${c.city || 'unknown'}, ${c.country || 'unknown'})<br>` +
+                  `Time: <strong>${new Date().toISOString()}</strong></p>`,
+                ip: c.ip
+              });
+            }
+          }
+        } catch {}
         return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
 
@@ -270,6 +354,11 @@ export async function onRequestPost({ request, env }) {
         }
         
         await env.DB.prepare('UPDATE users SET hash = ? WHERE email = ?').bind(await hashNewSecret(passwordHash), email).run();
+        // Pass-the-cookie control: a password change revokes EVERY session for
+        // the mailbox (including a hijacked one). The changer signs in again.
+        try {
+          await env.DB.prepare('DELETE FROM sessions WHERE email = ?').bind(email).run();
+        } catch {}
         return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
       }
 

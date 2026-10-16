@@ -71,6 +71,39 @@ export async function verifySession(env, request) {
               await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(sessionToken).run();
             } catch {}
           } else {
+            // Pass-the-cookie control (see authz/login-guard.mjs bindingVerdict):
+            // revoke ONLY on a double mismatch (different network AND different
+            // device). A lone IP hop or UA change passes, so this cannot lock
+            // out legitimate users; rows without bindings (legacy) pass
+            // untouched. Any infra error here fails open — only an explicit
+            // double mismatch revokes.
+            try {
+              const { bindingVerdict } = await import('../authz/login-guard.mjs');
+              const hip = request.headers.get('cf-connecting-ip') ||
+                (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown';
+              const hua = request.headers.get('user-agent') || 'unknown';
+              let huaHash = '';
+              try {
+                const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hua));
+                huaHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+              } catch {}
+              const brow = await env.DB.prepare('SELECT ip_prefix, ua_hash FROM sessions WHERE token = ?').bind(sessionToken).first().catch(() => null);
+              if (bindingVerdict(brow, { ip: hip, uaHash: huaHash }) === 'hijack') {
+                try {
+                  await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(sessionToken).run();
+                } catch {}
+                try {
+                  await env.DB.prepare(
+                    'CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, timestamp TEXT, event_type TEXT, page TEXT, details TEXT, username TEXT, ip_address TEXT)'
+                  ).run();
+                  await env.DB.prepare(
+                    'INSERT INTO audit_logs (id, timestamp, event_type, page, details, username, ip_address) VALUES (?1,?2,?3,?4,?5,?6,?7)'
+                  ).bind(crypto.randomUUID(), new Date().toISOString(), 'AUTH_SESSION_HIJACK_REVOKED', 'Session Verify',
+                    JSON.stringify({ boundPrefix: brow && brow.ip_prefix ? 'set' : 'unset' }), String(row.email || 'unknown').slice(0, 254), hip).run();
+                } catch {}
+                return null;
+              }
+            } catch {}
             return { email: row.email, role: row.role || 'user' };
           }
         }

@@ -1,4 +1,7 @@
 import { verifySession } from './intake/auth';
+// Malware scan + hex helpers live in upload/scan.mjs (single definition,
+// loadable by the Node harness verbatim).
+import { scanMalware, hexOf } from './upload/scan.mjs';
 
 /**
  * POST /api/secure-upload
@@ -8,7 +11,6 @@ import { verifySession } from './intake/auth';
  */
 
 const MAX_PAYLOAD_SIZE = 300 * 1024 * 1024; // 300 MB
-const SCAN_WINDOW_BYTES = 256 * 1024; // malware-signature scan window (head of payload)
 
 const ALLOWED_EXTENSIONS = new Set([
   'png', 'jpg', 'jpeg', 'webp', 'gif', 'tiff', 'tif', 'heic', 'heif',
@@ -24,18 +26,11 @@ const ALLOWED_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ]);
 
-// EICAR anti-malware test signature
-const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
-
 function json(body, status) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' }
   });
-}
-
-function hexOf(bytes) {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function validateMagicBytes(headerArray, extension) {
@@ -69,37 +64,6 @@ function validateMagicBytes(headerArray, extension) {
   if (hex.startsWith('464c5601')) return true; // FLV
 
   return false;
-}
-
-function scanMalware(headBytes, fileName) {
-  try {
-    const hex = hexOf(headBytes.slice(0, Math.min(headBytes.length, SCAN_WINDOW_BYTES)));
-    if (hex.startsWith('4d5a')) return { infected: true, signature: 'EXECUTABLE_MZ' };
-    if (hex.startsWith('7f454c46')) return { infected: true, signature: 'EXECUTABLE_ELF' };
-    if (
-      hex.startsWith('feedface') || hex.startsWith('cefaedfe') ||
-      hex.startsWith('feedfacf') || hex.startsWith('cffaedfe') ||
-      hex.startsWith('cafebabe') || hex.startsWith('cafebabf')
-    ) return { infected: true, signature: 'EXECUTABLE_MACHO' };
-    if (hex.startsWith('2321')) return { infected: true, signature: 'SCRIPT_SHEBANG' };
-
-    let ascii = '';
-    const view = headBytes.slice(0, Math.min(headBytes.length, SCAN_WINDOW_BYTES));
-    for (let i = 0; i < view.length; i++) {
-      const c = view[i];
-      ascii += c >= 32 && c < 127 ? String.fromCharCode(c) : ' ';
-    }
-    if (ascii.includes(EICAR)) return { infected: true, signature: 'EICAR_TEST_FILE' };
-
-    const lower = String(fileName || '').toLowerCase();
-    if (/\.(exe|dll|bat|cmd|ps1|sh|com|scr|msi|jar|py|js|vbs)(\.|$)/.test(lower.replace(/\.(png|jpe?g|webp|gif|tiff?|heic|heif|mp4|mov|webm|mkv|avi|flv|csv|json)$/, ''))) {
-      return { infected: true, signature: 'DOUBLE_EXTENSION_MASQUERADE' };
-    }
-
-    return { infected: false, signature: null };
-  } catch {
-    return { infected: false, signature: null };
-  }
 }
 
 async function scanVirustotal(sha256, apiKey) {

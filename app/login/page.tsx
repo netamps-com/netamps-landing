@@ -217,6 +217,19 @@ export default function LoginPage() {
   // 30 minutes without activity. Informational only — never alongside
   // invite/reset views (those render instead of the sign-in form).
   const [expiredNotice, setExpiredNotice] = useState(false);
+  // Owner-verification hold: valid credentials from an unknown device do not
+  // mint a session until the owner approves (?challenge= polling). Blocked
+  // IPs render the page inert — the server enforces, this only explains.
+  const [heldChallenge, setHeldChallenge] = useState<string | null>(null);
+  const [heldMsg, setHeldMsg] = useState('');
+  const [ipBlocked, setIpBlocked] = useState(false);
+  // Owner console (?challenge=ID): approve/deny a held login with the mailed
+  // OTP. Rendered INSTEAD of the sign-in form — never alongside it.
+  const [ownerChallenge, setOwnerChallenge] = useState<string | null>(null);
+  const [ownerCode, setOwnerCode] = useState('');
+  const [ownerMsg, setOwnerMsg] = useState('');
+  const [ownerBusy, setOwnerBusy] = useState(false);
+  const [ownerDone, setOwnerDone] = useState('');
 
   useEffect(() => {
     document.title = 'Netamps Connect';
@@ -239,6 +252,8 @@ export default function LoginPage() {
       if (rst) setResetToken(rst);
       const exp = new URL(window.location.href).searchParams.get('expired');
       if (exp === '1') setExpiredNotice(true);
+      const oc = new URL(window.location.href).searchParams.get('challenge');
+      if (oc) setOwnerChallenge(oc);
     } catch {
       // URL manipulation unavailable
     }
@@ -385,6 +400,32 @@ export default function LoginPage() {
       });
       const data = await res.json();
 
+      // Owner-verification hold (HTTP 202): credentials were valid but the
+      // device is unknown — no session minted. The page holds on the
+      // challenge and polls; the owner approves by OTP, then the user signs
+      // in again (device now known). Never auto-retries: the Turnstile token
+      // is single-use, so a retry needs a fresh human check anyway.
+      if (res.status === 202 && data && (data.pending || data.code === 'OWNER_NOTIFY_FAILED')) {
+        if (data.pending && data.challengeId) {
+          setHeldChallenge(data.challengeId);
+          setHeldMsg(data.message || 'Additional verification required. The account owner has been notified — retry after approval.');
+        } else {
+          setErrorMsg(data.message || 'Additional verification is unavailable. Contact the account owner directly.');
+        }
+        setIsSubmitting(false);
+        if (turnstileSiteKey) resetTurnstile();
+        return;
+      }
+
+      // IP block (HTTP 403): render the page inert. Enforcement is
+      // server-side; this only explains and stops further attempts.
+      if (res.status === 403 && data && data.code === 'IP_BLOCKED') {
+        setIpBlocked(true);
+        setErrorMsg(data.message || 'Access temporarily restricted. The account owner has been notified.');
+        setIsSubmitting(false);
+        return;
+      }
+
       if (data.success) {
         // Remember-me decides persistence: checked → 30-day cookies,
         // unchecked → session cookies that die with the tab.
@@ -419,6 +460,94 @@ export default function LoginPage() {
       setErrorMsg('Network error. Check connection.');
       setIsSubmitting(false);
       if (turnstileSiteKey) resetTurnstile();
+    }
+  };
+
+  // Held-login polling: asks the server for the challenge state every 5s.
+  // On approval the user signs in again (fresh Turnstile token); on deny or
+  // expiry the hold ends with the reason shown. The challenge ID is a
+  // capability to READ status only — approval still needs the mailed OTP.
+  useEffect(() => {
+    if (!heldChallenge) return;
+    let stop = false;
+    const poll = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+        const res = await fetch(`${API_URL}/api/login-guard`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'challenge-status', challengeId: heldChallenge })
+        });
+        const data = await res.json().catch(() => null);
+        if (stop || !data || !data.success) return;
+        if (data.status === 'approved') {
+          stop = true;
+          setHeldChallenge(null);
+          setHeldMsg('Approved by the account owner — complete the check and sign in again.');
+          setErrorMsg('');
+        } else if (data.status === 'denied' || data.status === 'expired') {
+          stop = true;
+          setHeldChallenge(null);
+          setHeldMsg(data.status === 'denied'
+            ? 'The account owner denied this sign-in. The source is blocked.'
+            : 'The verification window expired. Sign in again to request a fresh approval.');
+        }
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => { stop = true; clearInterval(t); };
+  }, [heldChallenge]);
+
+  const handleOwnerVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOwnerMsg('');
+    if (!ownerChallenge || ownerCode.trim().length !== 6) {
+      setOwnerMsg('Enter the 6-digit approval code from the owner email.');
+      return;
+    }
+    setOwnerBusy(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/login-guard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'owner-verify', challengeId: ownerChallenge, code: ownerCode.trim() })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        setOwnerMsg(data?.message || 'Verification failed.');
+        return;
+      }
+      setOwnerDone('approved');
+    } catch {
+      setOwnerMsg('Network error. Try again shortly.');
+    } finally {
+      setOwnerBusy(false);
+    }
+  };
+
+  const handleOwnerDeny = async () => {
+    setOwnerMsg('');
+    if (!ownerChallenge) return;
+    setOwnerBusy(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${API_URL}/api/login-guard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'owner-deny', challengeId: ownerChallenge })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        setOwnerMsg(data?.message || 'Could not record the denial.');
+        return;
+      }
+      setOwnerDone('denied');
+    } catch {
+      setOwnerMsg('Network error. Try again shortly.');
+    } finally {
+      setOwnerBusy(false);
     }
   };
 
@@ -460,7 +589,62 @@ export default function LoginPage() {
             </h2>
           </div>
 
-          {resetToken ? (
+          {ownerChallenge ? (
+            <div className="space-y-6">
+              <div className="text-center">
+                <h3 className="text-xl font-black text-slate-900">Owner sign-in approval</h3>
+                <p className="text-sm text-slate-500 mt-1">A sign-in from an unrecognized device is on hold. Enter the 6-digit code from the owner email to approve it — or deny it to block the source for 24 hours.</p>
+              </div>
+              {ownerDone === 'approved' ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center">
+                  <p className="text-sm font-bold text-emerald-700">Approved — the held sign-in may now proceed. The user should retry on the sign-in form.</p>
+                </div>
+              ) : ownerDone === 'denied' ? (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+                  <p className="text-sm font-bold text-red-600">Denied — the source IP is blocked for 24 hours.</p>
+                </div>
+              ) : (
+                <form className="space-y-4" onSubmit={handleOwnerVerify}>
+                  {ownerMsg && (
+                    <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-500 text-sm">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      {ownerMsg}
+                    </div>
+                  )}
+                  <div>
+                    <label htmlFor="owner-code" className="block text-sm font-medium text-slate-700">Approval code</label>
+                    <input
+                      id="owner-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      required
+                      maxLength={6}
+                      value={ownerCode}
+                      onChange={(e) => setOwnerCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="••••••"
+                      className="mt-2 appearance-none block w-full px-3 py-3 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-900 text-center tracking-widest text-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={ownerBusy}
+                    className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-all disabled:opacity-70"
+                  >
+                    {ownerBusy ? <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Approve sign-in'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOwnerDeny}
+                    disabled={ownerBusy}
+                    className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-bold text-red-600 border border-red-200 hover:bg-red-50 transition-all disabled:opacity-70"
+                  >
+                    Deny and block source
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : resetToken ? (
             <div className="space-y-6">
               <div className="text-center">
                 <h3 className="text-xl font-black text-slate-900">Choose a new password</h3>
@@ -582,6 +766,24 @@ export default function LoginPage() {
             </div>
           ) : (
           <form className="space-y-4" onSubmit={handleSubmit}>
+            {ipBlocked && (
+              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2 text-red-600 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                This source is blocked. The account owner has been notified — sign-in is disabled until the block clears.
+              </div>
+            )}
+            {heldChallenge && (
+              <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-3 flex items-center gap-2 text-amber-700 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {heldMsg || 'Waiting on owner approval…'}
+              </div>
+            )}
+            {!heldChallenge && heldMsg && !ipBlocked && (
+              <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-3 flex items-center gap-2 text-amber-700 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {heldMsg}
+              </div>
+            )}
             {expiredNotice && (
               <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-3 flex items-center gap-2 text-amber-600 text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -668,7 +870,7 @@ export default function LoginPage() {
             <div>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || ipBlocked}
                 className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
