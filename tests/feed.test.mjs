@@ -79,6 +79,32 @@ function isServableSrc(src) {
   return false;
 }
 
+function parseFeedDate(value) {
+  if (typeof value !== 'string') return NaN;
+  const v = value.trim();
+  if (!v) return NaN;
+  const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(v);
+  if (m) {
+    const dd = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const yyyy = parseInt(m[3], 10);
+    const hh = m[4] === undefined ? 0 : parseInt(m[4], 10);
+    const mi = m[5] === undefined ? 0 : parseInt(m[5], 10);
+    const ss = m[6] === undefined ? 0 : parseInt(m[6], 10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31 && hh <= 23 && mi <= 59 && ss <= 59) {
+      return new Date(yyyy, mm - 1, dd, hh, mi, ss).getTime();
+    }
+  }
+  const native = Date.parse(v);
+  return Number.isFinite(native) ? native : NaN;
+}
+
+function isExpired(ts, nowMs) {
+  const ms = parseFeedDate(ts);
+  if (!Number.isFinite(ms)) return false;
+  return ms <= nowMs;
+}
+
 let pass = 0, fail = 0;
 function t(name, fn) {
   try {
@@ -173,6 +199,23 @@ t('javascript rejected', () => assert.equal(isServableSrc('javascript:alert(1)')
 t('data uri rejected', () => assert.equal(isServableSrc('data:image/png;base64,AAA'), false));
 t('bare relative rejected', () => assert.equal(isServableSrc('feed/a.jpg'), false));
 t('empty rejected', () => assert.equal(isServableSrc(''), false));
+
+console.log('\ndisplay-until dates');
+const NOW = new Date('2026-10-17T12:00:00Z').getTime();
+t('ISO past parses', () => assert.equal(Number.isFinite(parseFeedDate('2026-10-10T09:00:00Z')), true));
+t('ISO future parses', () => assert.equal(Number.isFinite(parseFeedDate('2026-12-01T00:00:00Z')), true));
+t('YYYY-MM-DD parses', () => assert.equal(Number.isFinite(parseFeedDate('2026-10-10')), true));
+t('DD/MM/YYYY day-first', () => assert.equal(parseFeedDate('13/10/2026'), new Date(2026, 9, 13).getTime()));
+t('DD-MM-YYYY with time', () => assert.equal(parseFeedDate('13-10-2026 09:30'), new Date(2026, 9, 13, 9, 30).getTime()));
+t('ambiguous falls back US-style', () => assert.equal(parseFeedDate('10/13/2026'), Date.parse('10/13/2026')));
+t('garbage is NaN', () => assert.equal(Number.isNaN(parseFeedDate('not a date')), true));
+t('empty is NaN', () => assert.equal(Number.isNaN(parseFeedDate('')), true));
+t('non-string is NaN', () => assert.equal(Number.isNaN(parseFeedDate(null)), true));
+t('past date expired', () => assert.equal(isExpired('2026-10-10T09:00:00Z', NOW), true));
+t('future date live', () => assert.equal(isExpired('2026-12-01T00:00:00Z', NOW), false));
+t('past DD/MM/YYYY expired', () => assert.equal(isExpired('10/10/2026', NOW), true));
+t('empty never expires', () => assert.equal(isExpired('', NOW), false));
+t('garbage never expires', () => assert.equal(isExpired('soon-ish', NOW), false));
 
 console.log(`\n${fail === 0 ? 'FEED_PASS' : 'FEED_FAIL'} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

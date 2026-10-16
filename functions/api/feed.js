@@ -14,6 +14,11 @@ import { corsJson, corsPreflight, applyCors } from '../_lib/cors.js';
  * Every other read or write requires a session.
  *
  * Honesty contract: latency is only ever a measured fetch duration.
+ *
+ * Expiry contract: an item/ticker `ts` is a display-until date in any
+ * standard format (ISO, RFC, YYYY-MM-DD, DD/MM/YYYY). Unparseable or empty
+ * means no expiry (always shown). The PUBLIC read hides expired rows; the
+ * authed read returns everything so operators can re-date them.
  */
 
 void applyCors;
@@ -28,6 +33,40 @@ const PUSH_TIMEOUT_MS = 8000;
 
 const CHANNEL_KINDS = new Set(['webhook', 'zapier', 'slack', 'custom']);
 const MEDIA_KINDS = new Set(['none', 'image', 'video', 'file']);
+
+// Tolerant display-until parser. Numeric D/M/Y forms (slashes or dashes,
+// optional time) read day-first per Indian convention; everything else goes
+// through Date.parse (ISO, RFC, YYYY-MM-DD). A day-first match with an
+// impossible month (e.g. 10/13/2026) falls through to Date.parse, which
+// reads it US-style. Returns epoch ms, or NaN when nothing parses.
+export function parseFeedDate(value) {
+  if (typeof value !== 'string') return NaN;
+  const v = value.trim();
+  if (!v) return NaN;
+  const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(v);
+  if (m) {
+    const dd = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const yyyy = parseInt(m[3], 10);
+    const hh = m[4] === undefined ? 0 : parseInt(m[4], 10);
+    const mi = m[5] === undefined ? 0 : parseInt(m[5], 10);
+    const ss = m[6] === undefined ? 0 : parseInt(m[6], 10);
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31 && hh <= 23 && mi <= 59 && ss <= 59) {
+      return new Date(yyyy, mm - 1, dd, hh, mi, ss).getTime();
+    }
+  }
+  const native = Date.parse(v);
+  return Number.isFinite(native) ? native : NaN;
+}
+
+// Expired = parseable date at or before now. Empty/garbage never expires:
+// a missing date must not hide content.
+export function isExpired(ts, nowMs) {
+  const ms = parseFeedDate(ts);
+  if (!Number.isFinite(ms)) return false;
+  const now = nowMs === undefined ? Date.now() : nowMs;
+  return ms <= now;
+}
 
 function defaultConfig() {
   return {
@@ -82,7 +121,7 @@ function defaultItems() {
       href: 'https://netamps.com/returns',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-13T09:30:00Z'
+      ts: ''
     },
     {
       id: 'feed-2',
@@ -92,7 +131,7 @@ function defaultItems() {
       href: 'https://netamps.com/returns',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-14T11:15:00Z'
+      ts: ''
     },
     {
       id: 'feed-3',
@@ -102,7 +141,7 @@ function defaultItems() {
       href: 'https://netamps.com/returns',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-15T14:05:00Z'
+      ts: ''
     },
     {
       id: 'feed-4',
@@ -112,7 +151,7 @@ function defaultItems() {
       href: 'https://netamps.com/track',
       media_kind: 'none',
       media_url: '',
-      ts: '2026-10-16T08:45:00Z'
+      ts: ''
     }
   ];
 }
@@ -124,6 +163,7 @@ function defaultTicker() {
       tag: 'ITAD',
       text: 'Enterprise pickups with chain-of-custody manifests',
       url: 'https://netamps.com/returns',
+      ts: '',
       enabled: 1
     },
     {
@@ -131,6 +171,7 @@ function defaultTicker() {
       tag: 'Buyback',
       text: 'Fresh buyback offers open for networking hardware',
       url: 'https://netamps.com/returns',
+      ts: '',
       enabled: 1
     },
     {
@@ -138,6 +179,7 @@ function defaultTicker() {
       tag: 'Tracking',
       text: 'Track your request live with milestone updates',
       url: 'https://netamps.com/track',
+      ts: '',
       enabled: 1
     }
   ];
@@ -179,6 +221,12 @@ async function ensureTables(env) {
   await env.DB.prepare(
     'CREATE TABLE IF NOT EXISTS feed_ticker (id TEXT PRIMARY KEY, tag TEXT, text TEXT, url TEXT, enabled INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, created_at TEXT)'
   ).run();
+  // Ticker expiry column for tables created before display-until dates.
+  try {
+    await env.DB.prepare('ALTER TABLE feed_ticker ADD COLUMN ts TEXT').run();
+  } catch {
+    // Duplicate-column error means the column already exists.
+  }
   await env.DB.prepare(
     'CREATE TABLE IF NOT EXISTS feed_events (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, channel TEXT, status INTEGER, latency_ms INTEGER, bytes INTEGER, payload TEXT)'
   ).run();
@@ -217,6 +265,7 @@ function mapTickerRow(row) {
     tag: typeof row.tag === 'string' ? row.tag : '',
     text: typeof row.text === 'string' ? row.text : '',
     url: typeof row.url === 'string' ? row.url : '',
+    ts: typeof row.ts === 'string' ? row.ts : '',
     enabled: row.enabled === false || row.enabled === 0 ? 0 : 1
   };
 }
@@ -253,6 +302,7 @@ function sanitizeTickerEntry(t, index) {
     tag: str(t && t.tag, 40),
     text: str(t && t.text, 140),
     url: str(t && t.url, 500),
+    ts: str(t && t.ts, 64),
     enabled
   };
 }
@@ -380,6 +430,9 @@ function validateTicker(ticker) {
     if (t.url !== undefined && t.url !== null) {
       if (typeof t.url !== 'string' || t.url.length > 500) return 'Each ticker url must be at most 500 characters.';
     }
+    if (t.ts !== undefined && t.ts !== null) {
+      if (typeof t.ts !== 'string' || t.ts.length > 64) return 'Each ticker ts must be at most 64 characters.';
+    }
   }
   return null;
 }
@@ -448,7 +501,7 @@ async function readFeed(env) {
     let ticker = [];
     try {
       const res = await env.DB.prepare(
-        'SELECT id, tag, text, url, enabled FROM feed_ticker ORDER BY sort ASC, rowid ASC'
+        'SELECT id, tag, text, url, ts, enabled FROM feed_ticker ORDER BY sort ASC, rowid ASC'
       ).all();
       ticker = (res && Array.isArray(res.results) ? res.results : []).map(mapTickerRow);
     } catch {
@@ -491,15 +544,15 @@ async function readFeed(env) {
         const t = seeds[i];
         try {
           await env.DB.prepare(
-            'INSERT OR REPLACE INTO feed_ticker (id, tag, text, url, enabled, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-          ).bind(t.id, t.tag, t.text, t.url, t.enabled ? 1 : 0, i, now).run();
+            'INSERT OR REPLACE INTO feed_ticker (id, tag, text, url, ts, enabled, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).bind(t.id, t.tag, t.text, t.url, t.ts || '', t.enabled ? 1 : 0, i, now).run();
         } catch {
           // Single-row seed failure must not break the read.
         }
       }
       try {
         const res = await env.DB.prepare(
-          'SELECT id, tag, text, url, enabled FROM feed_ticker ORDER BY sort ASC, rowid ASC'
+          'SELECT id, tag, text, url, ts, enabled FROM feed_ticker ORDER BY sort ASC, rowid ASC'
         ).all();
         const seeded = (res && Array.isArray(res.results) ? res.results : []).map(mapTickerRow);
         if (seeded.length > 0) ticker = seeded;
@@ -543,8 +596,8 @@ async function replaceTicker(env, ticker) {
   for (let i = 0; i < clean.length; i++) {
     const s = clean[i];
     await env.DB.prepare(
-      'INSERT OR REPLACE INTO feed_ticker (id, tag, text, url, enabled, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(s.id, s.tag, s.text, s.url, s.enabled ? 1 : 0, i, now).run();
+      'INSERT OR REPLACE INTO feed_ticker (id, tag, text, url, ts, enabled, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(s.id, s.tag, s.text, s.url, s.ts, s.enabled ? 1 : 0, i, now).run();
   }
   return clean;
 }
@@ -562,13 +615,17 @@ export async function onRequest(context) {
   if (request.method === 'GET') {
     if (isPublicRead) {
       const { config, items, ticker, updatedAt } = await readFeed(env);
-      const liveTicker = Array.isArray(ticker) ? ticker.filter((t) => t && t.enabled) : [];
+      const now = Date.now();
+      const liveItems = Array.isArray(items) ? items.filter((it) => it && !isExpired(it.ts, now)) : [];
+      const liveTicker = Array.isArray(ticker)
+        ? ticker.filter((t) => t && t.enabled && !isExpired(t.ts, now))
+        : [];
       return corsJson(request, env,
         {
           success: true,
           enabled: config.enabled,
           scroll: config.scroll !== false,
-          items,
+          items: liveItems,
           ticker: liveTicker,
           updatedAt
         },
@@ -678,6 +735,64 @@ export async function onRequest(context) {
         return corsJson(request, env, { success: true, ticker: clean });
       } catch {
         return corsJson(request, env, { success: false, message: 'Failed to save feed ticker.' }, 500);
+      }
+    }
+
+    // save-all: the dashboard Save button. Validates EVERY section first so a
+    // bad row anywhere rejects the whole write (nothing half-persisted), then
+    // writes config+items+ticker in one D1 batch — one round trip, one event.
+    if (action === 'save-all') {
+      const cfg = body.config;
+      if (!cfg || typeof cfg !== 'object' || !Array.isArray(body.items) || !Array.isArray(body.ticker)) {
+        return corsJson(request, env, { success: false, message: 'save-all requires config, items and ticker.' }, 400);
+      }
+      const badConfig = validateConfig(cfg);
+      if (badConfig) return corsJson(request, env, { success: false, message: badConfig }, 400);
+      const badItems = validateItems(body.items);
+      if (badItems) return corsJson(request, env, { success: false, message: badItems }, 400);
+      const badTicker = validateTicker(body.ticker);
+      if (badTicker) return corsJson(request, env, { success: false, message: badTicker }, 400);
+      let legacyItems = null;
+      if (Array.isArray(cfg.items)) {
+        const legacyInvalid = validateItems(cfg.items);
+        if (legacyInvalid) return corsJson(request, env, { success: false, message: legacyInvalid }, 400);
+        legacyItems = cfg.items;
+      }
+      if (!hasDb(env)) {
+        return corsJson(request, env, { success: false, message: 'Database unavailable.' }, 503);
+      }
+      try {
+        await ensureTables(env);
+        const cleanConfig = sanitizeConfig(cfg);
+        const cleanItems = sanitizeItemsArray(legacyItems !== null ? legacyItems : body.items);
+        const cleanTicker = sanitizeTickerArray(body.ticker);
+        const now = new Date().toISOString();
+        const stmts = [
+          env.DB.prepare('INSERT OR REPLACE INTO feed_config (id, data, updated_at) VALUES (?, ?, ?)')
+            .bind(FEED_ROW_ID, JSON.stringify(cleanConfig), now),
+          env.DB.prepare('DELETE FROM feed_items'),
+          ...cleanItems.map((s, i) => env.DB.prepare(
+            'INSERT OR REPLACE INTO feed_items (id, tag, title, detail, href, media_kind, media_url, ts, sort, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          ).bind(s.id, s.tag, s.title, s.detail, s.href, s.media_kind, s.media_url, s.ts, i, now, now)),
+          env.DB.prepare('DELETE FROM feed_ticker'),
+          ...cleanTicker.map((s, i) => env.DB.prepare(
+            'INSERT OR REPLACE INTO feed_ticker (id, tag, text, url, ts, enabled, sort, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).bind(s.id, s.tag, s.text, s.url, s.ts, s.enabled ? 1 : 0, i, now)),
+        ];
+        if (env.DB.batch && typeof env.DB.batch === 'function') {
+          await env.DB.batch(stmts);
+        } else {
+          for (const st of stmts) await st.run();
+        }
+        await logEvent(env, {
+          kind: 'save-all', channel: 'all',
+          status: 200, bytes: cleanItems.length + cleanTicker.length, payload: ''
+        });
+        return corsJson(request, env, {
+          success: true, config: cleanConfig, items: cleanItems, ticker: cleanTicker, updatedAt: now
+        });
+      } catch {
+        return corsJson(request, env, { success: false, message: 'Failed to save feed (all sections).' }, 500);
       }
     }
 
