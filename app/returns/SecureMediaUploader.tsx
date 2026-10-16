@@ -344,9 +344,8 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
           continue;
         }
         // Generate preview URL for supported image/video types (creates object URL for client-side preview)
-        const ext = (row.file.name.split('.').pop() || '').toLowerCase();
-        const isImg = /\.(png|jpe?g|webp|gif)$/i.test(row.file.name);
-        const isVid = /\.(mp4|webm|mov)$/i.test(row.file.name);
+        const isImg = f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(f.name);
+        const isVid = f.type.startsWith('video/') || /\.(mp4|webm|mkv|avi|flv|mov)$/i.test(f.name);
         const newPreviewUrl = (isImg || isVid) ? URL.createObjectURL(row.file) : undefined;
         setQueuedFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, hash, state: 'QUEUED', previewUrl: newPreviewUrl } : f)));
         pumpUploads();
@@ -452,8 +451,8 @@ const SecureMediaUploader = forwardRef<SecureMediaUploaderHandle, SecureMediaUpl
   // HEIC/TIFF have no browser decoder and MKV/AVI/FLV no browser player, so
   // staged files of those types keep the file icon instead of a dead preview
   // element. Icons above still use isImage/isVideo (container class).
-  const isPreviewableImage = (f: File) => /\.(png|jpe?g|webp|gif)$/i.test(f.name);
-  const isPreviewableVideo = (f: File) => /\.(mp4|webm|mov)$/i.test(f.name);
+  const isPreviewableImage = (f: File) => (f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|tiff?|heic|heif)$/i.test(f.name));
+  const isPreviewableVideo = (f: File) => (f.type.startsWith('video/') || /\.(mp4|webm|mkv|avi|flv|mov)$/i.test(f.name));
   const isData = (f: File) => /\.(csv|json|xlsx)$/i.test(f.name);
 
   const handleFiles = useCallback(
