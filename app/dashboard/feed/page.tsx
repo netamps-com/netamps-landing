@@ -20,7 +20,7 @@ type ChannelKind = 'webhook' | 'zapier' | 'slack' | 'custom';
 type SchemaSource = 'title' | 'link' | 'summary' | 'timestamp' | 'company';
 type PayloadFormat = 'json' | 'xml';
 
-type FeedItem = { id: string; tag: string; title: string; detail: string; href: string };
+type FeedItem = { id: string; tag: string; title: string; detail: string; href: string; ts: string };
 type Channel = { id: string; kind: ChannelKind; label: string; url: string; enabled: boolean };
 type SchemaField = { id: string; key: string; source: SchemaSource; required: boolean };
 type FeedSchema = { format: PayloadFormat; fields: SchemaField[] };
@@ -67,7 +67,7 @@ const DEFAULT_CONFIG: FeedConfig = {
 const FALLBACK_ITEM: FeedItem = {
   id: 'preview', tag: 'update', title: 'Sample post',
   detail: 'Preview only — add feed items below to curate landing content.',
-  href: 'https://netamps.com/',
+  href: 'https://netamps.com/', ts: '',
 };
 
 function isFeedConfig(v: unknown): v is FeedConfig {
@@ -120,6 +120,22 @@ function payloadBytes(payload: unknown): number {
   }
 }
 
+// datetime-local input round-trip: the control speaks "YYYY-MM-DDTHH:mm"
+// (local), the feed stores UTC ISO. Invalid input yields '' (unset).
+function tsToLocalInput(ts: string): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function tsFromLocalInput(v: string): string {
+  if (!v) return '';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
 function statusChip(status: number): string {
   if (status >= 200 && status < 300) return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
   if (status >= 400 && status < 500) return 'border-amber-500/40 bg-amber-500/10 text-amber-300';
@@ -153,6 +169,7 @@ export default function FeedDashboardPage() {
   const [lastResults, setLastResults] = useState<Record<string, { status: number; latency: number }>>({});
   const [attempts, setAttempts] = useState<Record<string, number>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [diagOpen, setDiagOpen] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -160,7 +177,7 @@ export default function FeedDashboardPage() {
   const [channelError, setChannelError] = useState('');
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [channelDraft, setChannelDraft] = useState({ label: '', url: '' });
-  const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '' });
+  const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '', ts: '' });
   const [newFieldKey, setNewFieldKey] = useState('');
   const secretRef = useRef<HTMLInputElement | null>(null);
 
@@ -188,8 +205,14 @@ export default function FeedDashboardPage() {
       const cfg = data?.config ?? data;
       if (isFeedConfig(cfg)) {
         // Older saved rows predate the scroll switch — default it ON.
+        // Items saved before per-item dates carry no ts — keep them as-is;
+        // the editor shows an empty date the operator can set.
         const withScroll = cfg as FeedConfig & { scroll?: unknown };
-        setConfig({ ...cfg, scroll: withScroll.scroll !== false });
+        setConfig({
+          ...cfg,
+          scroll: withScroll.scroll !== false,
+          items: cfg.items.map((it) => ({ ...it, ts: typeof (it as { ts?: unknown }).ts === 'string' ? (it as { ts: string }).ts : '' })),
+        });
       }
       else if (!res.ok) setError(data?.message || 'Feed API unavailable — editing local defaults.');
     } catch {
@@ -807,12 +830,24 @@ export default function FeedDashboardPage() {
             {/* Second row: Diagnostics / Rate+Security */}
             <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
               <section className={card} aria-label="Health and Error Diagnostics">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-bold text-white flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setDiagOpen((v) => !v)}
+                    className="flex items-center gap-2 font-bold text-white rounded-lg focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none"
+                    aria-expanded={diagOpen}
+                    aria-label="Toggle diagnostics"
+                  >
                     <Activity className="w-4 h-4 text-rose-300" /> Diagnostics
-                  </h2>
-                  <button onClick={() => setEvents([])} className={btnGhost}>Clear log</button>
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${diagOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {diagOpen && <button onClick={() => setEvents([])} className={btnGhost}>Clear log</button>}
                 </div>
+                {!diagOpen ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Collapsed — expand to inspect {events.length === 0 ? 'push events.' : `${events.length} push event${events.length === 1 ? '' : 's'}.`}
+                  </p>
+                ) : (
+                <>
                 <div className="mt-3 space-y-1.5">
                   {events.length === 0 && <p className="text-xs text-slate-500">No events yet.</p>}
                   {events.map((e) => (
@@ -842,6 +877,8 @@ export default function FeedDashboardPage() {
                       return `${ch?.label ?? id}: ${n}`;
                     }).join(' · ')}
                   </p>
+                )}
+                </>
                 )}
               </section>
 
@@ -962,6 +999,16 @@ export default function FeedDashboardPage() {
                         onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, detail: e.target.value } : x)) }))}
                         placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="Item detail"
                       />
+                      <label className="sm:col-span-2">
+                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Item date (individual)</span>
+                        <input
+                          type="datetime-local"
+                          value={tsToLocalInput(it.ts)}
+                          onChange={(e) => patch((c) => ({ ...c, items: c.items.map((x) => (x.id === it.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)) }))}
+                          className={`${inputDark} font-mono`}
+                          aria-label={`Date for ${it.title || 'item'}`}
+                        />
+                      </label>
                     </div>
                     <div className="mt-1.5 flex justify-end">
                       <button
@@ -980,6 +1027,16 @@ export default function FeedDashboardPage() {
                 <input value={newItem.href} onChange={(e) => setNewItem((d) => ({ ...d, href: e.target.value }))} placeholder="https://website… (ticker links here)" className={`${inputDark} font-mono`} aria-label="New item website URL" />
                 <input value={newItem.title} onChange={(e) => setNewItem((d) => ({ ...d, title: e.target.value }))} placeholder="Title" className={`${inputDark} sm:col-span-2`} aria-label="New item title" />
                 <input value={newItem.detail} onChange={(e) => setNewItem((d) => ({ ...d, detail: e.target.value }))} placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="New item detail" />
+                <label className="sm:col-span-2">
+                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Date (defaults to now)</span>
+                  <input
+                    type="datetime-local"
+                    value={tsToLocalInput(newItem.ts)}
+                    onChange={(e) => setNewItem((d) => ({ ...d, ts: tsFromLocalInput(e.target.value) }))}
+                    className={`${inputDark} font-mono`}
+                    aria-label="New item date"
+                  />
+                </label>
                 <div className="sm:col-span-2">
                   <button
                     onClick={() => {
@@ -992,9 +1049,11 @@ export default function FeedDashboardPage() {
                           title: newItem.title.trim(),
                           detail: newItem.detail.trim(),
                           href: newItem.href.trim(),
+                          // Individual date per item: operator's pick, else now.
+                          ts: newItem.ts || new Date().toISOString(),
                         }],
                       }));
-                      setNewItem({ tag: '', title: '', detail: '', href: '' });
+                      setNewItem({ tag: '', title: '', detail: '', href: '', ts: '' });
                     }}
                     disabled={!newItem.title.trim() || config.items.length >= MAX_ITEMS}
                     className={btnGhost}

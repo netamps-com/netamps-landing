@@ -34,35 +34,35 @@ function defaultConfig() {
     items: [
       {
         id: 'feed-1',
-        tag: 'Sourcing',
-        title: 'Server lots moving this week',
-        detail: 'Refurbished rack servers from decommissioned data centers.',
-        href: '/services',
-        ts: '2026-10-10T09:00:00Z'
+        tag: 'ITAD Pickup',
+        title: 'Enterprise decommission drive completed in Whitefield',
+        detail: '214 assets collected with chain-of-custody manifest; data erasure certificates issued per NIST SP 800-88.',
+        href: 'https://netamps.com/returns',
+        ts: '2026-10-13T09:30:00Z'
       },
       {
         id: 'feed-2',
         tag: 'Buyback',
-        title: 'We buy used networking gear',
-        detail: 'Switches, routers and firewalls collected from your office.',
-        href: '/services',
-        ts: '2026-10-11T09:00:00Z'
+        title: 'Fresh buyback offers open for networking hardware',
+        detail: 'Catalyst switches, routers and firewalls evaluated within 48 hours of request approval.',
+        href: 'https://netamps.com/returns',
+        ts: '2026-10-14T11:15:00Z'
       },
       {
         id: 'feed-3',
-        tag: 'Refurb',
-        title: 'Certified refurbished laptops in stock',
-        detail: 'Graded, tested and covered by warranty before resale.',
-        href: '/services',
-        ts: '2026-10-12T09:00:00Z'
+        tag: 'Refurb Stock',
+        title: 'Certified refurbished ThinkPad lot graded and listed',
+        detail: '42 units tested, data-wiped and warranty-tagged; bulk pricing available on request.',
+        href: 'https://netamps.com/returns',
+        ts: '2026-10-15T14:05:00Z'
       },
       {
         id: 'feed-4',
-        tag: 'Recycling',
-        title: 'Certified e-waste disposal',
-        detail: 'Compliant recycling with documentation for every pickup.',
-        href: '/services',
-        ts: '2026-10-13T09:00:00Z'
+        tag: 'Advisory',
+        title: 'Track your request live with milestone updates',
+        detail: 'Every pickup and evaluation now posts timestamped milestones to your tracking page.',
+        href: 'https://netamps.com/track',
+        ts: '2026-10-16T08:45:00Z'
       }
     ],
     channels: [

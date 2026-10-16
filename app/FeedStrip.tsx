@@ -187,9 +187,11 @@ export default function FeedStrip() {
                 {item.title}
               </h3>
               <p className="mt-1 text-sm leading-relaxed text-slate-600">{item.detail}</p>
-              <time dateTime={item.ts} className="mt-3 block text-xs font-medium text-slate-400">
-                {formatTime(item.ts)}
-              </time>
+              {item.ts ? (
+                <time dateTime={item.ts} className="mt-3 block text-xs font-medium text-slate-400">
+                  {formatTime(item.ts)}
+                </time>
+              ) : null}
             </article>
           ))}
         </div>
