@@ -73,7 +73,7 @@ export default function NegotiationsPage() {
   const load = useCallback(async (f: FilterKey) => {
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${API}/api/negotiations?status=${f}`, { cache: 'no-store' });
+      const res = await fetch(`${API}/api/negotiations?status=${f}`, { cache: 'no-store', credentials: 'include' });
       if (res.status === 401) { setUnauthorized(true); return; }
       let data: any = null;
       try { data = await res.json(); } catch { throw new Error('bad response'); }
@@ -115,6 +115,7 @@ export default function NegotiationsPage() {
       const res = await fetch(`${API}/api/negotiations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ negotiationId: n.id, action, totalPaise, note: d.note || '' })
       });
       let data: any = null;
