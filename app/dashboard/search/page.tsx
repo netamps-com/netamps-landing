@@ -29,7 +29,6 @@ import { buildNavSections } from '../nav';
 import { useDashboardSession } from '../useDashboardSession';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
-const router = useRouter();
 
 type Why = { term: string; fields: string[] };
 
@@ -104,6 +103,7 @@ export default function OrderSearchPage() {
   const [error, setError] = useState('');
   const [applied, setApplied] = useState<null | Record<string, string>>(null);
   const lastController = useRef<AbortController | null>(null);
+  const router = useRouter();
 
   // Declared above the unauthorized early return: React requires the same hook
   // order on every render, and the rail's footer shows this session.
