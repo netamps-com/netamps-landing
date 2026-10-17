@@ -357,8 +357,8 @@ export default function InventoryPage() {
           const high = String(r.priority ?? '').toLowerCase() === 'high';
           return (
             <li key={i} className="flex items-center gap-2">
-              <span className="w-10 font-mono text-slate-300">{String(r.sku ?? '')}</span>
-              <span className="min-w-0 flex-1 truncate text-slate-200">{String(r.reason ?? '')}</span>
+              <span className="w-10 font-mono text-slate-600">{String(r.sku ?? '')}</span>
+              <span className="min-w-0 flex-1 truncate text-slate-700">{String(r.reason ?? '')}</span>
               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${high ? 'border-rose-500/30 bg-rose-500/10 text-rose-400' : 'border-amber-500/30 bg-amber-500/10 text-amber-400'}`}>
                 {String(r.priority ?? '—')}
               </span>
@@ -378,8 +378,8 @@ export default function InventoryPage() {
           const r = x as Record<string, unknown>;
           return (
             <li key={i} className="flex items-center gap-2">
-              <span className="w-10 font-mono text-slate-300">{String(r.sku ?? '')}</span>
-              <span className="min-w-0 flex-1 truncate text-slate-200">{String(r.detail ?? r.reason ?? '')}</span>
+              <span className="w-10 font-mono text-slate-600">{String(r.sku ?? '')}</span>
+              <span className="min-w-0 flex-1 truncate text-slate-700">{String(r.detail ?? r.reason ?? '')}</span>
               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border border-rose-500/30 bg-rose-500/10 text-rose-400">
                 {String(r.severity ?? '—')}
               </span>
@@ -393,7 +393,7 @@ export default function InventoryPage() {
   const renderQueryAnswer = (result: unknown) => {
     const obj = result as Record<string, unknown>;
     const answer = typeof obj.answer === 'string' ? obj.answer : typeof result === 'string' ? result : 'No answer returned.';
-    return <p className="text-xs text-slate-300">{answer}</p>;
+    return <p className="text-xs text-slate-600">{answer}</p>;
   };
 
   const totalValuationCents = balance.reduce((a, r) => a + r.stock_value_cents, 0);
@@ -416,12 +416,12 @@ export default function InventoryPage() {
     return true;
   });
 
-  const card = 'rounded-xl border border-slate-800 bg-slate-900/70 p-4';
-  const input = 'w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none';
-  const fieldLabel = 'block text-[11px] font-bold uppercase tracking-wider text-slate-400';
+  const card = 'rounded-xl border border-slate-200 bg-white p-4';
+  const input = 'w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-500 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none';
+  const fieldLabel = 'block text-[11px] font-bold uppercase tracking-wider text-slate-500';
   const btnLime = 'inline-flex items-center gap-1.5 rounded-lg border border-lime-400/40 bg-lime-400/10 px-3 py-2 text-xs font-bold text-lime-400 transition-colors hover:bg-lime-400/20 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none';
   const btnSky = 'inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-xs font-bold text-sky-400 transition-colors hover:bg-sky-400/20 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none';
-  const btnGhost = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-bold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none disabled:opacity-50';
+  const btnGhost = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-300 focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none disabled:opacity-50';
   const pill = (restock: boolean) => `px-2 py-0.5 rounded text-[10px] font-bold border ${restock ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'}`;
 
   if (unauthorized) {
@@ -429,7 +429,7 @@ export default function InventoryPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-slate-700 font-semibold">Your session has ended.</p>
-          <Link href="/login" className="mt-3 inline-block px-4 py-2 bg-slate-900 text-white rounded-xl font-bold">
+          <Link href="/login" className="mt-3 inline-block px-4 py-2 bg-slate-50 text-white rounded-xl font-bold">
             Sign in
           </Link>
         </div>
@@ -466,54 +466,54 @@ export default function InventoryPage() {
         {notice && <p className="mt-4 text-sm text-emerald-700">{notice}</p>}
 
         {loading ? (
-          <div className="mt-6 rounded-2xl bg-slate-950 border border-slate-800 p-4">
+          <div className="mt-6 rounded-2xl bg-white border border-slate-200 p-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <section className={card}>
-                <div className="h-10 rounded-lg bg-slate-800 animate-pulse" />
+                <div className="h-10 rounded-lg bg-slate-100 animate-pulse" />
                 <div className="mt-3 space-y-2">
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse w-3/4" />
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse w-1/2" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse w-3/4" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse w-1/2" />
                 </div>
               </section>
               <section className={card}>
-                <div className="h-10 rounded-lg bg-slate-800 animate-pulse" />
+                <div className="h-10 rounded-lg bg-slate-100 animate-pulse" />
                 <div className="mt-3 space-y-2">
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse w-3/4" />
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse w-1/2" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse w-3/4" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse w-1/2" />
                 </div>
               </section>
               <section className={card}>
-                <div className="h-10 rounded-lg bg-slate-800 animate-pulse" />
+                <div className="h-10 rounded-lg bg-slate-100 animate-pulse" />
                 <div className="mt-3 grid gap-3">
-                  <div className="h-12 rounded-lg bg-slate-800 animate-pulse" />
-                  <div className="h-12 rounded-lg bg-slate-800 animate-pulse" />
-                  <div className="h-12 rounded-lg bg-slate-800 animate-pulse" />
+                  <div className="h-12 rounded-lg bg-slate-100 animate-pulse" />
+                  <div className="h-12 rounded-lg bg-slate-100 animate-pulse" />
+                  <div className="h-12 rounded-lg bg-slate-100 animate-pulse" />
                 </div>
               </section>
               <section className={`${card} lg:col-span-3`}>
-                <div className="h-10 rounded-lg bg-slate-800 animate-pulse" />
+                <div className="h-10 rounded-lg bg-slate-100 animate-pulse" />
                 <div className="mt-3 space-y-2">
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse" />
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse w-3/4" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse w-3/4" />
                 </div>
               </section>
               <section className={`${card} lg:col-span-3`}>
-                <div className="h-10 rounded-lg bg-slate-800 animate-pulse" />
+                <div className="h-10 rounded-lg bg-slate-100 animate-pulse" />
                 <div className="mt-3 space-y-2">
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse w-1/2" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse w-1/2" />
                 </div>
               </section>
               <section className={`${card} lg:col-span-3`}>
-                <div className="h-10 rounded-lg bg-slate-800 animate-pulse" />
+                <div className="h-10 rounded-lg bg-slate-100 animate-pulse" />
                 <div className="mt-3 space-y-2">
-                  <div className="h-8 rounded-lg bg-slate-800 animate-pulse w-1/3" />
-                  <div className="h-16 rounded-lg bg-slate-800 animate-pulse" />
+                  <div className="h-8 rounded-lg bg-slate-100 animate-pulse w-1/3" />
+                  <div className="h-16 rounded-lg bg-slate-100 animate-pulse" />
                 </div>
               </section>
             </div>
           </div>
         ) : (
-          <div className="mt-6 rounded-2xl bg-slate-950 text-slate-100 border border-slate-800 p-4">
+          <div className="mt-6 rounded-2xl bg-white text-slate-900 border border-slate-200 p-4">
             {/* Top row of modules: product registry, transaction logging, analytics. */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* ── MODULE 1: Product Master Registry ── */}
@@ -538,7 +538,7 @@ export default function InventoryPage() {
                     className={`${input} pl-8`}
                   />
                 </div>
-                <div className="mt-3 space-y-2 rounded-lg border border-slate-800 bg-slate-800/50 p-3">
+                <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
                     <div className="sm:col-span-2">
                       <label className={`${fieldLabel} mb-1`}>SKU</label>
@@ -580,7 +580,7 @@ export default function InventoryPage() {
                   <div className="mt-3 flex gap-2 flex-wrap">
                     {editingSku !== null ? (
                       <>
-                        <p className="mt-0.5 text-xs text-slate-400">Editing <span className="font-mono font-bold">{editingSku}</span>.</p>
+                        <p className="mt-0.5 text-xs text-slate-500">Editing <span className="font-mono font-bold">{editingSku}</span>.</p>
                         <button onClick={saveProduct} disabled={savingProd} className={btnLime}>
                           {savingProd ? <Save className="w-3.5 h-3.5" /> : null} {savingProd ? 'Saving…' : 'Save product'}
                         </button>
@@ -596,7 +596,7 @@ export default function InventoryPage() {
                 <div className="mt-4 overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700 text-[10px] uppercase tracking-wider text-slate-400">
+                      <tr className="border-b border-slate-300 text-[10px] uppercase tracking-wider text-slate-500">
                         <th className="px-4 py-3 text-left">SKU</th>
                         <th className="px-4 py-3 text-left">Item</th>
                         <th className="px-4 py-3 text-left">Category</th>
@@ -609,7 +609,7 @@ export default function InventoryPage() {
                         <th className="px-4 py-3 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800">
+                    <tbody className="divide-y divide-slate-200">
                       {filteredProducts.length === 0 ? (
                         <tr>
                           <td className="px-4 py-6 text-center text-slate-500" colSpan={10}>
@@ -618,16 +618,16 @@ export default function InventoryPage() {
                         </tr>
                       ) : (
                         filteredProducts.map((p) => (
-                          <tr key={p.sku} className="text-slate-200">
+                          <tr key={p.sku} className="text-slate-700">
                             <td className="px-4 py-3 font-mono">{p.sku}</td>
                             <td className="px-4 py-3">{p.item_name}</td>
-                            <td className="px-4 py-3 text-slate-300">{p.category}</td>
-                            <td className="px-4 py-3 text-slate-300">{p.uom}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{rupees(p.cost)}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{rupees(p.selling)}</td>
-                            <td className="px-4 py-3 text-slate-300">{p.supplier}</td>
-                            <td className="px-4 py-3 text-right text-slate-300">{p.trigger}</td>
-                            <td className="px-4 py-3 text-right text-slate-300">{p.target_max}</td>
+                            <td className="px-4 py-3 text-slate-600">{p.category}</td>
+                            <td className="px-4 py-3 text-slate-600">{p.uom}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{rupees(p.cost)}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{rupees(p.selling)}</td>
+                            <td className="px-4 py-3 text-slate-600">{p.supplier}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{p.trigger}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{p.target_max}</td>
                             <td className="px-4 py-3 text-right">
                               <button
                                 onClick={() => {
@@ -640,14 +640,14 @@ export default function InventoryPage() {
                                   setError('');
                                 }}
                                 title="Edit product"
-                                className="p-1 text-slate-400 hover:text-sky-400 transition-colors focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none"
+                                className="p-1 text-slate-500 hover:text-sky-400 transition-colors focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => deleteProduct(p.sku)}
                                 title="Delete product"
-                                className="ml-1 p-1 text-slate-400 hover:text-rose-400 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none"
+                                className="ml-1 p-1 text-slate-500 hover:text-rose-400 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -668,7 +668,7 @@ export default function InventoryPage() {
                   </h2>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-lime-400 mb-3 flex items-center gap-1">
                       <Plus className="w-3 h-3" /> Stock In
                     </h3>
@@ -693,7 +693,7 @@ export default function InventoryPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-3 flex items-center gap-1">
                       <Plus className="w-3 h-3 text-sky-400" /> Stock Out
                     </h3>
@@ -719,13 +719,13 @@ export default function InventoryPage() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-slate-400" /> Recent this session
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-slate-500" /> Recent this session
                   </h3>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-700 text-[10px] uppercase tracking-wider text-slate-400">
+                        <tr className="border-b border-slate-300 text-[10px] uppercase tracking-wider text-slate-500">
                           <th className="px-4 py-3 text-left">Txn ID</th>
                           <th className="px-4 py-3 text-left">SKU</th>
                           <th className="px-4 py-3 text-left">Type</th>
@@ -736,7 +736,7 @@ export default function InventoryPage() {
                           <th className="px-4 py-3 text-right">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800">
+                      <tbody className="divide-y divide-slate-200">
                         {txns.length === 0 ? (
                           <tr>
                             <td className="px-4 py-6 text-center text-slate-500" colSpan={8}>
@@ -745,23 +745,23 @@ export default function InventoryPage() {
                           </tr>
                         ) : (
                           txns.map((t) => (
-                            <tr key={t.txn_id} className="text-slate-200">
-                              <td className="px-4 py-3 font-mono text-slate-300">{t.txn_id}</td>
+                            <tr key={t.txn_id} className="text-slate-700">
+                              <td className="px-4 py-3 font-mono text-slate-600">{t.txn_id}</td>
                               <td className="px-4 py-3 font-mono">{t.sku}</td>
                               <td className="px-4 py-3">
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${t.type === 'IN' ? 'border-lime-500/30 bg-lime-500/10 text-lime-400' : 'border-sky-500/30 bg-sky-500/10 text-sky-400'}`}>
                                   {t.type}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-right text-slate-300">{t.qty}</td>
-                              <td className="px-4 py-3 text-right font-mono text-slate-300">{rupees(t.unit_rate_cents)}</td>
-                              <td className="px-4 py-3 text-slate-300 truncate" title={t.ref_notes}>{t.ref_notes}</td>
+                              <td className="px-4 py-3 text-right text-slate-600">{t.qty}</td>
+                              <td className="px-4 py-3 text-right font-mono text-slate-600">{rupees(t.unit_rate_cents)}</td>
+                              <td className="px-4 py-3 text-slate-600 truncate" title={t.ref_notes}>{t.ref_notes}</td>
                               <td className="px-4 py-3 text-right font-mono text-slate-500">{new Date(t.createdAt).toLocaleTimeString()}</td>
                               <td className="px-4 py-3 text-right">
                                 <button
                                   onClick={() => { void navigator.clipboard.writeText(t.txn_id).catch(() => {}); setNotice(`Copied ${t.txn_id}`); }}
                                   title="Copy txn id"
-                                  className="p-1 text-slate-500 hover:text-slate-200 transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none"
+                                  className="p-1 text-slate-500 hover:text-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none"
                                 >
                                   <Copy className="w-3.5 h-3.5" />
                                 </button>
@@ -783,22 +783,22 @@ export default function InventoryPage() {
                   </h2>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total valuation</p>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total valuation</p>
                     <p className="text-2xl font-mono font-black text-white">{rupees(totalValuationCents)}</p>
                     <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                       <DollarSign className="w-3 h-3" /> stock value at on-hand qty
                     </div>
                   </div>
-                  <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total units</p>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total units</p>
                     <p className="text-2xl font-mono font-black text-white">{totalUnits}</p>
                     <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                       <Package className="w-3 h-3" /> on hand across SKUs
                     </div>
                   </div>
-                  <div className="rounded-lg border border-slate-800 bg-slate-800/50 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">SKUs requiring restock</p>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">SKUs requiring restock</p>
                     <p className={`text-2xl font-mono font-black ${restockCount > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{restockCount}</p>
                     <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                       <AlertTriangle className="w-3 h-3" /> at or below reorder trigger
@@ -806,7 +806,7 @@ export default function InventoryPage() {
                   </div>
                 </div>
                 <div className="mt-5">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3 text-sky-400" /> Top velocity items
                   </h3>
                   <div className="space-y-2">
@@ -815,12 +815,12 @@ export default function InventoryPage() {
                     ) : (
                       topVelocities.map((v) => (
                         <div key={v.sku} className="flex items-center gap-3 text-xs">
-                          <span className="w-10 font-mono text-slate-400">{v.sku}</span>
-                          <span className="min-w-0 flex-1 truncate text-slate-200">{v.item_name}</span>
-                          <div className="w-24 h-2 shrink-0 rounded-full border border-slate-700 bg-slate-700">
+                          <span className="w-10 font-mono text-slate-500">{v.sku}</span>
+                          <span className="min-w-0 flex-1 truncate text-slate-700">{v.item_name}</span>
+                          <div className="w-24 h-2 shrink-0 rounded-full border border-slate-300 bg-slate-300">
                             <div className="h-full rounded-full bg-lime-400" style={{ width: `${Math.min(100, (v.volume / maxVol) * 100)}%` }} />
                           </div>
-                          <span className="w-10 text-right font-mono text-slate-300">{v.volume}</span>
+                          <span className="w-10 text-right font-mono text-slate-600">{v.volume}</span>
                         </div>
                       ))
                     )}
@@ -838,7 +838,7 @@ export default function InventoryPage() {
                     <h2 className="font-bold text-white flex items-center gap-2">
                       <Activity className="w-4 h-4 text-lime-400" /> Live Real-Time Balance Engine
                     </h2>
-                    <p className="text-xs text-slate-400 mt-1">On-hand = opening + inflow − outflow; value at product cost.</p>
+                    <p className="text-xs text-slate-500 mt-1">On-hand = opening + inflow − outflow; value at product cost.</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <label className={`${fieldLabel} mb-0 shrink-0`}>Status</label>
@@ -846,7 +846,7 @@ export default function InventoryPage() {
                       <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value as 'all' | 'healthy' | 'restock')}
-                        className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none"
+                        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none"
                       >
                         <option value="all">All SKUs</option>
                         <option value="healthy">Healthy</option>
@@ -856,7 +856,7 @@ export default function InventoryPage() {
                     </div>
                     <button
                       onClick={() => setLive((v) => !v)}
-                      className="ml-2 inline-flex items-center gap-1.5 rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none px-2.5 py-1.5 text-xs font-bold text-slate-200 disabled:opacity-50"
+                      className="ml-2 inline-flex items-center gap-1.5 rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none px-2.5 py-1.5 text-xs font-bold text-slate-700 disabled:opacity-50"
                       aria-pressed={live}
                     >
                       {live ? 'Pause polling' : 'Resume polling'}
@@ -869,7 +869,7 @@ export default function InventoryPage() {
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700 text-[10px] uppercase tracking-wider text-slate-400">
+                      <tr className="border-b border-slate-300 text-[10px] uppercase tracking-wider text-slate-500">
                         <th className="px-4 py-3 text-left">SKU</th>
                         <th className="px-4 py-3 text-left">Item</th>
                         <th className="px-4 py-3 text-left">Category</th>
@@ -882,7 +882,7 @@ export default function InventoryPage() {
                         <th className="px-4 py-3 text-right">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800">
+                    <tbody className="divide-y divide-slate-200">
                       {filteredBalance.length === 0 ? (
                         <tr>
                           <td className="px-4 py-6 text-center text-slate-500" colSpan={10}>
@@ -891,16 +891,16 @@ export default function InventoryPage() {
                         </tr>
                       ) : (
                         filteredBalance.map((r) => (
-                          <tr key={r.sku} className="text-slate-200">
-                            <td className="px-4 py-3 font-mono text-slate-300">{r.sku}</td>
+                          <tr key={r.sku} className="text-slate-700">
+                            <td className="px-4 py-3 font-mono text-slate-600">{r.sku}</td>
                             <td className="px-4 py-3">{r.item_name}</td>
-                            <td className="px-4 py-3 text-slate-300">{r.category}</td>
-                            <td className="px-4 py-3 text-slate-300">{r.uom}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{r.opening}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{r.inflow}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{r.outflow}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-200">{r.on_hand}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{rupees(r.stock_value_cents)}</td>
+                            <td className="px-4 py-3 text-slate-600">{r.category}</td>
+                            <td className="px-4 py-3 text-slate-600">{r.uom}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{r.opening}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{r.inflow}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{r.outflow}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-700">{r.on_hand}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{rupees(r.stock_value_cents)}</td>
                             <td className="px-4 py-3 text-right">
                               <span className={`${pill(r.status === 'RESTOCK REQUIRED')} flex items-center gap-1`}>
                                 {r.status === 'RESTOCK REQUIRED' && <AlertTriangle className="w-3 h-3" />}
@@ -921,18 +921,18 @@ export default function InventoryPage() {
                   <h2 className="font-bold text-white flex items-center gap-2">
                     <Truck className="w-4 h-4 text-amber-400" /> Automated Restock Procurement
                   </h2>
-                  <p className="text-xs text-slate-400">SKUs at or below reorder trigger.</p>
+                  <p className="text-xs text-slate-500">SKUs at or below reorder trigger.</p>
                 </div>
                 {restockItems.length === 0 ? (
-                  <div className="mt-4 rounded-lg border border-slate-800 bg-slate-800/50 p-6 text-center">
+                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
                     <PackageCheck className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
-                    <p className="text-xs font-bold text-slate-300">No restock required — all SKUs healthy.</p>
+                    <p className="text-xs font-bold text-slate-600">No restock required — all SKUs healthy.</p>
                   </div>
                 ) : (
                   <div className="mt-4 overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-700 text-[10px] uppercase tracking-wider text-slate-400">
+                        <tr className="border-b border-slate-300 text-[10px] uppercase tracking-wider text-slate-500">
                           <th className="px-4 py-3 text-left">SKU</th>
                           <th className="px-4 py-3 text-left">Item</th>
                           <th className="px-4 py-3 text-left">Supplier</th>
@@ -943,15 +943,15 @@ export default function InventoryPage() {
                           <th className="px-4 py-3 text-right">Action</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800">
+                      <tbody className="divide-y divide-slate-200">
                         {restockItems.map((item) => (
-                          <tr key={item.sku} className="text-slate-200">
-                            <td className="px-4 py-3 font-mono text-slate-300">{item.sku}</td>
+                          <tr key={item.sku} className="text-slate-700">
+                            <td className="px-4 py-3 font-mono text-slate-600">{item.sku}</td>
                             <td className="px-4 py-3">{item.item_name}</td>
-                            <td className="px-4 py-3 text-slate-300">{item.supplier}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{item.on_hand}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{item.trigger_level}</td>
-                            <td className="px-4 py-3 text-right font-mono text-slate-300">{item.target_max}</td>
+                            <td className="px-4 py-3 text-slate-600">{item.supplier}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{item.on_hand}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{item.trigger_level}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-600">{item.target_max}</td>
                             <td className="px-4 py-3 text-right font-mono text-lime-400">{item.recommended_qty}</td>
                             <td className="px-4 py-3 text-right">
                               <button
@@ -976,7 +976,7 @@ export default function InventoryPage() {
                     <Activity className="w-4 h-4 text-sky-400" /> AI Assistant
                   </h2>
                 </div>
-                <p className="text-xs text-slate-400 mb-3">Governed LLAMA layer: restock advice, anomaly detection, natural-language lookup.</p>
+                <p className="text-xs text-slate-500 mb-3">Governed LLAMA layer: restock advice, anomaly detection, natural-language lookup.</p>
                 <div className="space-y-2">
                   <div className="flex gap-2 flex-wrap">
                     <button
@@ -1011,7 +1011,7 @@ export default function InventoryPage() {
                   </div>
                   {aiLoading && <p className="text-xs text-lime-400">Working…</p>}
                   {aiResult !== null && (
-                    <div className="mt-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                    <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-3">
                       {aiMode === 'advisory' && renderAdvisory(aiResult)}
                       {aiMode === 'anomaly' && renderAnomalies(aiResult)}
                       {aiMode === 'query' && renderQueryAnswer(aiResult)}
