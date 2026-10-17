@@ -9,7 +9,7 @@
  */
 
 import { verifySession } from './intake/auth';
-import { runJson, llmEnabled, MODEL_SMALL } from '../llm/client.mjs';
+import { runJson, llmEnabled, MODEL_SMALL } from './llm/client.mjs';
 import { corsJson, corsPreflight } from '../_lib/cors.js';
 import { ensureTables, readBalance, logEvent } from './inventory';
 
