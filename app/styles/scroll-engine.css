@@ -1,0 +1,225 @@
+/* ── NETAMPS SCROLL ENGINE ─────────────────────────────────────────────────
+   Butter-smooth, hardware-accelerated fluid scroll navigation.
+   - scroll-snap for section/modules
+   - scroll-margin-top for fixed header offset
+   - scroll-driven timeline progress via animation-timeline: scroll()
+   - prefers-reduced-motion safe
+   Pure CSS. ── */
+
+@layer netamps.scroll {
+  /* ── Scroll container base ── */
+  .nm-scroll {
+    scroll-behavior: smooth;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* hardware-accelerated compositing for scroll */
+    will-change: scroll-position;
+  }
+
+  /* Horizontal scroll strip (mobile tab bar pattern) */
+  .nm-scroll-x {
+    scroll-behavior: smooth;
+    overflow-x: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: var(--nm-indigo-200) transparent;
+  }
+  .nm-scroll-x::-webkit-scrollbar {
+    height: 6px;
+  }
+  .nm-scroll-x::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .nm-scroll-x::-webkit-scrollbar-thumb {
+    background: var(--nm-indigo-200);
+    border-radius: 9999px;
+  }
+
+  /* ── Scroll-snap sections ── */
+  .nm-snap-y {
+    scroll-snap-type: y mandatory;
+  }
+  .nm-snap-x {
+    scroll-snap-type: x mandatory;
+  }
+  .nm-snap-start {
+    scroll-snap-align: start;
+  }
+  .nm-snap-center {
+    scroll-snap-align: center;
+  }
+  .nm-snap-end {
+    scroll-snap-align: end;
+  }
+
+  /* ── Scroll-margin top: clears fixed header ── */
+  .nm-scroll-mt {
+    scroll-margin-top: var(--nm-space-lg); /* adjust to header height */
+  }
+  .nm-scroll-mt-lg {
+    scroll-margin-top: var(--nm-space-xl);
+  }
+  .nm-scroll-mt-2xl {
+    scroll-margin-top: var(--nm-space-2xl);
+  }
+
+  /* ── Scroll-driven progress rail ── */
+  .nm-scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 3px;
+    background: var(--nm-indigo-600);
+    z-index: var(--nm-z-popover);
+    transform-origin: 0% 0%;
+    will-change: width;
+    /* Hardware-accelerated, paint-only */
+    contain: paint;
+  }
+  .nm-scroll-progress::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--nm-indigo-400);
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+  }
+
+  /* Read progress text (optional label) */
+  .nm-progress-label {
+    position: fixed;
+    top: var(--nm-space-sm);
+    right: var(--nm-space-sm);
+    z-index: var(--nm-z-popover);
+    font-size: var(--nm-fs-xs);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    padding: var(--nm-space-xs) var(--nm-space-sm);
+    background: rgba(15, 23, 42, 0.85);
+    color: #fff;
+    border-radius: var(--nm-radius-full);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* ── Scroll-driven reveal (entrance animation on scroll) ── */
+  .nm-reveal {
+    opacity: 0;
+    transform: translatey(var(--nm-space-sm));
+    animation: nm-reveal-in var(--nm-duration-base) ease-out forwards;
+    animation-timeline: scroll();
+    animation-range: entry 10% cover 30%;
+    will-change: transform, opacity;
+  }
+  .nm-reveal.reveal-delayed {
+    animation-range: entry 20% cover 40%;
+    animation-delay: var(--nm-duration-fast);
+  }
+
+  @keyframes nm-reveal-in {
+    from {
+      opacity: 0;
+      transform: translatey(var(--nm-space-sm));
+    }
+    to {
+      opacity: 1;
+      transform: translatey(0);
+    }
+  }
+
+  /* ── Scroll-driven horizontal progress bar (for carousel/strip) ── */
+  .nm-scroll-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--nm-indigo-500), var(--nm-amber-500));
+    transform-origin: 0% 0%;
+    will-change: transform;
+    contain: paint;
+  }
+
+  /* ── OS-aware scrollbar styling (subtle) ── */
+  .nm-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .nm-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .nm-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--nm-slate-300);
+    border-radius: 9999px;
+  }
+  .nm-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--nm-slate-400);
+  }
+
+  /* ── OS-level reduced motion overrides ── */
+  @media (prefers-reduced-motion: reduce) {
+    .nm-scroll {
+      scroll-behavior: auto;
+    }
+    .nm-scroll-x {
+      scroll-behavior: auto;
+    }
+    .nm-snap-y,
+    .nm-snap-x {
+      scroll-snap-type: none !important;
+    }
+    .nm-snap-start,
+    .nm-snap-center,
+    .nm-snap-end {
+      scroll-snap-align: none !important;
+    }
+    .nm-reveal,
+    .nm-reveal.reveal-delayed {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .nm-scroll-progress {
+      animation: none !important;
+      width: 100% !important; /* instant full */
+    }
+    .nm-scroll-indicator {
+      animation: none !important;
+      width: 100% !important;
+    }
+  }
+
+  /* ── High-DPI / Retina crispness for scroll indicators ── */
+  @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .nm-scroll-progress {
+      transform: translatez(0); /* force GPU compositing */
+    }
+    .nm-scroll-indicator {
+      transform: translatez(0);
+    }
+  }
+}
+
+/* ── Scroll-linked typography: slightly scale page title as user scrolls ── */
+@layer netamps.scroll {
+  .nm-scroll-title {
+    font-size: var(--nm-fs-2xl);
+    will-change: transform;
+    contain: layout;
+  }
+  @supports (animation-timeline: scroll()) {
+    .nm-scroll-title {
+      animation: nm-title-scale linear both;
+      animation-timeline: scroll();
+      animation-range: cover 25% cover 75%;
+    }
+  }
+  @keyframes nm-title-scale {
+    from {
+      transform: scale(1);
+    }
+    to {
+      transform: scale(0.92);
+    }
+  }
+}

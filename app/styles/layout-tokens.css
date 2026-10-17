@@ -1,0 +1,253 @@
+/* ── NETAMPS LAYOUT ENGINE — Fluid Tokens, Reset & Fluid Typography ────────
+   High-density layout tokens for ultra-wide + compact panels.
+   Fluid type scales via clamp(). Container-aware spacing tokens.
+   Pure CSS — zero JS layout listeners. ── */
+
+@layer netamps.base, netamps.tokens, netamps.typography;
+
+/* ── 1. Layout Tokens (CSS Custom Properties) ────────────────────────────── */
+@layer netamps.tokens {
+  :root {
+    /* ── Brand (mirrors Tailwind palette for single source of truth) ── */
+    --nm-indigo-50: #eff6ff;
+    --nm-indigo-100: #dbeafe;
+    --nm-indigo-500: #6366f1;
+    --nm-indigo-600: #4f46e5;
+    --nm-indigo-700: #4338ca;
+    --nm-emerald-50: #ecfdf5;
+    --nm-emerald-600: #059669;
+    --nm-amber-50: #fffbeb;
+    --nm-amber-600: #d97706;
+    --nm-slate-50: #f8fafc;
+    --nm-slate-100: #f1f5f9;
+    --nm-slate-200: #e2e8f0;
+    --nm-slate-900: #0f172a;
+
+    /* ── Fluid spacing ladder (clamp-ready) ── */
+    --nm-space-xs: clamp(0.375rem, 1vw, 0.5rem);      /* 6px – 8px */
+    --nm-space-sm: clamp(0.5rem, 1.2vw, 0.75rem);     /* 8px – 12px */
+    --nm-space-md: clamp(1rem, 1.5vw, 1.5rem);        /* 16px – 24px */
+    --nm-space-lg: clamp(1.5rem, 2vw, 2rem);          /* 24px – 32px */
+    --nm-space-xl: clamp(2rem, 3vw, 3rem);            /* 32px – 48px */
+    --nm-space-2xl: clamp(3rem, 4vw, 4rem);           /* 48px – 64px */
+    --nm-space-3xl: clamp(4rem, 6vw, 6rem);           /* 64px – 96px */
+
+    /* ── Border radius ladder ── */
+    --nm-radius-sm: 0.375rem;   /* 6px */
+    --nm-radius-md: 0.5rem;     /* 8px */
+    --nm-radius-lg: 0.75rem;    /* 12px */
+    --nm-radius-xl: 1rem;       /* 16px */
+    --nm-radius-full: 9999px;
+
+    /* ── Z-index ladder ── */
+    --nm-z-dropdown: 100;
+    --nm-z-sticky: 200;
+    --nm-z-modal: 300;
+    --nm-z-popover: 400;
+    --nm-z-tooltip: 500;
+
+    /* ── Fluid font-size clamp tokens ── */
+    --nm-fs-xs: clamp(0.75rem, 0.875vw, 0.875rem);   /* 12px – 14px */
+    --nm-fs-sm: clamp(0.875rem, 1vw, 1rem);          /* 14px – 16px */
+    --nm-fs-base: clamp(1rem, 1.1vw, 1.125rem);      /* 16px – 18px */
+    --nm-fs-lg: clamp(1.125rem, 1.3vw, 1.25rem);     /* 18px – 20px */
+    --nm-fs-xl: clamp(1.25rem, 1.6vw, 1.5rem);       /* 20px – 24px */
+    --nm-fs-2xl: clamp(1.5rem, 2vw, 1.875rem);       /* 24px – 30px */
+    --nm-fs-3xl: clamp(1.875rem, 3vw, 2.25rem);      /* 30px – 36px */
+    --nm-fs-4xl: clamp(2.25rem, 4vw, 3rem);          /* 36px – 48px */
+    --nm-fs-5xl: clamp(3rem, 5vw, 4rem);             /* 48px – 64px */
+
+    /* ── Fluid line-heights ── */
+    --nm-lh-tight: 1.2;
+    --nm-lh-snug: 1.375;
+    --nm-lh-normal: 1.5;
+    --nm-lh-relaxed: 1.75;
+
+    /* ── Motion: reduced-motion override lives in base layer ── */
+    --nm-duration-fast: 150ms;
+    --nm-duration-base: 250ms;
+    --nm-duration-slow: 400ms;
+  }
+
+  /* Dark theme overrides (mirrors existing slate-950 theme) */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --nm-slate-50: #020617;
+      --nm-slate-100: #0f172a;
+      --nm-slate-200: #1e293b;
+    }
+  }
+}
+
+/* ── 2. Global Reset ─────────────────────────────────────────────────────── */
+@layer netamps.base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    /* Smooth scroll for anchor navigation; respects prefers-reduced-motion */
+    scroll-behavior: smooth;
+    scroll-padding-top: var(--nm-space-lg); /* offsets fixed header */
+    /* Prevent horizontal overflow from fluid clamps */
+    overflow-x: clip;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-outfit), ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji";
+    font-size: var(--nm-fs-base);
+    line-height: var(--nm-lh-normal);
+    color: var(--nm-slate-900);
+    background-color: var(--nm-slate-50);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Accessibility: respect OS reduced-motion preference globally */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto !important;
+      scroll-padding-top: var(--nm-space-md);
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Remove default list styling for layout components */
+  ul[class*="nm-"], ol[class*="nm-"] {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Images & media: never exceed their container, prevent CLS */
+  img,
+  picture,
+  video,
+  canvas,
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Accessible focus-visible for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--nm-indigo-500);
+    outline-offset: 2px;
+    border-radius: var(--nm-radius-sm);
+  }
+
+  /* Skip link for keyboard users (hidden until focused) */
+  .nm-skip-link {
+    position: absolute;
+    top: var(--nm-space-sm);
+    left: var(--nm-space-sm);
+    z-index: var(--nm-z-popover);
+    padding: var(--nm-space-sm) var(--nm-space-md);
+    background: var(--nm-indigo-600);
+    color: #fff;
+    text-decoration: none;
+    border-radius: var(--nm-radius-md);
+    font-weight: 600;
+    transform: translatey(-100%);
+    transition: transform var(--nm-duration-base) ease-out;
+  }
+  .nm-skip-link:focus {
+    transform: translatey(0);
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+}
+
+/* ── 3. Fluid Typography System ──────────────────────────────────────────── */
+@layer netamps.typography {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-outfit), ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      "Noto Sans", sans-serif;
+    font-weight: 700; /* font-black equivalent */
+    line-height: var(--nm-lh-tight);
+    color: var(--nm-slate-900);
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    font-size: var(--nm-fs-5xl);
+    margin-bottom: var(--nm-space-lg);
+  }
+  h2 {
+    font-size: var(--nm-fs-4xl);
+    margin-bottom: var(--nm-space-xl);
+  }
+  h3 {
+    font-size: var(--nm-fs-3xl);
+    margin-bottom: var(--nm-space-xl);
+  }
+  h4 {
+    font-size: var(--nm-fs-2xl);
+    margin-bottom: var(--nm-space-lg);
+  }
+
+  p {
+    margin-bottom: var(--nm-space-lg);
+    line-height: var(--nm-lh-relaxed);
+  }
+
+  /* Fluid tracking-tight for display text */
+  .nm-tracking-tight {
+    letter-spacing: -0.02em;
+  }
+  .nm-tracking-wide {
+    letter-spacing: 0.05em;
+  }
+
+  /* Fluid clamp utility classes (drop-in for Tailwind-like usage) */
+  .nm-text-xs {
+    font-size: var(--nm-fs-xs);
+  }
+  .nm-text-sm {
+    font-size: var(--nm-fs-sm);
+  }
+  .nm-text-base {
+    font-size: var(--nm-fs-base);
+  }
+  .nm-text-lg {
+    font-size: var(--nm-fs-lg);
+  }
+  .nm-text-xl {
+    font-size: var(--nm-fs-xl);
+  }
+  .nm-text-2xl {
+    font-size: var(--nm-fs-2xl);
+  }
+  .nm-text-3xl {
+    font-size: var(--nm-fs-3xl);
+  }
+  .nm-text-4xl {
+    font-size: var(--nm-fs-4xl);
+  }
+  .nm-text-5xl {
+    font-size: var(--nm-fs-5xl);
+  }
+}

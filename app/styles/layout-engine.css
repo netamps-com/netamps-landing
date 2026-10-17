@@ -1,0 +1,239 @@
+/* ── NETAMPS SMART LAYOUT ENGINE ───────────────────────────────────────────
+   Container-query-driven grid & flex system. Eliminates dead white space on
+   ultrawide monitors while keeping readability on small panels. Pure CSS;
+   clamp/minmax/calc throughout. ── */
+
+@layer netamps.layout {
+  /* ── Fluid container ── */
+  .nm-container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: var(--nm-container-max, 1440px);
+    padding-left: var(--nm-space-md);
+    padding-right: var(--nm-space-md);
+  }
+
+  /* ── Fluid grid: 12 columns on desktop, auto-collapse below ── */
+  .nm-grid {
+    display: grid;
+    gap: var(--nm-space-lg);
+    grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+  }
+  .nm-grid-2 {
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  }
+  .nm-grid-3 {
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  }
+  .nm-grid-4 {
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  }
+
+  /* ── Fluid flex wrappers ── */
+  .nm-flex {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--nm-space-lg);
+    align-items: flex-start;
+  }
+  .nm-flex-center {
+    align-items: center;
+    justify-content: center;
+  }
+  .nm-flex-between {
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ── Card surface: glass/white card with subtle shadow ── */
+  .nm-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--nm-slate-200);
+    border-radius: var(--nm-radius-xl);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+    overflow: clip; /* contain layout paint */
+    contain: layout paint;
+  }
+  .nm-card > * {
+    width: 100%; /* force full-width children so grid children never overflow */
+  }
+  .nm-card-body {
+    padding: var(--nm-space-lg);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--nm-space-md);
+  }
+
+  /* ── Aspect-ratio media wrapper (prevents CLS) ── */
+  .nm-aspect {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: var(--nm-radius-lg);
+    background: var(--nm-slate-100);
+  }
+  .nm-aspect::before {
+    content: "";
+    display: block;
+  }
+  .nm-aspect-16-9::before {
+    padding-top: 56.25%;
+  }
+  .nm-aspect-4-3::before {
+    padding-top: 75%;
+  }
+  .nm-aspect-1-1::before {
+    padding-top: 100%;
+  }
+  .nm-aspect > img,
+  .nm-aspect > video,
+  .nm-aspect > iframe,
+  .nm-aspect > canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ── Container queries: component-level responsiveness ── */
+  .nm-card-container {
+    container-type: inline-size;
+    container-name: card;
+    width: 100%;
+  }
+
+  /* When the card container is narrow, stack internally */
+  @container card (max-width: 400px) {
+    .nm-card-compact {
+      flex-direction: column !important;
+      gap: var(--nm-space-md) !important;
+    }
+    .nm-card-compact > .nm-avatar {
+      width: 48px;
+      height: 48px;
+    }
+  }
+  @container card (min-width: 401px) {
+    .nm-card-compact {
+      flex-direction: row !important;
+      gap: var(--nm-space-lg) !important;
+    }
+    .nm-card-compact > .nm-avatar {
+      width: 56px;
+      height: 56px;
+    }
+  }
+
+  /* ── Ultrawide safety: cap content width & add side gutters ── */
+  .nm-ultrawide-guard {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  @media (min-width: 1440px) {
+    .nm-ultrawide-guard {
+      padding-left: var(--nm-space-2xl);
+      padding-right: var(--nm-space-2xl);
+    }
+  }
+
+  /* ── Two-column auto layout (desktop side-by-side, mobile stack) ── */
+  .nm-duo {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--nm-space-xl);
+  }
+  @media (min-width: 768px) {
+    .nm-duo {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  /* ── Three-column auto layout ── */
+  .nm-trio {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--nm-space-lg);
+  }
+  @media (min-width: 768px) {
+    .nm-trio {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 1024px) {
+    .nm-trio {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  /* ── Fluid aspect-aware media card ── */
+  .nm-media-card {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--nm-radius-lg);
+    overflow: hidden;
+    background: var(--nm-slate-100);
+  }
+  .nm-media-card img,
+  .nm-media-card video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ── Stack with fluid gap ── */
+  .nm-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nm-space-lg);
+  }
+  .nm-stack > * {
+    width: 100%;
+  }
+
+  /* ── Divider (thin separator) ── */
+  .nm-divider {
+    height: 1px;
+    width: 100%;
+    border: none;
+    background: var(--nm-slate-200);
+    margin: var(--nm-space-lg) 0;
+  }
+
+  /* ── Utility: clamp-based padding helpers ── */
+  .nm-p-xs { padding: var(--nm-space-xs); }
+  .nm-p-sm { padding: var(--nm-space-sm); }
+  .nm-p-md { padding: var(--nm-space-md); }
+  .nm-p-lg { padding: var(--nm-space-lg); }
+  .nm-p-xl { padding: var(--nm-space-xl); }
+  .nm-px-xs { padding-left: var(--nm-space-xs); padding-right: var(--nm-space-xs); }
+  .nm-px-sm { padding-left: var(--nm-space-sm); padding-right: var(--nm-space-sm); }
+  .nm-px-md { padding-left: var(--nm-space-md); padding-right: var(--nm-space-md); }
+  .nm-px-lg { padding-left: var(--nm-space-lg); padding-right: var(--nm-space-lg); }
+  .nm-py-xs { padding-top: var(--nm-space-xs); padding-bottom: var(--nm-space-xs); }
+  .nm-py-sm { padding-top: var(--nm-space-sm); padding-bottom: var(--nm-space-sm); }
+  .nm-py-md { padding-top: var(--nm-space-md); padding-bottom: var(--nm-space-md); }
+  .nm-py-lg { padding-top: var(--nm-space-lg); padding-bottom: var(--nm-space-lg); }
+  .nm-py-xl { padding-top: var(--nm-space-xl); padding-bottom: var(--nm-space-xl); }
+
+  /* ── Utility: clamp-based margin helpers ── */
+  .nm-mb-xs { margin-bottom: var(--nm-space-xs); }
+  .nm-mb-sm { margin-bottom: var(--nm-space-sm); }
+  .nm-mb-md { margin-bottom: var(--nm-space-md); }
+  .nm-mb-lg { margin-bottom: var(--nm-space-lg); }
+  .nm-mb-xl { margin-bottom: var(--nm-space-xl); }
+  .nm-mt-xs { margin-top: var(--nm-space-xs); }
+  .nm-mt-sm { margin-top: var(--nm-space-sm); }
+  .nm-mt-md { margin-top: var(--nm-space-md); }
+  .nm-mt-lg { margin-top: var(--nm-space-lg); }
+  .nm-mt-xl { margin-top: var(--nm-space-xl); }
+}
