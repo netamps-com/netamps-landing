@@ -2,19 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Rss, Radio, Activity, Webhook, FileJson, ShieldCheck, Gauge,
   Power, Pause, Play, Plus, Trash2, Copy, RefreshCw, ChevronDown, Send, Repeat,
-  Upload, X, Loader2, ArrowLeft,
+  Upload, X, Loader2, ArrowLeft, Sparkles, Bot, Clock,
 } from 'lucide-react';
 import { DashboardShell } from '../DashboardNav';
 import { buildNavSections } from '../nav';
 import { useDashboardSession } from '../useDashboardSession';
-
-// Post-login Feed Push Dashboard. Curates the landing feed and fans it out
-// to external channels. Reads/writes `${API}/api/feed`; signing happens
-// server-side on push, this page only documents the header and holds config.
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -26,7 +21,7 @@ type MediaKind = 'none' | 'image' | 'video' | 'file';
 type FeedItem = { id: string; tag: string; title: string; detail: string; href: string; media_kind: MediaKind; media_url: string; ts: string };
 type TickerEntry = { id: string; tag: string; text: string; url: string; ts: string; enabled: boolean };
 type Channel = { id: string; kind: ChannelKind; label: string; url: string; enabled: boolean };
-type SchemaField = { id: string; key: string; source: SchemaSource; required: boolean };
+type SchemaField = { id: string; key: string; source: string; required: boolean };
 type FeedSchema = { format: PayloadFormat; fields: SchemaField[] };
 type FeedRate = { perMinute: number; burst: number; retryMax: number };
 type FeedConfig = {
@@ -50,6 +45,9 @@ const MEDIA_KINDS: MediaKind[] = ['none', 'image', 'video', 'file'];
 const SCHEMA_SOURCES: SchemaSource[] = ['title', 'link', 'summary', 'timestamp', 'company'];
 const MAX_ITEMS = 12;
 const MAX_EVENTS = 50;
+const MAX_TITLE_LEN = 140;
+const MAX_DETAIL_LEN = 280;
+const MAX_TAG_LEN = 40;
 const CDN_PREFIX = '/api/cdn/feed/';
 const MEDIA_ACCEPT = 'image/*,video/*,.pdf,.csv,.json,.txt,.xlsx,.docx';
 const MAX_MEDIA_BYTES = 15 * 1024 * 1024;
@@ -60,7 +58,7 @@ const uid = () =>
     : `id-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 const DEFAULT_CONFIG: FeedConfig = {
-  enabled: false,
+  enabled: true,
   scroll: true,
   channels: [],
   rate: { perMinute: 60, burst: 10, retryMax: 3 },
@@ -80,10 +78,9 @@ const FALLBACK_ITEM: FeedItem = {
   href: 'https://netamps.com/', media_kind: 'none', media_url: '', ts: '',
 };
 
-function isFeedConfig(v: unknown): v is FeedConfig & { items?: unknown } {
+function isFeedConfig(v: unknown): v is FeedConfig {
   if (!v || typeof v !== 'object') return false;
   const c = v as Record<string, unknown>;
-  // Accepts both shapes: new config-only and legacy config with items.
   return (
     typeof c.enabled === 'boolean' &&
     Array.isArray(c.channels) &&
@@ -138,7 +135,6 @@ function escapeXml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-// Maps a schema field source onto the curated feed item.
 function sourceValue(source: SchemaSource, item: FeedItem): string {
   switch (source) {
     case 'title': return item.title;
@@ -173,8 +169,6 @@ function payloadBytes(payload: unknown): number {
   }
 }
 
-// datetime-local input round-trip: the control speaks "YYYY-MM-DDTHH:mm"
-// (local), the feed stores UTC ISO. Invalid input yields '' (unset).
 function tsToLocalInput(ts: string): string {
   if (!ts) return '';
   const d = new Date(ts);
@@ -189,8 +183,6 @@ function tsFromLocalInput(v: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }
 
-// Display-until mirror of the API rule (parseFeedDate/isExpired): day-first
-// numeric forms, Date.parse fallback, empty/garbage never expires.
 function parseDisplayUntil(value: string): number {
   if (typeof value !== 'string') return NaN;
   const v = value.trim();
@@ -217,22 +209,16 @@ function isExpiredTs(ts: string, nowMs?: number): boolean {
   return ms <= (nowMs === undefined ? Date.now() : nowMs);
 }
 
-// CDN asset URLs are API-relative; prefix API for dashboard previews.
 function previewSrc(url: string): string {
   const t = url.trim();
   if (t.startsWith('/') && API) return `${API}${t}`;
   return t;
 }
 
-// Last path segment for file chips; query/hash stripped.
 function mediaFileName(url: string): string {
   const t = url.trim().split('?')[0].split('#')[0];
   const seg = t.split('/').filter(Boolean).pop() ?? t;
-  try {
-    return decodeURIComponent(seg) || t;
-  } catch {
-    return seg || t;
-  }
+  try { return decodeURIComponent(seg) || t; } catch { return seg || t; }
 }
 
 function statusChip(status: number): string {
@@ -285,13 +271,14 @@ export default function FeedDashboardPage() {
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [channelDraft, setChannelDraft] = useState({ label: '', url: '' });
   const [newItem, setNewItem] = useState({ tag: '', title: '', detail: '', href: '', media_kind: 'none' as MediaKind, media_url: '', ts: '' });
+  const [newItemErrors, setNewItemErrors] = useState<{ title?: string; detail?: string; href?: string }>({});
   const [newTicker, setNewTicker] = useState({ tag: '', text: '', url: '', ts: '' });
+  const [newTickerErrors, setNewTickerErrors] = useState<{ text?: string }>({});
   const [newFieldKey, setNewFieldKey] = useState('');
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
   const secretRef = useRef<HTMLInputElement | null>(null);
 
-  // Hooks stay above the unauthorized early return to keep hook order stable.
   const session = useDashboardSession();
   const router = useRouter();
   const navSections = buildNavSections();
@@ -309,7 +296,7 @@ export default function FeedDashboardPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API}/api/feed`, { cache: 'no-store' });
+      const res = await fetch(`${API}/api/feed`, { cache: 'no-store', credentials: 'include' });
       if (res.status === 401) { setUnauthorized(true); return; }
       let data: any = null;
       try { data = await res.json(); } catch { throw new Error('bad response'); }
@@ -318,7 +305,6 @@ export default function FeedDashboardPage() {
         setDefaultItems((data.defaults as { items: unknown[] }).items.map(normalizeItem));
       }
       if (isFeedConfig(cfg)) {
-        // Older saved rows predate the scroll switch — default it ON.
         const withScroll = cfg as FeedConfig & { scroll?: unknown };
         setConfig({
           enabled: cfg.enabled,
@@ -327,14 +313,12 @@ export default function FeedDashboardPage() {
           rate: cfg.rate,
           schema: cfg.schema,
         });
-        // New shape carries items/ticker top-level; legacy nests items in config.
         const legacyItems = (cfg as { items?: unknown }).items;
         const rawItems = Array.isArray(data?.items)
           ? (data.items as unknown[])
           : Array.isArray(legacyItems)
             ? (legacyItems as unknown[])
             : [];
-        // Items saved before per-item dates/media carry no ts/media — normalize fills defaults.
         setItems(rawItems.map(normalizeItem));
         setTicker(Array.isArray(data?.ticker) ? (data.ticker as unknown[]).map(normalizeTicker) : []);
       }
@@ -352,7 +336,7 @@ export default function FeedDashboardPage() {
     setHistoryLoading(true);
     setHistoryError('');
     try {
-      const res = await fetch(`${API}/api/feed?history=1&limit=100`, { cache: 'no-store' });
+      const res = await fetch(`${API}/api/feed?history=1&limit=100`, { cache: 'no-store', credentials: 'include' });
       if (res.status === 401) { setUnauthorized(true); return; }
       let data: any = null;
       try { data = await res.json(); } catch { throw new Error('bad response'); }
@@ -361,7 +345,6 @@ export default function FeedDashboardPage() {
         return;
       }
       const rows = Array.isArray(data?.events) ? (data.events as unknown[]).map(normalizeHistory) : [];
-      // Newest first by ts; rows without ts keep server order reversed.
       rows.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
       setHistory(rows);
     } catch {
@@ -380,7 +363,31 @@ export default function FeedDashboardPage() {
     return () => clearInterval(t);
   }, [loadHistory]);
 
-  // Heartbeat tick: appends a monitor sample only while the stream is live.
+  // Real-time push via EventSource for live updates
+  const eventSourceRef = useRef<EventSource | null>(null);
+  useEffect(() => {
+    if (!API) return;
+    const es = new EventSource(`${API}/api/feed/events?${Math.random()}`);
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.kind === 'save-all' || data.kind === 'save-items' || data.kind === 'save-ticker' || data.kind === 'save-config') {
+          appendEvent({
+            channel: 'feed (sync)',
+            bytes: 0,
+            status: 200,
+            latency: 0,
+            payload: JSON.stringify({ action: data.kind, note: 'remote update detected' }),
+          });
+          loadHistory();
+        }
+      } catch { /* ignore malformed */ }
+    };
+    es.onerror = () => { es.close(); };
+    eventSourceRef.current = es;
+    return () => { es.close(); };
+  }, [appendEvent]);
+
   const previewItem = items[0] ?? FALLBACK_ITEM;
   const builtPayload = useMemo(() => buildPayload(config.schema, previewItem), [config.schema, previewItem]);
   const previewText = useMemo(
@@ -402,6 +409,22 @@ export default function FeedDashboardPage() {
     return () => clearInterval(t);
   }, [live, loading, builtPayload, appendEvent]);
 
+  const validateNewItem = useCallback((it: { title: string; detail: string; href: string }) => {
+    const errs: { title?: string; detail?: string; href?: string } = {};
+    if (!it.title.trim()) errs.title = 'Title is required.';
+    else if (it.title.length > MAX_TITLE_LEN) errs.title = `Title too long (max ${MAX_TITLE_LEN} chars).`;
+    if (it.detail.length > MAX_DETAIL_LEN) errs.detail = `Detail too long (max ${MAX_DETAIL_LEN} chars).`;
+    if (it.href && !/^https?:\/\//i.test(it.href)) errs.href = 'URL must start with http(s)://';
+    return errs;
+  }, []);
+
+  const validateNewTicker = useCallback((t: { text: string }) => {
+    const errs: { text?: string } = {};
+    if (!t.text.trim()) errs.text = 'Flash text is required.';
+    else if (t.text.length > 140) errs.text = `Text too long (max 140 chars).`;
+    return errs;
+  }, []);
+
   const saveConfig = useCallback(async (next: FeedConfig, what: string) => {
     setSaving(true);
     setError('');
@@ -411,11 +434,12 @@ export default function FeedDashboardPage() {
       const res = await fetch(`${API}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'save', config: next }),
       });
       const latency = Math.round(performance.now() - t0);
       let data: any = null;
-      try { data = await res.json(); } catch { /* non-JSON body still counts as a push attempt */ }
+      try { data = await res.json(); } catch { }
       appendEvent({
         channel: `config (${what})`,
         bytes: payloadBytes(next),
@@ -446,11 +470,12 @@ export default function FeedDashboardPage() {
       const res = await fetch(`${API}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'save-items', items: next }),
       });
       const latency = Math.round(performance.now() - t0);
       let data: any = null;
-      try { data = await res.json(); } catch { /* non-JSON body still counts as a push attempt */ }
+      try { data = await res.json(); } catch { }
       appendEvent({
         channel: 'config (items)',
         bytes: payloadBytes(next),
@@ -482,11 +507,12 @@ export default function FeedDashboardPage() {
       const res = await fetch(`${API}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'save-ticker', ticker: next }),
       });
       const latency = Math.round(performance.now() - t0);
       let data: any = null;
-      try { data = await res.json(); } catch { /* non-JSON body still counts as a push attempt */ }
+      try { data = await res.json(); } catch { }
       appendEvent({
         channel: 'config (ticker)',
         bytes: payloadBytes(next),
@@ -521,10 +547,6 @@ export default function FeedDashboardPage() {
     await saveConfig(next, next.scroll ? 'scroll-on' : 'scroll-off');
   }, [config, saveConfig]);
 
-  // Master Save: captures EVERYTHING on screen — switches, channels, items,
-  // ticker, rate, schema — in one validated all-or-nothing write. The server
-  // rejects the whole request when any section is invalid, so the database
-  // can never hold half of what the operator saw.
   const saveAll = useCallback(async () => {
     setSaving(true);
     setError('');
@@ -535,11 +557,12 @@ export default function FeedDashboardPage() {
       const res = await fetch(`${API}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'save-all', ...payload }),
       });
       const latency = Math.round(performance.now() - t0);
       let data: any = null;
-      try { data = await res.json(); } catch { /* non-JSON body still counts as a push attempt */ }
+      try { data = await res.json(); } catch { }
       appendEvent({
         channel: 'config (all)',
         bytes: payloadBytes(payload),
@@ -574,11 +597,12 @@ export default function FeedDashboardPage() {
       const res = await fetch(`${API}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'test-push', channelId: ch.id, payload: builtPayload }),
       });
       const latency = Math.round(performance.now() - t0);
       let data: any = null;
-      try { data = await res.json(); } catch { /* keep status/latency from the transport */ }
+      try { data = await res.json(); } catch { }
       void data;
       void payload;
       setLastResults((m) => ({ ...m, [ch.id]: { status: res.status, latency } }));
@@ -611,6 +635,7 @@ export default function FeedDashboardPage() {
       const res = await fetch(`${API}/api/feed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'rotate-secret' }),
       });
       if (res.status === 401) { setUnauthorized(true); return; }
@@ -654,23 +679,18 @@ export default function FeedDashboardPage() {
     setNewChannel({ kind: 'webhook', label: '', url: '' });
   }, [newChannel, patch]);
 
-  // Local-file uploads only fill the editor fields; nothing auto-saves.
-  // Persistence still happens through the Save items button.
-  const uploadMediaFile = useCallback(async (
-    file: File,
-  ): Promise<{ kind: MediaKind; url: string } | null> => {
-    // Client-side pre-check: reject oversize files before any upload.
+  const uploadMediaFile = useCallback(async (file: File): Promise<{ kind: MediaKind; url: string } | null> => {
     if (file.size > MAX_MEDIA_BYTES) return null;
     const form = new FormData();
     form.append('file', file);
     const res = await fetch(`${API}/api/feed-media`, {
       method: 'POST',
-      credentials: 'same-origin',
+      credentials: 'include',
       body: form,
     });
     if (res.status === 401) { setUnauthorized(true); throw new Error('Session ended — sign in again.'); }
     let data: any = null;
-    try { data = await res.json(); } catch { /* fall through to the error below */ }
+    try { data = await res.json(); } catch { }
     if (!res.ok || data?.success === false) {
       throw new Error(typeof data?.message === 'string' && data.message ? data.message : 'Upload failed.');
     }
@@ -680,7 +700,6 @@ export default function FeedDashboardPage() {
     return { kind, url };
   }, []);
 
-  // Shared by item rows (target = item id) and the new-item draft (target = 'new').
   const handleMediaUpload = useCallback(async (target: string, file: File | undefined | null) => {
     if (!file || uploadingId !== null) return;
     setUploadError((m) => {
@@ -726,7 +745,6 @@ export default function FeedDashboardPage() {
       delete next[target];
       return next;
     });
-    // Only API-hosted objects have a deletable key; external URLs just clear.
     let path: string | null = null;
     if (trimmed.startsWith(CDN_PREFIX)) {
       path = trimmed;
@@ -734,7 +752,7 @@ export default function FeedDashboardPage() {
       try {
         const u = new URL(trimmed);
         if (u.pathname.startsWith(CDN_PREFIX)) path = u.pathname;
-      } catch { /* relative non-CDN URL — plain external, just clear */ }
+      } catch { }
     }
     if (!path) { clearFields(); return; }
     const key = `feed/${path.slice(CDN_PREFIX.length)}`;
@@ -742,7 +760,7 @@ export default function FeedDashboardPage() {
     try {
       const res = await fetch(`${API}/api/feed-media?key=${encodeURIComponent(key)}`, {
         method: 'DELETE',
-        credentials: 'same-origin',
+        credentials: 'include',
       });
       if (res.status === 401) { setUnauthorized(true); return; }
       if (!res.ok) {
@@ -750,7 +768,7 @@ export default function FeedDashboardPage() {
         try {
           const data = await res.json();
           if (typeof data?.message === 'string' && data.message) msg = data.message;
-        } catch { /* keep default */ }
+        } catch { }
         setUploadError((m) => ({ ...m, [target]: msg }));
         return;
       }
@@ -762,6 +780,51 @@ export default function FeedDashboardPage() {
       setUploadingId((cur) => (cur === `remove:${target}` ? null : cur));
     }
   }, [uploadingId]);
+
+  const aiOptimizeItem = useCallback(async (title: string, detail: string): Promise<{ title: string; detail: string }> => {
+    try {
+      const res = await fetch(`${API}/api/ai/feed-optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ title, detail }),
+      });
+      if (res.status === 401) { setUnauthorized(true); return { title, detail }; }
+      let data: any = null;
+      try { data = await res.json(); } catch { return { title, detail }; }
+      return {
+        title: typeof data?.title === 'string' ? data.title : title,
+        detail: typeof data?.detail === 'string' ? data.detail : detail,
+      };
+    } catch {
+      return { title, detail };
+    }
+  }, []);
+
+  const applyAiSuggestion = useCallback(async (targetId: string) => {
+    const item = items.find((i) => i.id === targetId);
+    if (!item) return;
+    const optimized = await aiOptimizeItem(item.title, item.detail);
+    setItems((prev) => prev.map((i) => (i.id === targetId ? { ...i, title: optimized.title, detail: optimized.detail } : i)));
+    setNotice('AI-optimized title and detail.');
+  }, [items, aiOptimizeItem]);
+
+  const aiDraftTicker = useCallback(async (tag: string) => {
+    try {
+      const res = await fetch(`${API}/api/ai/feed-draft-ticker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tag }),
+      });
+      if (res.status === 401) { setUnauthorized(true); return ''; }
+      let data: any = null;
+      try { data = await res.json(); } catch { return ''; }
+      return typeof data?.text === 'string' ? data.text : '';
+    } catch {
+      return '';
+    }
+  }, []);
 
   if (unauthorized) {
     return (
@@ -779,7 +842,7 @@ export default function FeedDashboardPage() {
       sections={navSections}
       footer={{ email: session.email, role: session.role, onTerminate: session.terminate }}
     >
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 w-full">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
@@ -826,7 +889,7 @@ export default function FeedDashboardPage() {
           </div>
         ) : (
           <div className="mt-6 rounded-2xl bg-slate-950 text-slate-100 border border-slate-800 p-4">
-            {/* Master switch: first control, above the grids. */}
+            {/* Master switch */}
             <div className="flex items-center justify-between gap-4 flex-wrap rounded-xl border border-slate-800 bg-slate-900/70 p-4">
               <div className="flex items-center gap-3">
                 <Power className="w-5 h-5 text-lime-400" />
@@ -851,16 +914,16 @@ export default function FeedDashboardPage() {
                 />
               </button>
             </div>
-            {/* Ticker scroll switch: motion control for the flash bar under the
-                feed cards. ON = scrolling marquee; OFF = static flash row. */}
+
+            {/* Ticker scroll switch */}
             <div className="mt-3 flex items-center justify-between gap-4 flex-wrap rounded-xl border border-slate-800 bg-slate-900/70 p-4">
               <div className="flex items-center gap-3">
                 <Repeat className="w-5 h-5 text-teal-300" />
                 <div>
                   <p className="font-bold text-white">Ticker Scroll {config.scroll ? 'ON' : 'OFF'}</p>
                   <p className="text-sm text-slate-400">
-                    ON = flashes scroll under the feed cards (clickable to each item&apos;s website);
-                    OFF = the same flashes sit as a static row.
+                    ON = flashes scroll under the feed cards;
+                    OFF = static flash row.
                   </p>
                 </div>
               </div>
@@ -965,7 +1028,7 @@ export default function FeedDashboardPage() {
                                   className={`flex-1 rounded-t transition-all duration-500 ${good
                                     ? 'bg-gradient-to-t from-emerald-500/40 to-lime-400 shadow-[0_0_6px_rgba(163,230,53,0.45)]'
                                     : 'bg-gradient-to-t from-rose-600/50 to-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.55)]'}`}
-                                  style={{ height: `${Math.max(8, (e.latency / maxLat) * 100)}%` }}
+                                style={{ height: `${Math.max(8, (e.latency / maxLat) * 100)}%` }}
                                 />
                               );
                             })}
@@ -1232,39 +1295,39 @@ export default function FeedDashboardPage() {
                     Collapsed — expand to inspect {events.length === 0 ? 'push events.' : `${events.length} push event${events.length === 1 ? '' : 's'}.`}
                   </p>
                 ) : (
-                <>
-                <div className="mt-3 space-y-1.5">
-                  {events.length === 0 && <p className="text-xs text-slate-500">No events yet.</p>}
-                  {events.map((e) => (
-                    <div key={e.id} className="rounded-lg border border-slate-800 bg-slate-950">
-                      <button
-                        onClick={() => setExpandedId((id) => (id === e.id ? null : e.id))}
-                        className="flex w-full items-center gap-2 px-2 py-1.5 text-xs transition-colors hover:bg-slate-900 focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none rounded-lg"
-                        aria-expanded={expandedId === e.id}
-                      >
-                        <span className={`px-1.5 py-0.5 rounded border font-mono font-bold ${statusChip(e.status)}`}>{e.status}</span>
-                        <span className="truncate text-slate-300 flex-1 text-left">{e.channel}</span>
-                        <span className="text-slate-400 font-mono">{e.time}</span>
-                        <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-colors ${expandedId === e.id ? 'rotate-180' : ''}`} />
-                      </button>
-                      {expandedId === e.id && (
-                        <pre className="mx-2 mb-2 max-h-32 overflow-auto rounded border border-slate-800 bg-black/60 p-2 font-mono text-[11px] text-slate-300">
-                          {e.payload}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {Object.keys(attempts).length > 0 && (
-                  <p className="mt-3 text-[11px] text-slate-500 font-mono">
-                    retries — {Object.entries(attempts).map(([id, n]) => {
-                      const ch = config.channels.find((c) => c.id === id);
-                      return `${ch?.label ?? id}: ${n}`;
-                    }).join(' · ')}
-                  </p>
-                )}
-                </>
-                )}
+                  <>
+                  <div className="mt-3 space-y-1.5">
+                    {events.length === 0 && <p className="text-xs text-slate-500">No events yet.</p>}
+                    {events.map((e) => (
+                      <div key={e.id} className="rounded-lg border border-slate-800 bg-slate-950">
+                        <button
+                          onClick={() => setExpandedId((id) => (id === e.id ? null : e.id))}
+                          className="flex w-full items-center gap-2 px-2 py-1.5 text-xs transition-colors hover:bg-slate-900 focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none rounded-lg"
+                          aria-expanded={expandedId === e.id}
+                        >
+                          <span className={`px-1.5 py-0.5 rounded border font-mono font-bold ${statusChip(e.status)}`}>{e.status}</span>
+                          <span className="truncate text-slate-300 flex-1 text-left">{e.channel}</span>
+                          <span className="text-slate-400 font-mono">{e.time}</span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-colors ${expandedId === e.id ? 'rotate-180' : ''}`} />
+                        </button>
+                        {expandedId === e.id && (
+                          <pre className="mx-2 mb-2 max-h-32 overflow-auto rounded border border-slate-800 bg-black/60 p-2 font-mono text-[11px] text-slate-300">
+                            {e.payload}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {Object.keys(attempts).length > 0 && (
+                    <p className="mt-3 text-[11px] text-slate-500 font-mono">
+                      retries — {Object.entries(attempts).map(([id, n]) => {
+                        const ch = config.channels.find((c) => c.id === id);
+                        return `${ch?.label ?? id}: ${n}`;
+                      }).join(' · ')}
+                    </p>
+                  )}
+                  </>
+                  )}
               </section>
 
               <section className={card} aria-label="Rate Limiting and Security">
@@ -1346,7 +1409,47 @@ export default function FeedDashboardPage() {
               </section>
             </div>
 
-            {/* Feed items editor: full width below the grids. */}
+            {/* AI Integration Section */}
+            <section className={`${card} mt-4`} aria-label="AI Feed Assistant">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-white flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-indigo-400" /> AI Feed Assistant
+                </h2>
+                <p className="text-xs text-slate-500">AI-optimize titles, details, and ticker flashes</p>
+              </div>
+              <div className="mt-3 space-y-2">
+                <div className="bg-slate-950/50 border border-slate-800/50 rounded-lg p-3">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">AI Item Optimizer</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const target = items[0]?.id;
+                        if (!target) return;
+                        applyAiSuggestion(target);
+                      }}
+                      disabled={items.length === 0 || saving}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-bold hover:bg-indigo-500/20 transition-colors disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3 h-3" /> AI-Optimize First Item
+                    </button>
+                    <button
+                      onClick={() => {
+                        aiDraftTicker('').then((text) => {
+                          if (text) {
+                            setNewTicker((d) => ({ ...d, text }));
+                          }
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-bold hover:bg-indigo-500/20 transition-colors disabled:opacity-50"
+                    >
+                      <Bot className="w-3 h-3" /> Draft Ticker
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Feed items editor */}
             <section className={`${card} mt-4`} aria-label="Feed Items Editor">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h2 className="font-bold text-white flex items-center gap-2">
@@ -1375,378 +1478,409 @@ export default function FeedDashboardPage() {
                 {items.length === 0 && (
                   <li className="text-xs text-slate-500">No curated items — the landing shows the paused bar until items exist and the feed is ON.</li>
                 )}
-                {items.map((it) => (
-                  <li key={it.id} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
-                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={it.tag}
-                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, tag: e.target.value } : x)))}
-                          placeholder="tag" className={inputDark} aria-label="Item tag"
-                        />
-                        {isExpiredTs(it.ts) && (
-                          <span className="shrink-0 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">Expired</span>
-                        )}
-                      </div>
-                      <input
-                        value={it.href}
-                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, href: e.target.value } : x)))}
-                        placeholder="https://website… (ticker links here)"
-                        className={`${inputDark} font-mono`}
-                        aria-label="Item website URL — the ticker flash links here"
-                        title="Website URL — the landing ticker flash links here"
-                      />
-                      <input
-                        value={it.title}
-                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, title: e.target.value } : x)))}
-                        placeholder="Title" className={`${inputDark} sm:col-span-2`} aria-label="Item title"
-                      />
-                      <input
-                        value={it.detail}
-                        onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, detail: e.target.value } : x)))}
-                        placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="Item detail"
-                      />
-                      {it.media_url.trim() !== '' && (
-                        <div className="sm:col-span-2">
-                          {it.media_kind === 'image' ? (
-                            <img src={previewSrc(it.media_url)} alt="" className="h-16 rounded object-cover" />
-                          ) : it.media_kind === 'video' ? (
-                            <video src={previewSrc(it.media_url)} className="h-16 rounded" controls preload="none" />
-                          ) : (
-                            <span className="inline-block max-w-full truncate rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-200">
-                              {mediaFileName(it.media_url)}
-                            </span>
+                {items.map((it) => {
+                  const itemErr = validateNewItem({ title: it.title, detail: it.detail, href: it.href });
+                  return (
+                    <li key={it.id} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
+                      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={it.tag}
+                            onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, tag: e.target.value } : x)))}
+                            placeholder="tag" className={inputDark} aria-label="Item tag"
+                          />
+                          {isExpiredTs(it.ts) && (
+                            <span className="shrink-0 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">Expired</span>
                           )}
                         </div>
-                      )}
-                      <label className="sm:col-span-2">
-                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
-                        <select
-                          value={it.media_kind}
-                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, media_kind: e.target.value as MediaKind } : x)))}
-                          className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
-                          aria-label={`Media kind for ${it.title || 'item'}`}
-                        >
-                          {MEDIA_KINDS.map((m) => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </label>
-                      {it.media_kind !== 'none' && (
                         <input
-                          value={it.media_url}
-                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, media_url: e.target.value } : x)))}
-                          placeholder="https://… image / video / file URL"
-                          className={`${inputDark} font-mono sm:col-span-2`}
-                          aria-label={`Media URL for ${it.title || 'item'}`}
+                          value={it.href}
+                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, href: e.target.value } : x)))}
+                          placeholder="https://website… (ticker links here)"
+                          className={`${inputDark} font-mono ${itemErr.href ? 'border-rose-500' : ''}`}
+                          aria-label="Item website URL — the ticker flash links here"
+                          title="Website URL — the landing ticker flash links here"
                         />
-                      )}
-                      <div className="sm:col-span-2 flex items-center gap-2 flex-wrap">
-                        <label className={`${btnGhost} cursor-pointer ${uploadingId !== null ? 'opacity-50 pointer-events-none' : ''}`}>
-                          {uploadingId === `upload:${it.id}` ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Upload className="w-3.5 h-3.5" />
-                          )}
-                          {uploadingId === `upload:${it.id}` ? 'Uploading…' : 'Upload file'}
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept={MEDIA_ACCEPT}
-                            disabled={uploadingId !== null}
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              e.target.value = '';
-                              void handleMediaUpload(it.id, f);
-                            }}
-                          />
-                        </label>
+                        {itemErr.href && <p className="text-[10px] text-rose-300">{itemErr.href}</p>}
+                        <input
+                          value={it.title}
+                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, title: e.target.value } : x)))}
+                          placeholder="Title" className={`${inputDark} sm:col-span-2 ${itemErr.title ? 'border-rose-500' : ''}`} aria-label="Item title"
+                        />
+                        {itemErr.title && <p className="text-[10px] text-rose-300">{itemErr.title}</p>}
+                        <input
+                          value={it.detail}
+                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, detail: e.target.value } : x)))}
+                          placeholder="Detail" className={`${inputDark} sm:col-span-2 ${itemErr.detail ? 'border-rose-500' : ''}`} aria-label="Item detail"
+                        />
+                        {itemErr.detail && <p className="text-[10px] text-rose-300">{itemErr.detail}</p>}
                         {it.media_url.trim() !== '' && (
-                          <button
-                            onClick={() => void handleMediaRemove(it.id, it.media_url)}
-                            disabled={uploadingId !== null}
-                            className={btnGhost}
+                          <div className="sm:col-span-2">
+                            {it.media_kind === 'image' ? (
+                              <img src={previewSrc(it.media_url)} alt="" className="h-16 rounded object-cover" />
+                            ) : it.media_kind === 'video' ? (
+                              <video src={previewSrc(it.media_url)} className="h-16 rounded" controls preload="none" />
+                            ) : (
+                              <span className="inline-block max-w-full truncate rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-200">
+                                {mediaFileName(it.media_url)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <label className="sm:col-span-2">
+                          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
+                          <select
+                            value={it.media_kind}
+                            onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, media_kind: e.target.value as MediaKind } : x)))}
+                            className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                            aria-label={`Media kind for ${it.title || 'item'}`}
                           >
-                            {uploadingId === `remove:${it.id}` ? (
+                            {MEDIA_KINDS.map((m) => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </label>
+                        {it.media_kind !== 'none' && (
+                          <input
+                            value={it.media_url}
+                            onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, media_url: e.target.value } : x)))}
+                            placeholder="https://… image / video / file URL"
+                            className={`${inputDark} font-mono sm:col-span-2`}
+                            aria-label={`Media URL for ${it.title || 'item'}`}
+                          />
+                        )}
+                        <div className="sm:col-span-2 flex items-center gap-2 flex-wrap">
+                          <label className={`${btnGhost} cursor-pointer ${uploadingId !== null ? 'opacity-50 pointer-events-none' : ''}`}>
+                            {uploadingId === `upload:${it.id}` ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             ) : (
-                              <X className="w-3.5 h-3.5" />
+                              <Upload className="w-3.5 h-3.5" />
                             )}
-                            {uploadingId === `remove:${it.id}` ? 'Removing…' : 'Remove attachment'}
+                            {uploadingId === `upload:${it.id}` ? 'Uploading…' : 'Upload file'}
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept={MEDIA_ACCEPT}
+                              disabled={uploadingId !== null}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = '';
+                                void handleMediaUpload(it.id, f);
+                              }}
+                            />
+                          </label>
+                          {it.media_url.trim() !== '' && (
+                            <button
+                              onClick={() => void handleMediaRemove(it.id, it.media_url)}
+                              disabled={uploadingId !== null}
+                              className={btnGhost}
+                            >
+                              {uploadingId === `remove:${it.id}` ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <X className="w-3.5 h-3.5" />
+                              )}
+                              {uploadingId === `remove:${it.id}` ? 'Removing…' : 'Remove attachment'}
+                            </button>
+                          )}
+                          {uploadError[it.id] && <p className="text-xs text-amber-300 w-full">{uploadError[it.id]}</p>}
+                        </div>
+                        <label className="sm:col-span-2">
+                          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Item date (individual) — display until; empty = always shown</span>
+                          <input
+                            type="datetime-local"
+                            value={tsToLocalInput(it.ts)}
+                            onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)))}
+                            className={`${inputDark} font-mono`}
+                            aria-label={`Date for ${it.title || 'item'}`}
+                          />
+                        </div>
+                        <div className="sm:col-span-2 flex items-end gap-2">
+                          <button
+                            onClick={() => applyAiSuggestion(it.id)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-[10px] font-bold hover:bg-indigo-500/20 transition-colors"
+                            title="AI-optimize title and detail"
+                          >
+                            <Sparkles className="w-3 h-3" /> AI
                           </button>
-                        )}
-                        {uploadError[it.id] && <p className="text-xs text-amber-300 w-full">{uploadError[it.id]}</p>}
+                          <button
+                            onClick={() => setItems((prev) => prev.filter((x) => x.id !== it.id))}
+                            aria-label={`Delete item ${it.title}`}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-rose-300 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none rounded px-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
                       </div>
-                      <label className="sm:col-span-2">
-                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Item date (individual) — display until; empty = always shown</span>
-                        <input
-                          type="datetime-local"
-                          value={tsToLocalInput(it.ts)}
-                          onChange={(e) => setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)))}
-                          className={`${inputDark} font-mono`}
-                          aria-label={`Date for ${it.title || 'item'}`}
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-1.5 flex justify-end">
-                      <button
-                        onClick={() => setItems((prev) => prev.filter((x) => x.id !== it.id))}
-                        aria-label={`Delete item ${it.title}`}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-rose-300 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none rounded px-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2 rounded-lg border border-slate-800 bg-slate-950 p-2">
-                <input value={newItem.tag} onChange={(e) => setNewItem((d) => ({ ...d, tag: e.target.value }))} placeholder="tag" className={inputDark} aria-label="New item tag" />
-                <input value={newItem.href} onChange={(e) => setNewItem((d) => ({ ...d, href: e.target.value }))} placeholder="https://website… (ticker links here)" className={`${inputDark} font-mono`} aria-label="New item website URL" />
-                <input value={newItem.title} onChange={(e) => setNewItem((d) => ({ ...d, title: e.target.value }))} placeholder="Title" className={`${inputDark} sm:col-span-2`} aria-label="New item title" />
-                <input value={newItem.detail} onChange={(e) => setNewItem((d) => ({ ...d, detail: e.target.value }))} placeholder="Detail" className={`${inputDark} sm:col-span-2`} aria-label="New item detail" />
-                {newItem.media_url.trim() !== '' && (
-                  <div className="sm:col-span-2">
-                    {newItem.media_kind === 'image' ? (
-                      <img src={previewSrc(newItem.media_url)} alt="" className="h-16 rounded object-cover" />
-                    ) : newItem.media_kind === 'video' ? (
-                      <video src={previewSrc(newItem.media_url)} className="h-16 rounded" controls preload="none" />
-                    ) : (
-                      <span className="inline-block max-w-full truncate rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-200">
-                        {mediaFileName(newItem.media_url)}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <label className="sm:col-span-2">
-                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
-                  <select
-                    value={newItem.media_kind}
-                    onChange={(e) => setNewItem((d) => ({ ...d, media_kind: e.target.value as MediaKind }))}
-                    className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
-                    aria-label="New item media kind"
-                  >
-                    {MEDIA_KINDS.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </label>
-                {newItem.media_kind !== 'none' && (
-                  <input
-                    value={newItem.media_url}
-                    onChange={(e) => setNewItem((d) => ({ ...d, media_url: e.target.value }))}
-                    placeholder="https://… image / video / file URL"
-                    className={`${inputDark} font-mono sm:col-span-2`}
-                    aria-label="New item media URL"
-                  />
-                )}
-                <div className="sm:col-span-2 flex items-center gap-2 flex-wrap">
-                  <label className={`${btnGhost} cursor-pointer ${uploadingId !== null ? 'opacity-50 pointer-events-none' : ''}`}>
-                    {uploadingId === 'upload:new' ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Upload className="w-3.5 h-3.5" />
-                    )}
-                    {uploadingId === 'upload:new' ? 'Uploading…' : 'Upload file'}
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept={MEDIA_ACCEPT}
-                      disabled={uploadingId !== null}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = '';
-                        void handleMediaUpload('new', f);
-                      }}
-                    />
-                  </label>
-                  {newItem.media_url.trim() !== '' && (
-                    <button
-                      onClick={() => void handleMediaRemove('new', newItem.media_url)}
-                      disabled={uploadingId !== null}
-                      className={btnGhost}
-                    >
-                      {uploadingId === 'remove:new' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <X className="w-3.5 h-3.5" />
-                      )}
-                      {uploadingId === 'remove:new' ? 'Removing…' : 'Remove attachment'}
-                    </button>
-                  )}
-                  {uploadError.new && <p className="text-xs text-amber-300 w-full">{uploadError.new}</p>}
-                </div>
-                <label className="sm:col-span-2">
-                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Display until (empty = always shown)</span>
-                  <input
-                    type="datetime-local"
-                    value={tsToLocalInput(newItem.ts)}
-                    onChange={(e) => setNewItem((d) => ({ ...d, ts: tsFromLocalInput(e.target.value) }))}
-                    className={`${inputDark} font-mono`}
-                    aria-label="New item date"
-                  />
-                </label>
-                <div className="sm:col-span-2">
-                  <button
-                    onClick={() => {
-                      if (!newItem.title.trim() || items.length >= MAX_ITEMS) return;
-                      setItems((prev) => [...prev, {
-                        id: uid(),
-                        tag: newItem.tag.trim(),
-                        title: newItem.title.trim(),
-                        detail: newItem.detail.trim(),
-                        href: newItem.href.trim(),
-                        media_kind: newItem.media_kind,
-                        media_url: newItem.media_url.trim(),
-                        // Individual date per item: operator's pick, else now.
-                        ts: newItem.ts,
-                      }]);
-                      setNewItem({ tag: '', title: '', detail: '', href: '', media_kind: 'none', media_url: '', ts: '' });
-                    }}
-                    disabled={!newItem.title.trim() || items.length >= MAX_ITEMS || uploadingId !== null}
-                    className={btnGhost}
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add item
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Scroll ticker editor: flashes under the feed cards. */}
-            <section className={`${card} mt-4`} aria-label="Scroll Ticker Editor">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h2 className="font-bold text-white flex items-center gap-2">
-                  <Repeat className="w-4 h-4 text-teal-300" /> Scroll Ticker
-                </h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono text-slate-500">{ticker.length}</span>
-                  <button onClick={() => saveTicker(ticker)} disabled={savingTicker} className={btnGhost}>
-                    {savingTicker ? 'Saving…' : 'Save ticker'}
-                  </button>
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                The Ticker Scroll switch at top controls motion; these entries are the flashes.
-              </p>
-              <ul className="mt-3 space-y-2">
-                {ticker.length === 0 && (
-                  <li className="text-xs text-slate-500">No ticker entries — add flashes below, then Save ticker.</li>
-                )}
-                {ticker.map((t) => (
-                  <li key={t.id} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={t.tag}
-                        onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, tag: e.target.value } : x)))}
-                        placeholder="tag" className={inputDark} aria-label="Ticker tag"
-                      />
-                      <button
-                        role="switch"
-                        aria-checked={t.enabled}
-                        aria-label={`Enable ticker ${t.text || t.tag}`}
-                        onClick={() => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, enabled: !x.enabled } : x)))}
-                        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none ${t.enabled ? 'border-lime-400/60 bg-lime-400/20' : 'border-slate-700 bg-slate-800'}`}
-                      >
-                        <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-colors ${t.enabled ? 'right-0.5 bg-lime-400' : 'left-0.5 bg-slate-500'}`} />
-                      </button>
-                      <button
-                        onClick={() => setTicker((prev) => prev.filter((x) => x.id !== t.id))}
-                        aria-label={`Delete ticker ${t.text}`}
-                        className="p-1 rounded text-slate-500 hover:text-rose-300 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="mt-1.5 grid grid-cols-1 gap-1.5">
-                      <input
-                        value={t.text}
-                        onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, text: e.target.value } : x)))}
-                        placeholder="Flash text" className={inputDark} aria-label="Ticker text"
-                      />
-                      <input
-                        value={t.url}
-                        onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, url: e.target.value } : x)))}
-                        placeholder="https://…" className={`${inputDark} font-mono`} aria-label="Ticker URL"
-                      />
-                      <label>
-                        <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                          Display until (empty = always shown)
-                          {isExpiredTs(t.ts) && <span className="ml-2 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-300">Expired — hidden on site</span>}
-                        </span>
-                        <input
-                          type="datetime-local"
-                          value={tsToLocalInput(t.ts)}
-                          onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)))}
-                          className={`${inputDark} font-mono`}
-                          aria-label={`Display-until date for ${t.text || 'ticker flash'}`}
-                        />
-                      </label>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-3 rounded-lg border border-slate-800 bg-slate-950 p-2">
-                <input value={newTicker.tag} onChange={(e) => setNewTicker((d) => ({ ...d, tag: e.target.value }))} placeholder="tag" className={inputDark} aria-label="New ticker tag" />
-                <input value={newTicker.text} onChange={(e) => setNewTicker((d) => ({ ...d, text: e.target.value }))} placeholder="Flash text" className={inputDark} aria-label="New ticker text" />
-                <input value={newTicker.url} onChange={(e) => setNewTicker((d) => ({ ...d, url: e.target.value }))} placeholder="https://…" className={`${inputDark} font-mono`} aria-label="New ticker URL" />
-                <input
-                  type="datetime-local"
-                  value={tsToLocalInput(newTicker.ts)}
-                  onChange={(e) => setNewTicker((d) => ({ ...d, ts: tsFromLocalInput(e.target.value) }))}
-                  className={`${inputDark} font-mono`}
-                  aria-label="New ticker display-until date"
-                  title="Display until (empty = always shown)"
-                />
-                <div className="sm:col-span-3">
-                  <button
-                    onClick={() => {
-                      if (!newTicker.text.trim()) return;
-                      setTicker((prev) => [...prev, {
-                        id: uid(),
-                        tag: newTicker.tag.trim(),
-                        text: newTicker.text.trim(),
-                        url: newTicker.url.trim(),
-                        ts: newTicker.ts,
-                        enabled: true,
-                      }]);
-                      setNewTicker({ tag: '', text: '', url: '', ts: '' });
-                    }}
-                    disabled={!newTicker.text.trim()}
-                    className={btnGhost}
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add flash
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Feed history: server-persisted archive of saves and test pushes. */}
-            <section className={`${card} mt-4`} aria-label="Feed History">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h2 className="font-bold text-white flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-teal-300" /> Feed History
-                </h2>
-                <button onClick={() => loadHistory()} disabled={historyLoading} className={btnGhost}>
-                  <RefreshCw className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
-                  {historyLoading ? 'Loading…' : 'Refresh'}
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                Server-persisted archive — every save and test push is logged automatically. Refreshes every 30s.
-              </p>
-              {historyError && <p className="mt-2 text-xs text-amber-300">{historyError}</p>}
-              {history.length === 0 ? (
-                <p className="mt-3 text-xs text-slate-500">No push history yet — saves and test pushes are logged automatically.</p>
-              ) : (
-                <ul className="mt-3 max-h-96 space-y-1.5 overflow-auto">
-                  {history.map((h) => (
-                    <li key={h.id} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-xs">
-                      <span className="font-mono text-slate-400 shrink-0">{h.ts ? new Date(h.ts).toLocaleString() : '—'}</span>
-                      <span className="px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-300 text-[10px] font-bold uppercase shrink-0">{h.kind}</span>
-                      <span className="truncate text-slate-300 flex-1">{h.channel || '—'}</span>
-                      <span className={`px-1.5 py-0.5 rounded border font-mono font-bold shrink-0 ${statusChip(h.status)}`}>{h.status}</span>
-                      <span className="font-mono text-teal-300 shrink-0">{h.latency_ms}ms</span>
                     </li>
                   ))}
                 </ul>
-              )}
-            </section>
+                <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                  <input value={newItem.tag} onChange={(e) => setNewItem((d) => ({ ...d, tag: e.target.value }))} placeholder="tag" className={inputDark} aria-label="New item tag" />
+                  <input value={newItem.href} onChange={(e) => setNewItem((d) => ({ ...d, href: e.target.value }))} placeholder="https://website… (ticker links here)" className={`${inputDark} font-mono`} aria-label="New item website URL" />
+                  <input value={newItem.title} onChange={(e) => setNewItem((d) => ({ ...d, title: e.target.value }))} placeholder="Title" className={`${inputDark} sm:col-span-2 ${newItemErrors.title ? 'border-rose-500' : ''}`} aria-label="New item title" />
+                  {newItemErrors.title && <p className="text-[10px] text-rose-300 sm:col-span-2">{newItemErrors.title}</p>}
+                  <input value={newItem.detail} onChange={(e) => setNewItem((d) => ({ ...d, detail: e.target.value }))} placeholder="Detail" className={`${inputDark} sm:col-span-2 ${newItemErrors.detail ? 'border-rose-500' : ''}`} aria-label="New item detail" />
+                  {newItemErrors.detail && <p className="text-[10px] text-rose-300 sm:col-span-2">{newItemErrors.detail}</p>}
+                  {newItem.media_url.trim() !== '' && (
+                    <div className="sm:col-span-2">
+                      {newItem.media_kind === 'image' ? (
+                        <img src={previewSrc(newItem.media_url)} alt="" className="h-16 rounded object-cover" />
+                      ) : newItem.media_kind === 'video' ? (
+                        <video src={previewSrc(newItem.media_url)} className="h-16 rounded" controls preload="none" />
+                      ) : (
+                        <span className="inline-block max-w-full truncate rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-200">
+                          {mediaFileName(newItem.media_url)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <label className="sm:col-span-2">
+                    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Media kind</span>
+                    <select
+                      value={newItem.media_kind}
+                      onChange={(e) => setNewItem((d) => ({ ...d, media_kind: e.target.value as MediaKind }))}
+                      className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                      aria-label="New item media kind"
+                    >
+                      {MEDIA_KINDS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </label>
+                  {newItem.media_kind !== 'none' && (
+                    <input
+                      value={newItem.media_url}
+                      onChange={(e) => setNewItem((d) => ({ ...d, media_url: e.target.value }))}
+                      placeholder="https://… image / video / file URL"
+                      className={`${inputDark} font-mono sm:col-span-2`}
+                      aria-label="New item media URL"
+                    />
+                  )}
+                  <div className="sm:col-span-2 flex items-center gap-2 flex-wrap">
+                    <label className={`${btnGhost} cursor-pointer ${uploadingId !== null ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {uploadingId === 'upload:new' ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
+                      {uploadingId === 'upload:new' ? 'Uploading…' : 'Upload file'}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept={MEDIA_ACCEPT}
+                        disabled={uploadingId !== null}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = '';
+                          void handleMediaUpload('new', f);
+                        }}
+                      />
+                    </label>
+                    {newItem.media_url.trim() !== '' && (
+                      <button
+                        onClick={() => void handleMediaRemove('new', newItem.media_url)}
+                        disabled={uploadingId !== null}
+                        className={btnGhost}
+                      >
+                        {uploadingId === 'remove:new' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <X className="w-3.5 h-3.5" />
+                        )}
+                        {uploadingId === 'remove:new' ? 'Removing…' : 'Remove attachment'}
+                      </button>
+                    )}
+                    {uploadError.new && <p className="text-xs text-amber-300 w-full">{uploadError.new}</p>}
+                  </div>
+                  <label className="sm:col-span-2">
+                    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Display until (empty = always shown)</span>
+                    <input
+                      type="datetime-local"
+                      value={tsToLocalInput(newItem.ts)}
+                      onChange={(e) => setNewItem((d) => ({ ...d, ts: tsFromLocalInput(e.target.value) }))}
+                      className={`${inputDark} font-mono`}
+                      aria-label="New item date"
+                    />
+                  </label>
+                  <div className="sm:col-span-2">
+                    <button
+                      onClick={() => {
+                        const errs = validateNewItem({
+                          title: newItem.title,
+                          detail: newItem.detail,
+                          href: newItem.href,
+                        });
+                        setNewItemErrors(errs);
+                        if (Object.keys(errs).length > 0) return;
+                        if (!newItem.title.trim() || items.length >= MAX_ITEMS) return;
+                        setItems((prev) => [...prev, {
+                          id: uid(),
+                          tag: newItem.tag.trim(),
+                          title: newItem.title.trim(),
+                          detail: newItem.detail.trim(),
+                          href: newItem.href.trim(),
+                          media_kind: newItem.media_kind,
+                          media_url: newItem.media_url.trim(),
+                          ts: newItem.ts,
+                        }]);
+                        setNewItem({ tag: '', title: '', detail: '', href: '', media_kind: 'none', media_url: '', ts: '' });
+                        setNewItemErrors({});
+                      }}
+                      disabled={Object.keys(validateNewItem({ title: newItem.title, detail: newItem.detail, href: newItem.href })).length > 0 || !newItem.title.trim() || items.length >= MAX_ITEMS || uploadingId !== null}
+                      className={btnGhost}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add item
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* Scroll ticker editor */}
+              <section className={`${card} mt-4`} aria-label="Scroll Ticker Editor">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="font-bold text-white flex items-center gap-2">
+                    <Repeat className="w-4 h-4 text-teal-300" /> Scroll Ticker
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono text-slate-500">{ticker.length}</span>
+                    <button onClick={() => saveTicker(ticker)} disabled={savingTicker} className={btnGhost}>
+                      {savingTicker ? 'Saving…' : 'Save ticker'}
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  The Ticker Scroll switch at top controls motion; these entries are the flashes.
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {ticker.length === 0 && (
+                    <li className="text-xs text-slate-500">No ticker entries — add flashes below, then Save ticker.</li>
+                  )}
+                  {ticker.map((t) => {
+                    const tickerErr = validateNewTicker({ text: t.text });
+                    return (
+                      <li key={t.id} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={t.tag}
+                            onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, tag: e.target.value } : x)))}
+                            placeholder="tag" className={inputDark} aria-label="Ticker tag"
+                          />
+                          <button
+                            role="switch"
+                            aria-checked={t.enabled}
+                            aria-label={`Enable ticker ${t.text || t.tag}`}
+                            onClick={() => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, enabled: !x.enabled } : x)))}
+                            className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-lime-400 focus-visible:outline-none ${t.enabled ? 'border-lime-400/60 bg-lime-400/20' : 'border-slate-700 bg-slate-800'}`}
+                          >
+                            <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-colors ${t.enabled ? 'right-0.5 bg-lime-400' : 'left-0.5 bg-slate-500'}`} />
+                          </button>
+                          <button
+                            onClick={() => setTicker((prev) => prev.filter((x) => x.id !== t.id))}
+                            aria-label={`Delete ticker ${t.text}`}
+                            className="p-1 rounded text-slate-500 hover:text-rose-300 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="mt-1.5 grid grid-cols-1 gap-1.5">
+                          <input
+                            value={t.text}
+                            onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, text: e.target.value } : x)))}
+                            placeholder="Flash text" className={`${inputDark} ${tickerErr.text ? 'border-rose-500' : ''}`} aria-label="Ticker text"
+                          />
+                          {tickerErr.text && <p className="text-[10px] text-rose-300">{tickerErr.text}</p>}
+                          <input
+                            value={t.url}
+                            onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, url: e.target.value } : x)))}
+                            placeholder="https://…" className={`${inputDark} font-mono`} aria-label="Ticker URL"
+                          />
+                          <label>
+                            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                              Display until (empty = always shown)
+                              {isExpiredTs(t.ts) && <span className="ml-2 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-300">Expired — hidden on site</span>}
+                            </span>
+                            <input
+                              type="datetime-local"
+                              value={tsToLocalInput(t.ts)}
+                              onChange={(e) => setTicker((prev) => prev.map((x) => (x.id === t.id ? { ...x, ts: tsFromLocalInput(e.target.value) } : x)))}
+                              className={`${inputDark} font-mono`}
+                              aria-label={`Display-until date for ${t.text || 'ticker flash'}`}
+                            />
+                          </label>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-3 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                  <input value={newTicker.tag} onChange={(e) => setNewTicker((d) => ({ ...d, tag: e.target.value }))} placeholder="tag" className={inputDark} aria-label="New ticker tag" />
+                  <input value={newTicker.text} onChange={(e) => setNewTicker((d) => ({ ...d, text: e.target.value }))} placeholder="Flash text" className={`${inputDark} ${newTickerErrors.text ? 'border-rose-500' : ''}`} aria-label="New ticker text" />
+                  {newTickerErrors.text && <p className="text-[10px] text-rose-300 sm:col-span-2">{newTickerErrors.text}</p>}
+                  <input value={newTicker.url} onChange={(e) => setNewTicker((d) => ({ ...d, url: e.target.value }))} placeholder="https://…" className={`${inputDark} font-mono`} aria-label="New ticker URL" />
+                  <input
+                    type="datetime-local"
+                    value={tsToLocalInput(newTicker.ts)}
+                    onChange={(e) => setNewTicker((d) => ({ ...d, ts: tsFromLocalInput(e.target.value) }))}
+                    className={`${inputDark} font-mono`}
+                    aria-label="New ticker display-until date"
+                    title="Display until (empty = always shown)"
+                  />
+                  <div className="sm:col-span-3">
+                    <button
+                      onClick={() => {
+                        const errs = validateNewTicker({ text: newTicker.text });
+                        setNewTickerErrors(errs);
+                        if (Object.keys(errs).length > 0) return;
+                        if (!newTicker.text.trim()) return;
+                        setTicker((prev) => [...prev, {
+                          id: uid(),
+                          tag: newTicker.tag.trim(),
+                          text: newTicker.text.trim(),
+                          url: newTicker.url.trim(),
+                          ts: newTicker.ts,
+                          enabled: true,
+                        }]);
+                        setNewTicker({ tag: '', text: '', url: '', ts: '' });
+                        setNewTickerErrors({});
+                      }}
+                      disabled={Object.keys(validateNewTicker({ text: newTicker.text })).length > 0 || !newTicker.text.trim()}
+                      className={btnGhost}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add flash
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* Feed history */}
+              <section className={`${card} mt-4`} aria-label="Feed History">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="font-bold text-white flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-teal-300" /> Feed History
+                  </h2>
+                  <button onClick={() => loadHistory()} disabled={historyLoading} className={btnGhost}>
+                    <RefreshCw className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+                    {historyLoading ? 'Loading…' : 'Refresh'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Server-persisted archive — every save and test push is logged automatically. Refreshes every 30s.
+                </p>
+                {historyError && <p className="mt-2 text-xs text-amber-300">{historyError}</p>}
+                {history.length === 0 ? (
+                  <p className="mt-3 text-xs text-slate-500">No push history yet — saves and test pushes are logged automatically.</p>
+                ) : (
+                  <ul className="mt-3 max-h-96 space-y-1.5 overflow-auto">
+                    {history.map((h) => (
+                      <li key={h.id} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-xs">
+                        <span className="font-mono text-slate-400 shrink-0">{h.ts ? new Date(h.ts).toLocaleString() : '—'}</span>
+                        <span className="px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-300 text-[10px] font-bold uppercase shrink-0">{h.kind}</span>
+                        <span className="truncate text-slate-300 flex-1">{h.channel || '—'}</span>
+                        <span className={`px-1.5 py-0.5 rounded border font-mono font-bold shrink-0 ${statusChip(h.status)}`}>{h.status}</span>
+                        <span className="font-mono text-teal-300 shrink-0">{h.latency_ms}ms</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
           </div>
         )}
       </main>
