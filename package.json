@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --import ./tests/resolve-cloudflare.mjs tests/stats.test.mjs && node --import ./tests/resolve-cloudflare.mjs tests/fusion.test.mjs && node tests/etl.test.mjs && node tests/norm-validator.test.mjs && node tests/enrich.test.mjs && node tests/candidates.test.mjs && node tests/reconcile.test.mjs && node tests/feed.test.mjs && node scripts/eval-match-rank.mjs && node scripts/test-buy-suggest.mjs && node scripts/test-negotiate.mjs && node scripts/test-audit.mjs && node scripts/test-search.mjs",
+    "test": "node --import ./tests/resolve-cloudflare.mjs tests/stats.test.mjs && node --import ./tests/resolve-cloudflare.mjs tests/fusion.test.mjs && node tests/etl.test.mjs && node tests/norm-validator.test.mjs && node tests/enrich.test.mjs && node tests/candidates.test.mjs && node tests/reconcile.test.mjs && node tests/feed.test.mjs && node tests/inventory.test.mjs && node scripts/eval-match-rank.mjs && node scripts/test-buy-suggest.mjs && node scripts/test-negotiate.mjs && node scripts/test-audit.mjs && node scripts/test-search.mjs",
     "test:bench": "node scripts/eval-match-rank.mjs",
     "test:buy-suggest": "node scripts/test-buy-suggest.mjs",
     "test:negotiate": "node scripts/test-negotiate.mjs"

@@ -24,6 +24,8 @@
  */
 
 import {
+  AlertTriangle,
+  BarChart3,
   Database,
   Handshake,
   History,
@@ -33,6 +35,8 @@ import {
   ScrollText,
   Search,
   Sparkles,
+  Truck,
+  TrendingUp,
   Users,
 } from 'lucide-react';
 import type { NavSection } from './DashboardNav';
@@ -111,6 +115,7 @@ export function buildNavSections(a: NavActions = {}): NavSection[] {
       items: [
         { key: 'negotiations', label: 'Negotiations', icon: Handshake, accent: 'amber', href: '/dashboard/negotiations' },
         { key: 'price-tracker', label: 'Price Tracker', icon: History, accent: 'emerald', href: '/dashboard/price-tracker' },
+        { key: 'inventory', label: 'Inventory', icon: Package, accent: 'indigo', href: '/dashboard/inventory' },
         { key: 'feed', label: 'Feed Push', icon: Radio, accent: 'sky', href: '/dashboard/feed' },
       ],
     },

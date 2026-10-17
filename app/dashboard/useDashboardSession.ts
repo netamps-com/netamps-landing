@@ -16,10 +16,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 export function useDashboardSession() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
 
   useEffect(() => {
@@ -33,6 +31,8 @@ export function useDashboardSession() {
 
   // Server revocation first (D1 row + HttpOnly cookie — clearing cookies alone
   // leaves the session usable until expiry), then local cleanup + redirect.
+  // Uses window.location.href instead of useRouter() to avoid requiring
+  // a Next.js router context during SSR/static export.
   const terminate = useCallback(async () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -40,8 +40,10 @@ export function useDashboardSession() {
     } catch {}
     document.cookie = 'session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-    router.push('/login');
-  }, [router]);
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+  }, []);
 
   return {
     email,

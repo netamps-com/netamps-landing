@@ -109,6 +109,7 @@ const DEFAULT_TITLE: Record<string, string> = {
   '/dashboard/search': 'Order search',
   '/dashboard/negotiations': 'Negotiations',
   '/dashboard/price-tracker': 'Price Tracker',
+  '/dashboard/inventory': 'Inventory',
   '/dashboard/feed': 'Feed Push',
 };
 
