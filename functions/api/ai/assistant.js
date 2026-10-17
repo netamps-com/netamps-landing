@@ -9,9 +9,9 @@
  * Response: { success, response, model, latencyMs }
  */
 
-import { verifySession } from './intake/auth';
+import { verifySession } from '../intake/auth';
 import { runJson } from '../llm/client.mjs';
-import { aiAuthorized } from './ai/registry.mjs';
+import { aiAuthorized } from '../ai/registry.mjs';
 
 const MODULE_PROMPTS = {
   login: `You are NETAMPS AI login assistant. Analyze login anomalies, security threats, and session issues. Provide actionable recommendations. Respond in JSON: {"analysis": "...", "recommendations": ["..."], "severity": "low|medium|high"}`,
