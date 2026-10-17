@@ -100,6 +100,35 @@ export async function ensureTables(env) {
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_ims_stock_out_sku ON ims_stock_out(sku, created_at)').run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_ims_stock_in_txn ON ims_stock_in(txn_id)').run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_ims_stock_out_txn ON ims_stock_out(txn_id)').run();
+
+  // HSN columns are additive: CREATE TABLE IF NOT EXISTS will not add them to a
+  // table created before HSN existed, so add them explicitly and tolerate the
+  // "already there" case. A failed ALTER is not fatal — the read paths below
+  // fall back to null HSN when the column is genuinely absent.
+  await ensureColumn(env, 'ims_products', 'hsn_code', 'TEXT');
+  await ensureColumn(env, 'ims_products', 'hsn_description', 'TEXT');
+}
+
+/** Add a column if the table exists and the column does not. Best-effort. */
+async function ensureColumn(env, table, column, type) {
+  if (!hasDb(env)) return;
+  try {
+    await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`).run();
+  } catch {
+    // D1 rejects the statement when the column already exists; that is the
+    // expected steady state, so swallowing the error is correct here.
+  }
+}
+
+/** True when ims_products actually carries the HSN columns. */
+export async function hasHsnColumns(env) {
+  if (!hasDb(env)) return false;
+  try {
+    const r = await env.DB.prepare('SELECT hsn_code FROM ims_products LIMIT 1').first();
+    return r !== null && r !== undefined;
+  } catch {
+    return false;
+  }
 }
 
 export async function readBalance(env) {
@@ -163,6 +192,8 @@ function mapProductRow(r) {
     supplier_name: typeof r.supplier_name === 'string' ? r.supplier_name : null,
     reorder_trigger_level: Number.isFinite(Number(r.reorder_trigger_level)) ? Number(r.reorder_trigger_level) : 0,
     target_max_inventory: Number.isFinite(Number(r.target_max_inventory)) ? Number(r.target_max_inventory) : 0,
+    hsn_code: typeof r.hsn_code === 'string' && r.hsn_code ? r.hsn_code : '',
+    hsn_description: typeof r.hsn_description === 'string' && r.hsn_description ? r.hsn_description : '',
     created_at: typeof r.created_at === 'string' ? r.created_at : null,
     updated_at: typeof r.updated_at === 'string' ? r.updated_at : null
   };
@@ -236,8 +267,13 @@ export async function onRequest(context) {
     }
 
     if (action === 'products') {
+      await ensureTables(env);
+      const withHsn = await hasHsnColumns(env);
+      const cols = withHsn
+        ? 'id, item_name, category, uom, cost_price_cents, selling_price_cents, supplier_name, reorder_trigger_level, target_max_inventory, hsn_code, hsn_description, created_at, updated_at'
+        : 'id, item_name, category, uom, cost_price_cents, selling_price_cents, supplier_name, reorder_trigger_level, target_max_inventory, created_at, updated_at';
       const res = await env.DB.prepare(
-        'SELECT id, item_name, category, uom, cost_price_cents, selling_price_cents, supplier_name, reorder_trigger_level, target_max_inventory, created_at, updated_at FROM ims_products ORDER BY item_name'
+        `SELECT ${cols} FROM ims_products ORDER BY item_name`,
       ).all();
       const products = (res && Array.isArray(res.results) ? res.results : []).map(mapProductRow);
       return corsJson(request, env, { success: true, products });
@@ -257,12 +293,25 @@ export async function onRequest(context) {
     const action = body && typeof body === 'object' ? body.action : null;
 
     if (action === 'save-product') {
+      // The client historically sent the product nested under `product`, the API
+      // contract is flat. Accept both so neither caller 400s on a shape mismatch
+      // (a nested payload used to read as "sku must be 1-64 characters").
+      const src = (body.product && typeof body.product === 'object') ? { ...body, ...body.product } : body;
       const {
         sku, item_name, category, uom, cost_price_cents, selling_price_cents,
-        supplier_name, reorder_trigger_level, target_max_inventory
-      } = body;
-      if (typeof sku !== 'string' || sku.length === 0 || sku.length > MAX_SKU_LEN) {
-        return corsJson(request, env, { success: false, message: 'sku must be 1-64 characters.' }, 400);
+        supplier_name, reorder_trigger_level, target_max_inventory,
+        hsn_code, hsn_description,
+        // short aliases accepted for the UI field names
+        cost, selling, supplier, trigger, target_max,
+      } = src;
+      const costRaw = cost_price_cents !== undefined ? cost_price_cents : cost;
+      const sellRaw = selling_price_cents !== undefined ? selling_price_cents : selling;
+      const supRaw = supplier_name !== undefined ? supplier_name : supplier;
+      const reorderRaw = reorder_trigger_level !== undefined ? reorder_trigger_level : trigger;
+      const targetRaw = target_max_inventory !== undefined ? target_max_inventory : target_max;
+
+      if (typeof sku !== 'string' || sku.trim().length === 0 || sku.trim().length > MAX_SKU_LEN) {
+        return corsJson(request, env, { success: false, field: 'sku', message: 'sku must be 1-64 characters.' }, 400);
       }
       if (typeof item_name !== 'string' || item_name.length === 0 || item_name.length > MAX_NAME_LEN) {
         return corsJson(request, env, { success: false, message: 'item_name must be 1-140 characters.' }, 400);
@@ -274,34 +323,49 @@ export async function onRequest(context) {
       if (uomValue.length > MAX_UOM_LEN) {
         return corsJson(request, env, { success: false, message: 'uom must be at most 20 characters.' }, 400);
       }
-      const cost = typeof cost_price_cents === 'number' ? cost_price_cents : Number(cost_price_cents);
-      const sell = typeof selling_price_cents === 'number' ? selling_price_cents : Number(selling_price_cents);
+      const cost = typeof costRaw === 'number' ? costRaw : Number(costRaw);
+      const sell = typeof sellRaw === 'number' ? sellRaw : Number(sellRaw);
       if (!Number.isInteger(cost) || cost < 0) {
-        return corsJson(request, env, { success: false, message: 'cost_price_cents must be an integer >= 0.' }, 400);
+        return corsJson(request, env, { success: false, field: 'cost', message: 'cost must be an integer >= 0 (paise).' }, 400);
       }
       if (!Number.isInteger(sell) || sell < 0) {
-        return corsJson(request, env, { success: false, message: 'selling_price_cents must be an integer >= 0.' }, 400);
+        return corsJson(request, env, { success: false, field: 'selling', message: 'selling must be an integer >= 0 (paise).' }, 400);
       }
-      if (supplier_name !== undefined && supplier_name !== null && (typeof supplier_name !== 'string' || supplier_name.length > MAX_SUPPLIER_LEN)) {
-        return corsJson(request, env, { success: false, message: 'supplier_name must be at most 140 characters.' }, 400);
+      if (sell > 0 && cost > 0 && sell < cost) {
+        return corsJson(request, env, { success: false, field: 'selling', message: 'Selling price is below cost price.' }, 400);
       }
-      const reorder = typeof reorder_trigger_level === 'number' ? reorder_trigger_level : Number(reorder_trigger_level);
-      const target = typeof target_max_inventory === 'number' ? target_max_inventory : Number(target_max_inventory);
+      if (supRaw !== undefined && supRaw !== null && (typeof supRaw !== 'string' || supRaw.length > MAX_SUPPLIER_LEN)) {
+        return corsJson(request, env, { success: false, field: 'supplier', message: 'supplier must be at most 140 characters.' }, 400);
+      }
+      const reorder = typeof reorderRaw === 'number' ? reorderRaw : Number(reorderRaw);
+      const target = typeof targetRaw === 'number' ? targetRaw : Number(targetRaw);
       if (!Number.isInteger(reorder) || reorder < 0) {
-        return corsJson(request, env, { success: false, message: 'reorder_trigger_level must be an integer >= 0.' }, 400);
+        return corsJson(request, env, { success: false, field: 'trigger', message: 'reorder trigger must be an integer >= 0.' }, 400);
       }
       if (!Number.isInteger(target) || target < 0) {
-        return corsJson(request, env, { success: false, message: 'target_max_inventory must be an integer >= 0.' }, 400);
+        return corsJson(request, env, { success: false, field: 'target_max', message: 'target max must be an integer >= 0.' }, 400);
       }
+      if (target > 0 && target < reorder) {
+        return corsJson(request, env, { success: false, field: 'target_max', message: 'Target max must be greater than or equal to the reorder trigger.' }, 400);
+      }
+      const skuClean = sku.trim();
+      const hsnCode = typeof hsn_code === 'string' ? hsn_code.trim() : '';
+      if (hsnCode && !/^[0-9]{2,8}$/.test(hsnCode)) {
+        return corsJson(request, env, { success: false, field: 'hsn_code', message: 'HSN code must be 2-8 digits.' }, 400);
+      }
+      const hsnDesc = str(typeof hsn_description === 'string' ? hsn_description : '', 300);
       try {
         const stamp = isoNow();
-        await runBatch(env, [
-          env.DB.prepare(
-            'INSERT INTO ims_products (id, item_name, category, uom, cost_price_cents, selling_price_cents, supplier_name, reorder_trigger_level, target_max_inventory, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET item_name=excluded.item_name, category=excluded.category, uom=excluded.uom, cost_price_cents=excluded.cost_price_cents, selling_price_cents=excluded.selling_price_cents, supplier_name=excluded.supplier_name, reorder_trigger_level=excluded.reorder_trigger_level, target_max_inventory=excluded.target_max_inventory, updated_at=excluded.updated_at'
-          ).bind(sku, str(item_name, MAX_NAME_LEN), str(category || '', MAX_CATEGORY_LEN), uomValue, cost, sell, str(supplier_name || '', MAX_SUPPLIER_LEN), reorder, target, stamp, stamp)
-        ]);
+        const hasHsn = await hasHsnColumns(env);
+        const sql = hasHsn
+          ? 'INSERT INTO ims_products (id, item_name, category, uom, cost_price_cents, selling_price_cents, supplier_name, reorder_trigger_level, target_max_inventory, hsn_code, hsn_description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET item_name=excluded.item_name, category=excluded.category, uom=excluded.uom, cost_price_cents=excluded.cost_price_cents, selling_price_cents=excluded.selling_price_cents, supplier_name=excluded.supplier_name, reorder_trigger_level=excluded.reorder_trigger_level, target_max_inventory=excluded.target_max_inventory, hsn_code=excluded.hsn_code, hsn_description=excluded.hsn_description, updated_at=excluded.updated_at'
+          : 'INSERT INTO ims_products (id, item_name, category, uom, cost_price_cents, selling_price_cents, supplier_name, reorder_trigger_level, target_max_inventory, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET item_name=excluded.item_name, category=excluded.category, uom=excluded.uom, cost_price_cents=excluded.cost_price_cents, selling_price_cents=excluded.selling_price_cents, supplier_name=excluded.supplier_name, reorder_trigger_level=excluded.reorder_trigger_level, target_max_inventory=excluded.target_max_inventory, updated_at=excluded.updated_at';
+        const binds = hasHsn
+          ? [skuClean, str(item_name, MAX_NAME_LEN), str(category || '', MAX_CATEGORY_LEN), uomValue, cost, sell, str(supRaw || '', MAX_SUPPLIER_LEN), reorder, target, hsnCode, hsnDesc, stamp, stamp]
+          : [skuClean, str(item_name, MAX_NAME_LEN), str(category || '', MAX_CATEGORY_LEN), uomValue, cost, sell, str(supRaw || '', MAX_SUPPLIER_LEN), reorder, target, stamp, stamp];
+        await runBatch(env, [env.DB.prepare(sql).bind(...binds)]);
         await logEvent(env, { kind: 'ims_save_product', channel: 'inventory', status: 200, latency_ms: Date.now() - actionStart, bytes: 0, payload: '' });
-        return corsJson(request, env, { success: true, sku });
+        return corsJson(request, env, { success: true, sku: skuClean });
       } catch {
         return corsJson(request, env, { success: false, message: 'Failed to save product.' }, 500);
       }
