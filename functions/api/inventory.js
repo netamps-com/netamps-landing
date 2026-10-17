@@ -301,14 +301,15 @@ export async function onRequest(context) {
         sku, item_name, category, uom, cost_price_cents, selling_price_cents,
         supplier_name, reorder_trigger_level, target_max_inventory,
         hsn_code, hsn_description,
-        // short aliases accepted for the UI field names
-        cost, selling, supplier, trigger, target_max,
       } = src;
-      const costRaw = cost_price_cents !== undefined ? cost_price_cents : cost;
-      const sellRaw = selling_price_cents !== undefined ? selling_price_cents : selling;
-      const supRaw = supplier_name !== undefined ? supplier_name : supplier;
-      const reorderRaw = reorder_trigger_level !== undefined ? reorder_trigger_level : trigger;
-      const targetRaw = target_max_inventory !== undefined ? target_max_inventory : target_max;
+      // Short aliases accepted for the UI field names (cost, selling, supplier,
+      // trigger, target_max). Namespaced so they never collide with the cents
+      // variables declared below.
+      const costRaw = cost_price_cents !== undefined ? cost_price_cents : src.cost;
+      const sellRaw = selling_price_cents !== undefined ? selling_price_cents : src.selling;
+      const supRaw = supplier_name !== undefined ? supplier_name : src.supplier;
+      const reorderRaw = reorder_trigger_level !== undefined ? reorder_trigger_level : src.trigger;
+      const targetRaw = target_max_inventory !== undefined ? target_max_inventory : src.target_max;
 
       if (typeof sku !== 'string' || sku.trim().length === 0 || sku.trim().length > MAX_SKU_LEN) {
         return corsJson(request, env, { success: false, field: 'sku', message: 'sku must be 1-64 characters.' }, 400);
