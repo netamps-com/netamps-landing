@@ -7,8 +7,10 @@
  * and the actual validators — not hand-rolled stubs.
  *
  * Invariants under test:
- *   1. Registry integrity: six modules, tiers and token ceilings matching
- *      their real call sites, route 'direct' until migrated.
+ *   1. Registry integrity: every consumer's module is registered with the
+ *      tier, token ceiling and route its real call site uses (route 'direct'
+ *      for the gateway-callers, 'orchestrated' for modules already on
+ *      invokeModule), plus the feed AI modules.
  *   2. Access: operators (admin/staff/@netamps.com) in; buyers, public and
  *      expired sessions out. Non-admins never review.
  *   3. Gate order: FORBIDDEN → UNKNOWN_MODULE → brake → module flag →
@@ -67,7 +69,11 @@ const BUYER = { email: 'buyer@company.com', role: 'user' };
 
 // ── 1. registry integrity ───────────────────────────────────────────────────
 {
-  t('six governed modules registered', AI_MODULES.length === 6);
+  // Every id is unique and the six original call-site modules survive.
+  const ids = AI_MODULES.map((m) => m.id);
+  t('module ids are unique', new Set(ids).size === ids.length);
+  const CORE = ['normalize', 'enrich', 'buy_suggest', 'match_rank', 'order_search', 'track_milestone'];
+  t('core six modules registered', CORE.every((id) => !!getModule(id)));
   const byId = Object.fromEntries(AI_MODULES.map((m) => [m.id, m]));
   t('tiers match call sites', byId.normalize.tier === 'auto' && byId.enrich.tier === 'auto'
     && byId.buy_suggest.tier === 'small' && byId.match_rank.tier === 'auto'
@@ -75,7 +81,12 @@ const BUYER = { email: 'buyer@company.com', role: 'user' };
   t('token ceilings match call sites', byId.normalize.maxTokens === 400 && byId.enrich.maxTokens === 400
     && byId.match_rank.maxTokens === 700 && byId.order_search.maxTokens === 400
     && byId.track_milestone.maxTokens === 256);
-  t('all routes direct until migrated', AI_MODULES.every((m) => m.route === 'direct'));
+  // 'direct' = the call site still hits the gateway itself. 'orchestrated' =
+  // it already goes through invokeModule (the feed AI endpoints).
+  t('core modules stay direct until migrated', CORE.every((id) => byId[id].route === 'direct'));
+  t('feed modules are orchestrated', byId.feed_optimize.route === 'orchestrated'
+    && byId.feed_draft_ticker.route === 'orchestrated');
+  t('route values are known', AI_MODULES.every((m) => m.route === 'direct' || m.route === 'orchestrated'));
   t('unknown module resolves null', getModule('nope') === null);
 }
 
@@ -234,7 +245,20 @@ const BUYER = { email: 'buyer@company.com', role: 'user' };
 
   // Health rollup reads the gateway telemetry table (absent here → zeros, honestly).
   const health = await (await import('../functions/api/ai/orchestrator.mjs')).moduleHealth(e3);
-  t('health covers all modules', health.length === 6 && health.every((h) => h.calls24h === 0));
+  t('health covers all modules', health.length === AI_MODULES.length && health.every((h) => h.calls24h === 0));
+
+  // The feed AI modules are wired through the same governed path.
+  const { env: fenv } = makeEnv({ title: 'Enterprise servers in stock', detail: 'Certified units, ready to ship.' });
+  const fr = await invokeModule(fenv, {
+    user: ADMIN, moduleId: 'feed_optimize', system: 's', userPrompt: 'u'
+  });
+  t('feed_optimize is orchestrated', fr.ok === true && fr.checks.schema === 'pass'
+    && String(fr.payload.title).includes('servers'));
+  const { env: tenv } = makeEnv({ text: 'Enterprise servers in stock and ready to ship' });
+  const tr = await invokeModule(tenv, {
+    user: ADMIN, moduleId: 'feed_draft_ticker', system: 's', userPrompt: 'u'
+  });
+  t('feed_draft_ticker is orchestrated', tr.ok === true && tr.checks.schema === 'pass');
 }
 
 // ── 6. suggestions inbox ────────────────────────────────────────────────────

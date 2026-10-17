@@ -1,18 +1,45 @@
 /**
  * POST /api/ai/feed-optimize — AI-optimizes feed item title and detail.
  *
- * Auth: requires a valid dashboard session.
+ * Auth: operator-only. 401 before any registry read or model work for
+ * anonymous callers, 403 for authenticated non-operators — the same two gates
+ * the rest of NETAMPS AI applies (see ai.js and assistant.js).
  * Body: { title: string, detail: string }
- * Returns: { title: string, detail: string }
+ * Returns: { success, title, detail, source, model?, reason? }
  *
- * Uses Workers AI (llama-3.1-8b) when env.AI is bound; falls back to
- * deterministic cleanup (trim, capitalize, truncate to limits) otherwise.
+ * Invocation goes through the governed orchestrator (module `feed_optimize`),
+ * not a hand-rolled call. That buys the emergency brake, the per-module flag,
+ * the daily budget, schema validation of the model's JSON, and an `ai_runs`
+ * audit row for every attempt — and it uses the current Workers AI model id
+ * from the shared gateway instead of the retired unsuffixed llama-3.1-8b that
+ * this endpoint used to hardcode (that model is gone, so every call used to
+ * throw and silently degrade, meaning AI never actually ran here).
+ *
+ * Deterministic-first still holds: if the model is unavailable, over budget,
+ * or returns something that fails the schema, we fall back to the local
+ * cleanup rules below and say so via `source`, never surfacing an error for
+ * what is a copy-polish nicety.
  */
 
 import { verifySession } from '../intake/auth';
+import { aiAuthorized } from './registry.mjs';
+import { invokeModule } from './orchestrator.mjs';
 
 const MAX_TITLE = 140;
 const MAX_DETAIL = 280;
+
+const MODULE_ID = 'feed_optimize';
+const PROMPT_VERSION = 'feed-optimize-v1';
+
+const SYSTEM_PROMPT =
+  'You are a concise B2B copy editor for an IT asset disposition (ITAD) ' +
+  'company called Netamps. Rewrite the given feed item title and detail so ' +
+  `they are clear, specific and professional. Title: at most ${MAX_TITLE} ` +
+  'characters, title case, no trailing period. Detail: at most ' +
+  `${MAX_DETAIL} characters, 1-2 sentences, professional tone, keeping every ` +
+  'concrete fact that was supplied. Do not invent numbers, customers, ' +
+  'certifications or outcomes. Respond with JSON only: ' +
+  '{"title": "...", "detail": "..."}';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -49,12 +76,17 @@ function deterministicOptimize(title, detail) {
 }
 
 export async function onRequestPost({ request, env }) {
-  try {
-    const user = await verifySession(env, request);
-    if (!user) {
-      return json({ success: false, message: 'Unauthorized' }, 401);
-    }
+  // Gate 1: login. No session → 401 before anything else happens.
+  const user = await verifySession(env, request);
+  if (!user) {
+    return json({ success: false, message: 'Unauthorized' }, 401);
+  }
+  // Gate 2: operator. Authenticated but not Netamps staff → 403.
+  if (!aiAuthorized(user)) {
+    return json({ success: false, message: 'Forbidden' }, 403);
+  }
 
+  try {
     let body = {};
     try {
       body = await request.json() || {};
@@ -70,52 +102,45 @@ export async function onRequestPost({ request, env }) {
     }
 
     let result;
-    if (env && env.AI && typeof env.AI.run === 'function') {
-      try {
-        const prompt = `You are a concise B2B copy editor for an IT asset disposition (ITAD) company called Netamps. Optimize the following feed item title and detail for clarity, professionalism, and impact. Rules:
-1. Title: max ${MAX_TITLE} chars, title case, no trailing period, punchy and specific.
-2. Detail: max ${MAX_DETAIL} chars, 1-2 sentences, professional tone, include key facts.
-3. Output ONLY valid JSON: {"title": "...", "detail": "..."}. No markdown, no explanation.
+    let source = 'deterministic';
+    let model = null;
+    let reason = null;
 
-Input title: ${rawTitle}
-Input detail: ${rawDetail}`;
+    if (env && env.DB && typeof env.DB.prepare === 'function') {
+      const r = await invokeModule(env, {
+        user,
+        moduleId: MODULE_ID,
+        system: SYSTEM_PROMPT,
+        userPrompt: `Input title: ${rawTitle}\nInput detail: ${rawDetail}`,
+        temperature: 0.3,
+        maxTokens: 300,
+        promptVersion: PROMPT_VERSION,
+      });
 
-        const aiResp = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-          prompt,
-          max_tokens: 300,
-          temperature: 0.3,
-        });
-
-        let parsed;
-        try {
-          const text = typeof aiResp.response === 'string' ? aiResp.response : String(aiResp.response ?? '');
-          const start = text.indexOf('{');
-          const end = text.lastIndexOf('}');
-          if (start >= 0 && end > start) {
-            parsed = JSON.parse(text.slice(start, end + 1));
-          } else {
-            parsed = JSON.parse(text);
-          }
-        } catch {
-          parsed = null;
-        }
-
-        result = {
-          title: typeof parsed?.title === 'string' ? parsed.title.trim() : rawTitle.trim(),
-          detail: typeof parsed?.detail === 'string' ? parsed.detail.trim() : rawDetail.trim(),
-        };
-      } catch {
+      const p = r && r.payload;
+      if (r && r.ok && p && typeof p.title === 'string' && typeof p.detail === 'string') {
+        result = { title: p.title.trim(), detail: p.detail.trim() };
+        source = 'model';
+        model = r.model || null;
+      } else {
+        reason = (r && r.reason) || 'MODEL_UNAVAILABLE';
         result = deterministicOptimize(rawTitle, rawDetail);
       }
     } else {
+      // No database attached: no orchestration (budgets and audit live in D1).
+      reason = 'NO_DB';
       result = deterministicOptimize(rawTitle, rawDetail);
     }
 
-    return json({
+    const out = {
       success: true,
       title: clampTitle(result.title),
       detail: clampDetail(result.detail),
-    });
+      source,
+    };
+    if (model) out.model = model;
+    if (reason) out.reason = reason;
+    return json(out);
   } catch (err) {
     console.error('[ai/feed-optimize] error:', err);
     return json({ success: false, message: 'AI optimization failed.' }, 500);

@@ -13,11 +13,15 @@
  */
 import { registerHooks } from 'node:module';
 import { existsSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
-const AUTH_STUB = pathToFileURL(
-  new URL('./stubs/auth.js', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
-).href;
+// The stub URL must survive percent-encoded characters in the checkout path.
+// Deriving it straight from the URL (instead of round-tripping through
+// `.pathname` + `pathToFileURL`) keeps reserved characters intact: on a path
+// such as "Default Project", `.pathname` yields a "%20" that `pathToFileURL`
+// then re-encodes to "%2520", so the loader looked for a literal
+// "Default%20Project" directory and every auth-stub load died with ENOENT.
+const AUTH_STUB = new URL('./stubs/auth.js', import.meta.url).href;
 
 registerHooks({
   resolve(specifier, context, nextResolve) {

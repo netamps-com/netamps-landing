@@ -1,5 +1,5 @@
 import { verifySession } from './intake/auth';
-import { corsJson, corsPreflight, applyCors } from '../_lib/cors.js';
+import { corsJson as baseCorsJson, corsPreflight, applyCors } from '../_lib/cors.js';
 
 /**
  * GET/POST /api/feed — curated signal feed plus ticker and push channels.
@@ -22,6 +22,22 @@ import { corsJson, corsPreflight, applyCors } from '../_lib/cors.js';
  */
 
 void applyCors;
+
+/**
+ * Every authed feed response carries operator-curated data, so nothing the
+ * dashboard reads or writes may be stored — not by the browser, not by an
+ * intermediate cache. Without an explicit Cache-Control the browser applies
+ * heuristic freshness and an edge cache can hold a response indefinitely,
+ * which is exactly the "I saved a change and the landing feed didn't update"
+ * failure. Wrapping the shared helper once here beats sprinkling a header
+ * across ~35 call sites; the public read opts back into a short window.
+ */
+const corsJson = (request, env, body, status = 200, opts = {}) =>
+  baseCorsJson(request, env, body, status, { cacheControl: 'no-store', ...opts });
+
+// Public read freshness: an edge may cache it briefly, but never long enough
+// for a saved change to look stuck. The client revalidates on the same cadence.
+const PUBLIC_CACHE = 'public, max-age=30, stale-while-revalidate=60';
 
 const FEED_ROW_ID = 'site';
 const MAX_ITEMS = 12;
@@ -629,7 +645,7 @@ export async function onRequest(context) {
           ticker: liveTicker,
           updatedAt
         },
-        200, { public: true, methods: 'GET', maxAge: 60 });
+        200, { public: true, methods: 'GET', maxAge: 60, cacheControl: PUBLIC_CACHE });
     }
     const user = await verifySession(env, request);
     if (!user) return corsJson(request, env, { success: false, message: 'Unauthorized' }, 401);

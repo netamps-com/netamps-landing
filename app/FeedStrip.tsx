@@ -33,7 +33,10 @@ type FeedLoadState =
 // Production-grade refresh: static export has no sockets, so the strip
 // revalidates on an interval (skipped while the tab is hidden) plus on
 // window focus. No links leave this section — titles render as plain text.
-const POLL_MS = 60000;
+// The cadence deliberately matches the public API's 30s edge-freshness
+// window (/api/feed?public=1 answers max-age=30), so a save in the dashboard
+// is visible here in roughly one poll rather than one stale cache window.
+const POLL_MS = 30000;
 const FETCH_TIMEOUT_MS = 10000;
 
 function formatTime(ts: string): string {

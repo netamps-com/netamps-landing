@@ -40,8 +40,11 @@ function allowedOrigins(env) {
  * @param {Headers} headers response headers (mutated in place)
  * @param {Request} request
  * @param {object} env
- * @param {{ public?: boolean, methods?: string, headers?: string, maxAge?: number }} opts
+ * @param {{ public?: boolean, methods?: string, headers?: string, maxAge?: number, cacheControl?: string }} opts
  *        public: true ⇒ allow any origin (public, non-sensitive endpoints only)
+ *        cacheControl: sets Cache-Control verbatim. NOTE `maxAge` above is the
+ *        CORS preflight cache (Access-Control-Max-Age), NOT HTTP caching — pass
+ *        `cacheControl` to control how long a response may be stored.
  */
 export function applyCors(headers, request, env, opts = {}) {
   const {
@@ -49,9 +52,16 @@ export function applyCors(headers, request, env, opts = {}) {
     methods = 'GET, POST, OPTIONS',
     allowedHeaders = 'Content-Type, Authorization',
     maxAge = 86400,
+    cacheControl = null,
   } = opts;
 
   const origin = request.headers.get('Origin');
+
+  // Independent of CORS: set before the public early-return so both branches
+  // carry the caller's caching policy.
+  if (cacheControl) {
+    headers.set('Cache-Control', cacheControl);
+  }
 
   if (isPublic) {
     headers.set('Access-Control-Allow-Origin', '*');

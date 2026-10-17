@@ -9,7 +9,7 @@
  * model consumer, enforced by the orchestrator (`orchestrator.mjs`), reported
  * by the dashboard (`/dashboard/ai`), reviewed through the suggestions inbox.
  *
- * ── THE SIX GOVERNED MODULES ────────────────────────────────────────────────
+ * ── THE GOVERNED MODULES ────────────────────────────────────────────────────
  * Registered from each consumer's actual call site (tier, token budget and
  * prompt contract verified against code, not memory):
  *   normalize      normalize/line.js        descriptor extraction
@@ -18,9 +18,20 @@
  *   match_rank     matching/ranker.js       candidate re-rank
  *   order_search   search/core.mjs           pool-index selection
  *   track_milestone track/extract.js        milestone verdict extraction
- * All six currently call the gateway DIRECTLY (route:'direct'). They migrate
- * onto the orchestrator one at a time; the registry already describes the
- * target contract, so migration is a call-site swap, never a redesign.
+ *   login_assist / returns_assist / domain_assist / ingest_stats /
+ *   module_recovery ai/assistant.js          operator assistant modules
+ *   feed_optimize   ai/feed-optimize.js     feed item copy rewrite
+ *   feed_draft_ticker ai/feed-draft-ticker.js feed ticker flash draft
+ *
+ * `route` records how the consumer reaches the model today:
+ *   'direct'        the call site still calls the gateway (llm/client.mjs)
+ *                   itself — the original six plus the assistant modules.
+ *   'orchestrated'  the call site goes through invokeModule(), so it is
+ *                   fully governed end to end (budgets, schema validation and
+ *                   an ai_runs audit row per attempt). The feed AI endpoints
+ *                   are the first modules registered already-migrated.
+ * The registry describes each target contract, so moving a 'direct' module
+ * onto the orchestrator is a call-site swap, never a redesign.
  *
  * ── ACCESS ──────────────────────────────────────────────────────────────────
  * `aiAuthorized(user)`: a valid login session AND (role admin/staff OR a
@@ -184,6 +195,29 @@ export const AI_MODULES = Object.freeze([
     schema: {
       required: ['diagnosis', 'recovery_steps'],
       types: { diagnosis: ['string'], recovery_steps: ['array'] }
+    },
+    grounding: null, math: []
+  },
+  // Feed AI. The first two modules whose call site already runs through
+  // invokeModule() (route 'orchestrated'), so they inherit the whole gate
+  // chain — brake, flag, budget, schema validation and audit — for free.
+  {
+    id: 'feed_optimize', feature: 'feed_optimize', owner: 'ai/feed-optimize.js',
+    purpose: 'Rewrite one feed item title and detail for clarity and impact.',
+    tier: 'small', maxTokens: 300, dailyBudget: 1000, route: 'orchestrated',
+    schema: {
+      required: ['title', 'detail'],
+      types: { title: ['string'], detail: ['string'] }
+    },
+    grounding: null, math: []
+  },
+  {
+    id: 'feed_draft_ticker', feature: 'feed_draft_ticker', owner: 'ai/feed-draft-ticker.js',
+    purpose: 'Draft a short scrolling ticker flash for the landing feed from a tag.',
+    tier: 'small', maxTokens: 100, dailyBudget: 1000, route: 'orchestrated',
+    schema: {
+      required: ['text'],
+      types: { text: ['string'] }
     },
     grounding: null, math: []
   }

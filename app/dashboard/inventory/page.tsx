@@ -133,10 +133,10 @@ export default function InventoryPage() {
     setNotice('');
     try {
       const [balRes, restRes, anaRes, prodRes] = await Promise.all([
-        fetch(`${API}/api/inventory?action=balance`, { cache: 'no-store' }),
-        fetch(`${API}/api/inventory?action=restock`, { cache: 'no-store' }),
-        fetch(`${API}/api/inventory?action=analytics`, { cache: 'no-store' }),
-        fetch(`${API}/api/inventory?action=products`, { cache: 'no-store' }),
+        fetch(`${API}/api/inventory?action=balance`, { cache: 'no-store', credentials: 'include' }),
+        fetch(`${API}/api/inventory?action=restock`, { cache: 'no-store', credentials: 'include' }),
+        fetch(`${API}/api/inventory?action=analytics`, { cache: 'no-store', credentials: 'include' }),
+        fetch(`${API}/api/inventory?action=products`, { cache: 'no-store', credentials: 'include' }),
       ]);
       if (balRes.status === 401 || restRes.status === 401 || anaRes.status === 401 || prodRes.status === 401) {
         setUnauthorized(true);
@@ -190,7 +190,7 @@ export default function InventoryPage() {
     if (live) {
       tickRef.current = setInterval(async () => {
         try {
-          const res = await fetch(`${API}/api/inventory?action=balance`, { cache: 'no-store' });
+          const res = await fetch(`${API}/api/inventory?action=balance`, { cache: 'no-store', credentials: 'include' });
           if (res.status === 401) { setUnauthorized(true); return; }
           const data = await parseJson(res);
           setBalance(computeBalance(rowsOf(data), products));
@@ -214,6 +214,7 @@ export default function InventoryPage() {
       const res = await fetch(`${API}/api/inventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'save-product', product: { sku, item_name: itemName, category: prodDraft.category.trim(), uom: prodDraft.uom.trim() || 'Nos', cost: Math.round(cost), selling: Math.round(selling), supplier: prodDraft.supplier.trim(), trigger: num(prodDraft.trigger), target_max: num(prodDraft.targetMax) } }),
       });
       if (res.status === 401) { setUnauthorized(true); return; }
@@ -238,6 +239,7 @@ export default function InventoryPage() {
       const res = await fetch(`${API}/api/inventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: 'delete-product', sku }),
       });
       if (res.status === 401) { setUnauthorized(true); return; }
@@ -266,6 +268,7 @@ export default function InventoryPage() {
       const res = await fetch(`${API}/api/inventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action: type === 'IN' ? 'stock-in' : 'stock-out', txn_id: txnIdValue, sku, qty: Math.round(qty), unit_rate_cents: Math.round(rate), ref_notes: draft.ref_notes.trim() }),
       });
       if (res.status === 400) {
@@ -310,6 +313,7 @@ export default function InventoryPage() {
       const res = await fetch(`${API}/api/inventory-ai`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action, ...body }),
       });
       if (res.status === 401) { setUnauthorized(true); return; }
