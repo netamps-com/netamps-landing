@@ -136,6 +136,56 @@ export const AI_MODULES = Object.freeze([
     },
     grounding: { kind: 'quotes', textKey: 'pageText', minLen: 8 },
     math: []
+  },
+  {
+    id: 'login_assist', feature: 'login', owner: 'login/page.tsx',
+    purpose: 'AI assistance for login anomaly detection, security analysis, and session management.',
+    tier: 'small', maxTokens: 256, dailyBudget: 1000, route: 'direct',
+    schema: {
+      required: ['analysis', 'recommendations'],
+      types: { analysis: ['string'], recommendations: ['array'] }
+    },
+    grounding: null, math: []
+  },
+  {
+    id: 'returns_assist', feature: 'returns', owner: 'returns/page.tsx',
+    purpose: 'AI assistance for returns processing, price analysis, and negotiation suggestions.',
+    tier: 'auto', maxTokens: 400, dailyBudget: 2000, route: 'direct',
+    schema: {
+      required: ['analysis', 'suggestions'],
+      types: { analysis: ['string'], suggestions: ['array'] }
+    },
+    grounding: null, math: []
+  },
+  {
+    id: 'domain_assist', feature: 'domain', owner: 'domain/page.tsx',
+    purpose: 'AI assistance for domain management, DNS configuration, and SSL/TLS analysis.',
+    tier: 'auto', maxTokens: 400, dailyBudget: 1000, route: 'direct',
+    schema: {
+      required: ['analysis', 'recommendations'],
+      types: { analysis: ['string'], recommendations: ['array'] }
+    },
+    grounding: null, math: []
+  },
+  {
+    id: 'ingest_stats', feature: 'ingest', owner: 'ingest/stats.js',
+    purpose: 'AI assistance for data ingestion statistics, anomaly detection, and trend analysis.',
+    tier: 'auto', maxTokens: 400, dailyBudget: 1000, route: 'direct',
+    schema: {
+      required: ['summary', 'anomalies'],
+      types: { summary: ['string'], anomalies: ['array'] }
+    },
+    grounding: null, math: []
+  },
+  {
+    id: 'module_recovery', feature: 'module_recovery', owner: 'modules/recovery.js',
+    purpose: 'AI assistance for recovering failed modules, diagnostics, and self-healing.',
+    tier: 'auto', maxTokens: 400, dailyBudget: 500, route: 'direct',
+    schema: {
+      required: ['diagnosis', 'recovery_steps'],
+      types: { diagnosis: ['string'], recovery_steps: ['array'] }
+    },
+    grounding: null, math: []
   }
 ]);
 
